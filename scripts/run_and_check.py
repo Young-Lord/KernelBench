@@ -10,6 +10,7 @@ from kernelbench import eval as kernel_eval
 from kernelbench import utils as kernel_utils
 from scripts.generate_baseline_time import measure_program_time
 from kernelbench.utils import read_file
+from kernelbench.kernel_static_checker import validate_kernel_static
 
 # Modal setup
 app = modal.App("run_and_check")
@@ -119,6 +120,8 @@ class ScriptConfig(Config):
         self.gpu_arch = ["Ada"]
         self.precision = "fp32"
         self.backend = "cuda"
+
+        self.check_kernel = True  # [experimental] optional static checker catching potential hacking patterns
 
     def __repr__(self):
         return f"ScriptConfig({self.to_dict()})"
@@ -278,6 +281,18 @@ def main(config: ScriptConfig):
         raise ValueError("Invalid ref_origin")
     
     kernel_src = read_file(config.kernel_src_path)
+
+    # Optional: static code checker for kernel code using regex matching
+    # NOTE: by no means is this checker complete, but it could help catch some potential hacks
+    if config.check_kernel:
+        static_check_status, errors, warnings = validate_kernel_static(
+            kernel_src,
+            backend=config.backend,
+            precision=config.precision,
+        )
+        assert static_check_status, f"Static check failed. Errors: {errors}. Warnings: {warnings}"
+        if warnings:
+            print(f"[WARN] Static check warnings: {warnings}")
 
     # Start Evaluation
     assert config.eval_mode in ["local", "modal"], "eval_mode must be either 'local' or 'modal'"
