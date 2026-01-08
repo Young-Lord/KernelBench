@@ -161,7 +161,9 @@ def get_torch_compile_triton(level_num: int, problem_id: int) -> str:
             
 
             torch.cuda.synchronize(device=device)
-            elapsed_times = time_execution_with_cuda_event(
+            timing_method = "cuda_event" # use cuda event for timing here
+            time_func_cuda_event = get_timing_function(timing_method)
+            elapsed_times = time_func_cuda_event(
                 model, *inputs, num_trials=1, verbose=False, device=device
             )
             runtime_stats = get_timing_stats(elapsed_times, device=device)

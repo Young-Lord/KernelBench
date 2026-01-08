@@ -77,6 +77,8 @@ def get_timing_function(
             return time_execution_with_do_bench_impl
         case "host_time":
             return time_execution_with_host_time 
+        case "nsight_python_time":
+            return time_execution_with_nsight_python
         # we might add other methods in the future
         case _: 
             raise ValueError(f"Unsupported timing method: {method}")
@@ -85,7 +87,6 @@ def get_timing_function(
 Kernel Timing Functions
 NOTE: we have a WIP blogpost on this topic covering the various timing approaches   
 """
-
 
 def time_execution_with_cuda_event(
     kernel_fn: callable,
@@ -388,6 +389,74 @@ def time_execution_with_host_time(
 
     return elapsed_times
 
+def time_execution_with_nsight_python(
+    kernel_fn: callable,
+    args: list[Any],
+    num_warmup: int = 3,
+    num_trials: int = 10,
+    discard_first: int = 1, # not used here
+    verbose: bool = True,
+    device: torch.device | None = None) -> list[float]:
+    """
+    Time a CUDA kernel function using nsight-python.
+    
+    Note: nsight returns an average time across num_trials runs.
+    Returns a list with a single value (average time) for API consistency.
+    GPU time from nsight is in nanoseconds, converted to milliseconds.
+    
+    Returns:
+        List containing one float: average elapsed time in milliseconds
+    """
+    
+    from kernelbench.profile import profile_with_nsight
+    
+    if device is None:
+        if verbose:
+            print(f"Using current device: {torch.cuda.current_device()}")
+        device = torch.cuda.current_device()
+
+    with torch.cuda.device(device):
+        # Warm ups
+        for _ in range(num_warmup):
+            kernel_fn(*args)
+            torch.cuda.synchronize(device=device)
+        
+        # Clear cache for cold start
+        torch.cuda.empty_cache()
+        clear_l2_cache(device=device)
+        
+        if verbose:
+            print(f"[Profiling] Using device: {device} {torch.cuda.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}")
+        
+        # Profile with nsight - returns average time in nanoseconds
+        # Wrap kernel function
+        def wrapped_kernel():
+            return kernel_fn(*args)
+        
+        # Profile with nsight, use gpu_time_duration.sum metric for GPU time
+        metric_values = profile_with_nsight(
+            wrapped_kernel,
+            metrics=["gpu__time_duration.sum"],
+            num_trials=num_trials
+        )
+        
+        # Convert from nanoseconds to milliseconds
+        gpu_time_ns = metric_values.get("gpu__time_duration.sum")
+        if gpu_time_ns is None:
+            raise RuntimeError("Failed to get GPU time from nsight")
+        
+        # Convert nanoseconds to milliseconds
+        # nsight returns average across num_trials, so we return a single value in a list
+        gpu_time_ms = gpu_time_ns / 1_000_000.0
+        
+        if verbose:
+            print(f"Average GPU time: {gpu_time_ms:.3f} ms (across {num_trials} trials)")
+        
+        # NOTE: nsight only returns average time across num_trials, so we return a single value in a list
+        # it did run num_trials times, but we only return the average (1 item)
+        # Return list with single average value for API consistency
+        return [gpu_time_ms]
+
 ########################################################
 # Timing stats
 # tools to help compute speedup and other time
@@ -439,3 +508,4 @@ def get_timing_stats(elapsed_times: list[float], device: torch.device = None) ->
         stats["device"] = str(device)  # for debugging
 
     return stats
+

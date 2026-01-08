@@ -6,7 +6,7 @@ from kernelbench.eval import (
     fetch_ref_arch_from_problem_id,
 )
 from kernelbench.timing import (
-    time_execution_with_cuda_event,
+    get_timing_function,
     get_timing_stats,
 )
 from kernelbench.dataset import construct_kernelbench_dataset, fetch_ref_arch_from_dataset
@@ -134,6 +134,7 @@ class EvalFunc:
             ref_arch_name: str,
             ref_arch_src: str, 
             num_trials: int = 100,
+            timing_method: str="cuda_event",
             use_torch_compile: bool = False,
             torch_compile_backend: str="inductor", 
             torch_compile_options: str="default",
@@ -173,9 +174,16 @@ class EvalFunc:
                     print(f"Using PyTorch Eager Execution on {ref_arch_name}")
                 
                 model = model.cuda(device=device)
+                timing_func = get_timing_function(timing_method)
                 torch.cuda.synchronize(device=device)
-                elapsed_times = time_execution_with_cuda_event(
-                    model, inputs, num_trials=num_trials, verbose=verbose, device=device
+                elapsed_times = timing_func(
+                    model,
+                    inputs,
+                    num_warmup=3,  # or any default you prefer
+                    num_trials=num_trials,
+                    discard_first=1,  # or 0 to include first trial
+                    verbose=verbose,
+                    device=device,
                 )
                 runtime_stats = get_timing_stats(elapsed_times, device=device)
 
@@ -220,6 +228,7 @@ def record_baseline_times(config: BaselineConfig,
                         ref_arch_name=ref_arch_name,
                         ref_arch_src=ref_arch_src,
                         num_trials=config.num_trials,
+                        timing_method="cuda_event",
                         use_torch_compile=use_torch_compile,
                         torch_compile_backend=torch_compile_backend,
                         torch_compile_options=torch_compile_options,
