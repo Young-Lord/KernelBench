@@ -193,7 +193,7 @@ class EvalFunc:
         from kernelbench.eval import eval_kernel_against_ref, get_torch_dtype_from_string
 
         set_gpu_arch(gpu_arch)
-        device = torch.device("cuda:0")
+        device = kernel_utils.resolve_device()
 
         num_correct_trials = configs["num_correct_trials"]
         num_perf_trials = configs["num_perf_trials"]
@@ -233,7 +233,7 @@ class EvalFunc:
         from kernelbench.utils import set_gpu_arch
 
         set_gpu_arch(gpu_arch)
-        device = torch.device("cuda:0")
+        device = kernel_utils.resolve_device()
 
         return measure_ref_program_time(
             ref_arch_name="Reference Program",
@@ -298,7 +298,7 @@ def main(config: ScriptConfig):
 
     if config.eval_mode == "local":
         # Local evaluation (existing code path)
-        device = torch.device("cuda:0")
+        device = kernel_utils.resolve_device()
         kernel_utils.set_gpu_arch(config.gpu_arch)
 
         print("[INFO] Evaluating kernel against reference code (LOCAL)")

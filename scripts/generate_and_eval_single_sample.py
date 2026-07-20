@@ -176,7 +176,7 @@ def main(config: EvalConfig):
         include_hardware = include_hardware.lower() in ["true", "1", "yes"]
     config.include_hardware_info = include_hardware
 
-    supported_backends = {"cuda", "hip", "triton", "tilelang", "cute", "thunderkittens"}
+    supported_backends = {"cuda", "hip", "musa", "triton", "tilelang", "cute", "thunderkittens"}
     backend = config.backend.lower()
     if backend not in supported_backends:
         raise ValueError(

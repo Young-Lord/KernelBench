@@ -99,6 +99,8 @@ uv run python scripts/<script_name>.py ...
 
 For AMD GPU aka ROCm backend (ROCm>=7.1), please add `uv remove torch && uv add torch --index pytorch=https://download.pytorch.org/whl/rocm7.1` for RoCm compatible PyTorch to configure your dependencies. Running in a docker image is recommended for this due to complexity of ROCm setup.
 
+For Moore Threads MUSA GPUs, install [torch_musa](https://github.com/MooreThreads/Torch_MUSA) and the MUSA SDK. See [docs/musa/README.md](docs/musa/README.md) for setup and usage with `backend=musa`.
+
 You can still use `conda (python=3.10)` to create your environment and install dependencies with `requirements.txt`.
 
 We use `litellm` for API calls. Please set your keys by creating a `.env` following our `.env.example`.
@@ -124,9 +126,11 @@ uv run python scripts/generate_and_eval_single_sample.py dataset_src=huggingface
 **What you might need to modify**
 * **`gpu_arch`** - Depending on your GPU, you might need to adjust the `gpu_arch` argument to reflect your hardware.
 * **`precision`** - You can specify the precision of tensor by `precision=fp32`. Currently all of our reported results are `fp32` but we added support for `fp16` & `bf16`.
-*  **`backend`** - We are also supporting other GPU programming languages beyond `cuda`. For example, simply specify `backend=triton` or `backend=hip`. For now we support NVIDIA GPUs with programming frameworks and DSLs: `cuda`, `triton`, `cute`, `tilelang`, `thunderkittens`. 
+*  **`backend`** - We are also supporting other GPU programming languages beyond `cuda`. For example, simply specify `backend=triton`, `backend=hip`, or `backend=musa`. Supported backends: `cuda`, `hip`, `musa`, `triton`, `cute`, `tilelang`, `thunderkittens`.
 
 Note for AMD GPUs: Use `hip` backend, `gpu_arch` currently supported: `gfx942`, `gfx950`.
+
+Note for Moore Threads MUSA GPUs: Use `backend=musa`, `gpu_arch` supported: `mp_21`, `mp_22`, `S4000`. See [docs/musa/README.md](docs/musa/README.md).
 
 Note on setting up ThunderKittens (TK) locally: to use `backend=thunderkittens`, you need to git clone the ThunderKittens repo and set the following environment variable to point to your local ThunderKittens directory, `export THUNDERKITTENS_ROOT=<PATH to ThunderKittens folder>`, and all ThunderKitten programs as shown in the [example](src/kernelbench/prompts/model_new_ex_add_thunderkittens.py), should contain `tk_root = os.environ.get("THUNDERKITTENS_ROOT", "/root/ThunderKittens")`, which enable the kernel to include the right TK primitives. In addition, we only support BF16 for TK right now.
 

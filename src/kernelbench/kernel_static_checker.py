@@ -207,6 +207,27 @@ def check_hip_impl(code: str) -> Tuple[bool, str]:
         return (True, "Missing hipcc compiler")
     return (False, "")
 
+# <========= MUSA CHECKS =========>
+MUSA_COMPILE_PATTERNS = ["load_inline", "cpp_extension", "MUSAExtension", "musa_extension"]
+
+def check_musa_impl(code: str) -> Tuple[bool, str]:
+    """
+    Check for valid MUSA kernel implementation.
+
+    Requirements:
+    - Must have __global__ void kernel_name (kernel definition)
+    - Must use load_inline, cpp_extension, or MUSAExtension for compilation
+    - Should reference musa_runtime.h or mcc compiler
+    """
+    code = _strip_comments(code)
+    if "__global__" not in code:
+        return (True, "Missing __global__ kernel definition")
+    if not any(p in code for p in MUSA_COMPILE_PATTERNS):
+        return (True, "Missing load_inline, cpp_extension, or MUSAExtension for compilation")
+    if "musa_runtime.h" not in code and "mcc" not in code and "musa_extension" not in code:
+        return (True, "Missing musa_runtime.h, mcc compiler, or musa_extension import")
+    return (False, "")
+
 # <========= TRITON CHECKS =========>
 # Rationale: Triton kernels are compiled from @triton.jit decorated functions.
 # They must use tl.* operations (tl.load, tl.store, etc.) for actual kernel work.
@@ -579,6 +600,7 @@ CHECK_FUNCTIONS: Dict[str, Union[Callable[[str], Tuple[bool, str]], Callable[[st
     # should be strict
     "cuda_impl": check_cuda_impl,
     "hip_impl": check_hip_impl,
+    "musa_impl": check_musa_impl,
     "triton_impl": check_triton_impl,
     "tk_impl": check_tk_impl,
     "cute_impl": check_cute_impl,
@@ -603,6 +625,7 @@ STRICT_CHECKS = [
 BACKEND_IMPL_CHECK = {
     "cuda": "cuda_impl",
     "hip": "hip_impl",
+    "musa": "musa_impl",
     "triton": "triton_impl",
     "thunderkittens": "tk_impl",
     "cute": "cute_impl",

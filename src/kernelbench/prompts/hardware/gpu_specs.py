@@ -183,6 +183,17 @@ GPU_SPEC_INFO = {
         "Maximum number of registers per thread": "256",
         "Shared memory capacity per CU": "160 KB",
     },
+    "S4000": {
+        "GPU Architecture": "mp_22 (Moore Threads)",
+        "GPU Memory": "48GB GDDR6",
+        "Memory Bandwidth": "448 GB/s",
+        "FP32 TFLOPS": "14.7",
+        "Multi-Processor Count": "56",
+        "Warp Size": "128",
+        "Max Threads per Block": "1024",
+        "Shared memory capacity per MP": "72 KB",
+        "SIMT Model": "Single Instruction Multiple Threads (SIMT)",
+    },
     "MI355X": {
         "GPU Architecture": "gfx950",
         "GPU Memory": "288GB",

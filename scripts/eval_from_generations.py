@@ -202,7 +202,8 @@ class ModalEvaluator:
         gpu_available = False
         
         while time.time() - start_time < max_wait_time:
-            if torch.cuda.is_available():
+            from kernelbench.gpu import is_gpu_available
+            if is_gpu_available():
                 gpu_available = True
                 break
             # Progressive backoff: 0.5s, 1s, 2s, 4s, 8s...
@@ -227,7 +228,7 @@ class ModalEvaluator:
                 num_correct_trials=num_correct_trials,
                 num_perf_trials=num_perf_trials,
                 build_dir=None,
-                device=torch.device("cuda:0"),
+                device=kernel_utils.resolve_device(),
                 backend=backend,
                 precision=get_torch_dtype_from_string(precision),
             )
@@ -607,7 +608,7 @@ def batch_eval(
                         WorkArgs(
                             problem_id=p_id,
                             sample_id=s_idx,
-                            device=torch.device(f"cuda:{i%batch_size}"),
+                            device=kernel_utils.resolve_device(i % batch_size),
                         ),
                         config,
                         curr_level_dataset,
@@ -758,7 +759,7 @@ def add_to_eval_results_file(
 def single_eval_example(
     config: EvalConfig, curr_level_dataset: list[str], run_dir: str, eval_file_path
 ):
-    device = torch.device("cuda:0")
+    device = kernel_utils.resolve_device()
     example_work = WorkArgs(problem_id=1, sample_id=0, device=device)
     # example_eval_result = evaluate_single_sample(example_work, config, curr_level_dataset, run_dir)
     example_eval_result = cuda_single_eval_wrapper(
@@ -786,16 +787,18 @@ def main(config: EvalConfig):
         config.gpu = "H100"
         print(f"[ThunderKittens] Auto-configured: precision=bf16, gpu=H100")
 
-    # Check if CUDA is available (only for local mode)
+    # Check if GPU is available (only for local mode)
     if config.eval_mode == "local":
-        if not torch.cuda.is_available():
-            raise RuntimeError("CUDA device not available. Local evaluation requires GPU.")
+        from kernelbench.gpu import is_gpu_available, get_gpu_module, resolve_device
+        if not is_gpu_available():
+            raise RuntimeError("No GPU available (CUDA or MUSA). Local evaluation requires GPU.")
         
         # set GPU arch to configure what target to build for
         set_gpu_arch(config.gpu_arch)
+        gpu = get_gpu_module()
         assert (
-            config.num_gpu_devices <= torch.cuda.device_count()
-        ), f"Number of GPUs requested ({config.num_gpu_devices}) is greater than the number of available GPUs ({torch.cuda.device_count()})"
+            config.num_gpu_devices <= gpu.device_count()
+        ), f"Number of GPUs requested ({config.num_gpu_devices}) is greater than the number of available GPUs ({gpu.device_count()})"
     else:
         print(f"[Modal] Using Modal for evaluation with GPU: {config.gpu}")
 

@@ -22,6 +22,7 @@ import torch.nn as nn
 from pydantic import BaseModel
 
 from . import timing, dataset
+from . import gpu as kb_gpu
 
 REPO_TOP_PATH = os.path.abspath(
     os.path.join(
@@ -64,8 +65,8 @@ def fetch_ref_arch_from_level_problem_id(level, problem_id, with_name=False):
 
 def set_seed(seed: int):
     torch.manual_seed(seed)
-    # NOTE: this only sets on current cuda device
-    torch.cuda.manual_seed(seed)
+    if kb_gpu.is_gpu_available():
+        kb_gpu.get_gpu_module().manual_seed(seed)
 
 def get_torch_dtype_from_string(precision: str) -> torch.dtype:
     """
@@ -228,16 +229,13 @@ def graceful_eval_cleanup(
     Clean up env, gpu cache, and compiled CUDA extensions after evaluation
     """  # delete ran-specific function definitions before next eval run
     del curr_context
-    # Clear CUDA cache and reset GPU state
-    with torch.cuda.device(device):
-        torch.cuda.empty_cache()
-
-        # does this help?
-        torch.cuda.reset_peak_memory_stats(device=device)
-
-        torch.cuda.synchronize(
-            device=device
-        )  # Wait for all CUDA operations to complete
+    gpu = kb_gpu.get_gpu_module()
+    resolved = kb_gpu.resolve_device(device)
+    with gpu.device(resolved):
+        gpu.empty_cache()
+        if hasattr(gpu, "reset_peak_memory_stats"):
+            gpu.reset_peak_memory_stats(device=resolved)
+        gpu.synchronize(device=resolved)
     if tempfile:
         tempfile.close()
         os.remove(tempfile.name)
@@ -402,9 +400,11 @@ def eval_kernel_against_ref(
     verbose: bool = False,
     build_dir: os.PathLike = None,
     device: Union[torch.device, int] = (
-        torch.cuda.current_device() if torch.cuda.is_available() else None
+        kb_gpu.resolve_device()
+        if kb_gpu.is_gpu_available()
+        else None
     ),  # have to run on GPU
-    backend: str = "cuda",  # can be 'cuda', 'triton', 'tilelang', or 'cute'
+    backend: str = "cuda",  # can be 'cuda', 'musa', 'hip', 'triton', 'tilelang', or 'cute'
     precision: torch.dtype = torch.float32,
 
     # Guard against potential reward hacking [optional but ongoing enhancement]
@@ -427,8 +427,12 @@ def eval_kernel_against_ref(
     ONGOING EFFORT to refactor and modularize this, and adding more tests for eval.
     """
     # TODO: check device is busy
-    assert torch.cuda.is_available(), "CUDA is not available, cannot run Eval"
-    
+    assert kb_gpu.is_gpu_available(), "No GPU available (CUDA or MUSA), cannot run Eval"
+
+    gpu = kb_gpu.get_gpu_module()
+    device = kb_gpu.resolve_device(device)
+    kb_gpu.activate_musa_compat()
+
     # Backend-GPU vendor validation
     from .utils import get_gpu_vendor
     vendor = get_gpu_vendor(device)
@@ -436,9 +440,16 @@ def eval_kernel_against_ref(
     # HIP is AMD-only
     if backend_lower == "hip" and vendor != "amd":
         raise ValueError(f"HIP backend requires AMD GPU, got {vendor}")
+    # MUSA is Moore Threads-only
+    if backend_lower == "musa" and vendor != "musa":
+        raise ValueError(f"MUSA backend requires Moore Threads GPU, got {vendor}")
     # cuda/cute/thunderkittens are NVIDIA-only (triton/tilelang work on both)
-    if backend_lower in ["cuda", "cute", "thunderkittens"] and vendor == "amd":
-        raise ValueError(f"{backend} backend requires NVIDIA GPU, got AMD")
+    if backend_lower in ["cuda", "cute", "thunderkittens"] and vendor in ("amd", "musa"):
+        raise ValueError(f"{backend} backend requires NVIDIA GPU, got {vendor}")
+
+    if backend_lower == "musa":
+        kb_gpu.configure_musa_env()
+
     
     if backend_lower == "tilelang":
         assert precision == torch.float16 or precision == torch.bfloat16, "TileLang only supports fp16 or bfloat16"
@@ -450,15 +461,14 @@ def eval_kernel_against_ref(
         linewidth=80,  # Maximum width before wrapping
     )
 
-    # set CUDA device
-    torch.cuda.set_device(device)
+    gpu.set_device(device)
     
-    # Backends that use tempfile approach and need CUDA_VISIBLE_DEVICES
+    # Backends that use tempfile approach and need device visibility env vars
     # TileLang, Triton, and CuTe all use tempfile for proper module loading
     uses_tempfile = backend.lower() in ["triton", "tilelang", "cute"]
     
     metadata = {}  # for storing result metadata
-    metadata["hardware"] = torch.cuda.get_device_name(device=device)
+    metadata["hardware"] = gpu.get_device_name(device=device)
     metadata["device"] = str(device)  # for debugging
 
     if uses_tempfile:
@@ -466,17 +476,16 @@ def eval_kernel_against_ref(
         if isinstance(device, int):
             device_num = device
         elif isinstance(device, torch.device):
-            assert (
-                device.type == "cuda"
-            ), "CUDA is not availible on device, cannot run Eval"
-            device_num = device.index
+            assert device.type in ("cuda", "musa"), "GPU is not available on device, cannot run Eval"
+            device_num = device.index if device.index is not None else 0
         else:
             raise ValueError(
                 f"device must be an int or torch.device, got {type(device)}"
             )
-        # NVIDIA uses CUDA_VISIBLE_DEVICES, AMD uses HIP_VISIBLE_DEVICES
         if vendor == "amd":
             os.environ["HIP_VISIBLE_DEVICES"] = str(device_num)
+        elif vendor == "musa":
+            os.environ["MUSA_VISIBLE_DEVICES"] = str(device_num)
         else:
             os.environ["CUDA_VISIBLE_DEVICES"] = str(device_num)
     context = {}
@@ -520,7 +529,7 @@ def eval_kernel_against_ref(
         else:
             # Default CUDA backend
             ModelNew = load_custom_model(custom_model_src, context, build_dir)
-        torch.cuda.synchronize(device=device)  # not sure if this is too much
+        gpu.synchronize(device=device)  # not sure if this is too much
     except Exception as e:
         print(
             f"Failed to compile custom CUDA kernel: Record as compilation failure. \nError: {e}"
@@ -563,7 +572,7 @@ def eval_kernel_against_ref(
             assert hasattr(custom_model, "forward")
             original_model = original_model.to(device=device, dtype=precision)
             custom_model = custom_model.to(device=device, dtype=precision)
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
         if verbose:
             print("[Eval] New Model with Custom CUDA Kernel Loaded")
     except RuntimeError as e:
@@ -611,14 +620,14 @@ def eval_kernel_against_ref(
                 if verbose:
                     print("[Eval] Measuring Performance as Sample is Correct")
 
-                torch.cuda.synchronize(device=device)
+                gpu.synchronize(device=device)
                 set_seed(seed_num)
                 inputs = get_inputs()
                 # Convert inputs for performance measurement
                 inputs = [_process_input_tensor(x, device, backend, precision) for x in inputs]
                 
                 model_new = custom_model.to(device=device, dtype=precision)
-                torch.cuda.synchronize(device=device)
+                gpu.synchronize(device=device)
 
                 # support multiple timing backend
                 timing_fn = timing.get_timing_function(timing_method)
@@ -656,14 +665,14 @@ def eval_kernel_against_ref(
         if verbose:
             print("[Eval] Additional checks to flag excessive speedup")
 
-        torch.cuda.synchronize(device=device)
+        gpu.synchronize(device=device)
         set_seed(seed_num)
         inputs = get_inputs()
         # Convert inputs for performance measurement
         inputs = [_process_input_tensor(x, device, backend, precision) for x in inputs]
         
         model_new = custom_model.to(device=device, dtype=precision)
-        torch.cuda.synchronize(device=device)
+        gpu.synchronize(device=device)
 
         # time PyTorch reference function
         # same timing_fn as specified from before
@@ -746,6 +755,7 @@ def run_and_check_correctness(
     precision: torch.dtype
     """
     pass_count = 0
+    gpu = kb_gpu.get_gpu_module()
 
     # Generate num_correct_trials seeds deterministically from the initial seed
     torch.manual_seed(seed)
@@ -775,12 +785,12 @@ def run_and_check_correctness(
             model_new = new_model_instance.to(device=device, dtype=precision)
 
             output = model(*inputs)
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
             # ensure all GPU operations are completed before checking results
 
             try:
                 output_new = model_new(*inputs)
-                torch.cuda.synchronize(device=device)
+                gpu.synchronize(device=device)
                 if output.shape != output_new.shape:
                     metadata = register_and_format_exception(
                         "correctness_issue",

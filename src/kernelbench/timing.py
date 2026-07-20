@@ -5,6 +5,17 @@ import time
 from typing import Any, Optional, Union
 import os
 
+from kernelbench import gpu as kb_gpu
+
+
+def _gpu_and_device(device=None):
+    gpu = kb_gpu.get_gpu_module()
+    if device is None:
+        resolved = gpu.current_device()
+    else:
+        resolved = kb_gpu.resolve_device(device)
+    return gpu, resolved
+
 
 def measure_ref_program_time(
     ref_arch_name: str,
@@ -40,13 +51,10 @@ def measure_ref_program_time(
 
     try:
         with torch.no_grad():
-            if isinstance(device, str):
-                device = torch.device(device)
-            elif isinstance(device, int):
-                device = torch.device(f"cuda:{device}")
-            torch.cuda.set_device(device)
+            gpu, device = _gpu_and_device(device)
+            gpu.set_device(device)
 
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
             set_seed(42)
             inputs = get_inputs()
             set_seed(42)
@@ -88,7 +96,7 @@ def measure_ref_program_time(
             else:
                 print(f"Using PyTorch Eager Execution on {ref_arch_name}")
 
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
 
             timing_fn = get_timing_function(timing_method)
             elapsed_times = timing_fn(
@@ -146,7 +154,8 @@ def clear_l2_cache_triton(cache=None, device: str = "cuda"):
     Thrash the cache by making a large dummy tensor, using triton runtime's functionality
     """
     from triton import runtime as triton_runtime
-    with torch.cuda.device(device):
+    gpu, device = _gpu_and_device(device)
+    with gpu.device(device):
         cache = triton_runtime.driver.active.get_empty_cache_for_benchmark()
         # this effectively thrashes L2 cache under the hood too
         triton_runtime.driver.active.clear_cache(cache)
@@ -229,36 +238,38 @@ def time_execution_with_cuda_event(
         List of elapsed times in milliseconds (length = num_trials)
     """
     if device is None:
+        gpu, device = _gpu_and_device()
         if verbose:
-            print(f"Using current device: {torch.cuda.current_device()}")
-        device = torch.cuda.current_device()
+            print(f"Using current device: {device}")
+    else:
+        gpu, device = _gpu_and_device(device)
 
-    with torch.cuda.device(device):
+    with gpu.device(device):
         
         # Warm ups
         for _ in range(num_warmup):
             kernel_fn(*args)
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
         
-        # note this only release PyTorch’s CUDA caching allocator, not necessarily clearing device's L2 cache
-        torch.cuda.empty_cache()
+        # note this only release PyTorch's GPU caching allocator, not necessarily clearing device's L2 cache
+        gpu.empty_cache()
         
-        print(f"[Profiling] Using device: {device} {torch.cuda.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}"
+        print(f"[Profiling] Using device: {device} {gpu.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}"
         )
 
         elapsed_times: list[float] = [] # in ms
 
         # Timing trials
         for trial in range(num_trials + discard_first):
-            torch.cuda.synchronize(device=device) # block on all streams
+            gpu.synchronize(device=device) # block on all streams
 
             # create event marker default is not interprocess
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
+            start_event = gpu.Event(enable_timing=True)
+            end_event = gpu.Event(enable_timing=True)
             
             clear_l2_cache(device=device) # measuring cold cache performance
 
-            # note cuda events mark event on current stream
+            # note GPU events mark event on current stream
             start_event.record()
             _ = kernel_fn(*args)
             end_event.record() 
@@ -266,7 +277,7 @@ def time_execution_with_cuda_event(
             # waits for all streams on that device
             # though it is important to note the events only record time between on current stream
             # TODO: find ways to check hacks by launching work on additional stream
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
 
             # Calculate the elapsed time in milliseconds
             elapsed_time_ms = start_event.elapsed_time(end_event)
@@ -313,15 +324,14 @@ def time_execution_with_do_bench_interface(
 
     See: https://triton-lang.org/main/python-api/generated/triton.testing.do_bench.html
     """
-    if device is None:
-        if verbose:
-            print(f"Using current device: {torch.cuda.current_device()}")
-        device = torch.cuda.current_device()
+    gpu, device = _gpu_and_device(device)
+    if verbose:
+        print(f"Using current device: {device}")
 
 
     from triton import testing as triton_testing
     do_bench_fn = lambda : kernel_fn(*args) # wrap function with arguments
-    with torch.cuda.device(device):
+    with gpu.device(device):
         return triton_testing.do_bench(fn=do_bench_fn,
             warmup=25,
             rep=100, 
@@ -362,13 +372,13 @@ def time_execution_with_do_bench_impl(
     """
 
     from triton import runtime as triton_runtime
-    device = device if device is not None else torch.cuda.current_device()
+    gpu, device = _gpu_and_device(device)
     if verbose: 
         print(f"Using do_bench to evaluate kernel on {device}")
 
 
     # added to constraint to this device
-    with torch.cuda.device(device):  
+    with gpu.device(device):  
 
         # specify device interface (supports both nvidia and amd)
         # under the hood, di is torch.cuda (amd uses a cuda compatible interface)
@@ -457,26 +467,25 @@ def time_execution_with_host_time(
     Returns:
         List of elapsed times in milliseconds
     """
-    if device is None:
-        if verbose:
-            print(f"Using current device: {torch.cuda.current_device()}")
-        device = torch.cuda.current_device()
+    gpu, device = _gpu_and_device(device)
+    if verbose:
+        print(f"Using current device: {device}")
 
     # Warm ups
     for _ in range(num_warmup):
         kernel_fn(*args)
-        torch.cuda.synchronize(device=device)
+        gpu.synchronize(device=device)
 
-    print(f"[Profiling] Using device: {device} {torch.cuda.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}")
+    print(f"[Profiling] Using device: {device} {gpu.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}")
     elapsed_times = []
 
     # clear PyTorch allocator cache
-    torch.cuda.empty_cache()
+    gpu.empty_cache()
 
     # Actual trials
     for trial in range(num_trials + discard_first):
         # block all streams on device
-        torch.cuda.synchronize(device=device)
+        gpu.synchronize(device=device)
 
         # focus on cold_cache performance
         clear_l2_cache(device=device) 
@@ -484,7 +493,7 @@ def time_execution_with_host_time(
         # CPU-side wall clock time using perf_counter (high-resolution timer)
         start_time = time.perf_counter()
         kernel_fn(*args)
-        torch.cuda.synchronize(device=device) # wait for all stream to finish
+        gpu.synchronize(device=device) # wait for all stream to finish
         # this blocks the CPU until all GPU work on device is done
         # this means all kernels on all streams
         end_time = time.perf_counter()
@@ -518,30 +527,29 @@ def time_execution_with_nsight_python(
     from kernelbench.profile import profile_with_nsight
     from kernelbench.utils import get_gpu_vendor
     
-    if device is None:
-        if verbose:
-            print(f"Using current device: {torch.cuda.current_device()}")
-        device = torch.cuda.current_device()
+    gpu, device = _gpu_and_device(device)
+    if verbose:
+        print(f"Using current device: {device}")
     
     # NSight is NVIDIA-only
     if get_gpu_vendor(device) != "nvidia":
         raise RuntimeError(
             "NSight profiling requires NVIDIA GPU. "
-            "Use timing_method='cuda_event' or 'do_bench' for AMD."
+            "Use timing_method='cuda_event' or 'do_bench' for AMD/MUSA."
         )
 
-    with torch.cuda.device(device):
+    with gpu.device(device):
         # Warm ups
         for _ in range(num_warmup):
             kernel_fn(*args)
-            torch.cuda.synchronize(device=device)
+            gpu.synchronize(device=device)
         
         # Clear cache for cold start
-        torch.cuda.empty_cache()
+        gpu.empty_cache()
         clear_l2_cache(device=device)
         
         if verbose:
-            print(f"[Profiling] Using device: {device} {torch.cuda.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}")
+            print(f"[Profiling] Using device: {device} {gpu.get_device_name(device)}, warm up {num_warmup}, trials {num_trials}")
         
         # Profile with nsight - returns average time in nanoseconds
         # Wrap kernel function
@@ -619,8 +627,9 @@ def get_timing_stats(elapsed_times: list[float], device: torch.device = None) ->
     }
 
     if device:
-        stats["hardware"] = torch.cuda.get_device_name(device=device)
-        stats["device"] = str(device)  # for debugging
+        gpu = kb_gpu.get_gpu_module()
+        stats["hardware"] = gpu.get_device_name(device=kb_gpu.resolve_device(device))
+        stats["device"] = str(kb_gpu.resolve_device(device))  # for debugging
 
     return stats
 
