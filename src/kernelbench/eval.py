@@ -381,8 +381,11 @@ def _process_input_tensor(input, device, backend="cuda", precision=torch.float32
     # sometimes things like init inputs are floats (like in the case of labels / targets, classification losses, etc.) 
     if not isinstance(input, torch.Tensor):
         return input
-    
-    # cast to the desired percision dtype for activations
+
+    if not input.is_floating_point():
+        return input.to(device=device)
+
+    # cast to the desired precision dtype for activations
     input_tensor = input.to(dtype=precision)
     
     # Default for all other backends and float types
