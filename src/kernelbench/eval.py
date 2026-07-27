@@ -434,7 +434,7 @@ def eval_kernel_against_ref(
 
     gpu = kb_gpu.get_gpu_module()
     device = kb_gpu.resolve_device(device)
-    kb_gpu.activate_musa_compat()
+    # No need for activate_musa_compat() — torchada handles CUDA→MUSA routing transparently
 
     # Backend-GPU vendor validation
     from .utils import get_gpu_vendor
@@ -451,7 +451,8 @@ def eval_kernel_against_ref(
         raise ValueError(f"{backend} backend requires NVIDIA GPU, got {vendor}")
 
     if backend_lower == "musa":
-        kb_gpu.configure_musa_env()
+        # torchada handles the MUSA build environment automatically
+        pass
 
     
     if backend_lower == "tilelang":
@@ -663,7 +664,12 @@ def eval_kernel_against_ref(
     # We are working on preventing excessive speedup issues
     ##############################################################
 
-    if measure_performance and check_for_excessive_speedup:  # experimental: hence able to shut off codepath if needed
+    if (
+        measure_performance
+        and check_for_excessive_speedup
+        and kernel_exec_result.correctness
+        and kernel_exec_result.runtime > 0
+    ):  # experimental: hence able to shut off codepath if needed
     
         if verbose:
             print("[Eval] Additional checks to flag excessive speedup")

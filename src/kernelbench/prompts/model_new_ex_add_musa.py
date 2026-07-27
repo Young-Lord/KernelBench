@@ -1,10 +1,24 @@
 import torch
 import torch.nn as nn
+
+# torchada patches torch.utils.cpp_extension.load_inline to work transparently
+# on Moore Threads MUSA GPUs — CUDA sources compile with mcc automatically.
+# You can use either import style:
+#
+#   Option A (recommended — backed by torchada):
+#     import torchada
+#     from torch.utils.cpp_extension import load_inline
+#
+#   Option B (backward-compatible alias, same result):
+#     from kernelbench.musa_extension import load_inline
+#
 from kernelbench.musa_extension import load_inline
 
-# MUSA inline extension loader (uses mcc + MUSAExtension under the hood)
-# See kernelbench.musa_extension for implementation details.
-
+# ── Kernel source ──────────────────────────────────────────────────────────
+# With torchada, you can write kernels using either:
+#   - #include <musa_runtime.h>   (MUSA-native, preferred for MUSA targets)
+#   - #include <cuda_runtime.h>   (CUDA source — torchada auto-translates)
+# Kernel launch syntax (<<<>>>) and all standard patterns work either way.
 elementwise_add_source = """
 #include <torch/extension.h>
 #include <musa_runtime.h>

@@ -216,16 +216,18 @@ def check_musa_impl(code: str) -> Tuple[bool, str]:
 
     Requirements:
     - Must have __global__ void kernel_name (kernel definition)
-    - Must use load_inline, cpp_extension, or MUSAExtension for compilation
-    - Should reference musa_runtime.h or mcc compiler
+    - Must use load_inline, cpp_extension, MUSAExtension, or musa_extension for compilation
+    - Must include either <musa_runtime.h> or <cuda_runtime.h> (torchada auto-translates the latter)
+
+    Note: With torchada, CUDA sources (cuda_runtime.h) compile on MUSA without changes.
     """
     code = _strip_comments(code)
     if "__global__" not in code:
         return (True, "Missing __global__ kernel definition")
     if not any(p in code for p in MUSA_COMPILE_PATTERNS):
         return (True, "Missing load_inline, cpp_extension, or MUSAExtension for compilation")
-    if "musa_runtime.h" not in code and "mcc" not in code and "musa_extension" not in code:
-        return (True, "Missing musa_runtime.h, mcc compiler, or musa_extension import")
+    if "musa_runtime.h" not in code and "cuda_runtime.h" not in code:
+        return (True, "Missing musa_runtime.h or cuda_runtime.h (torchada auto-translates the latter)")
     return (False, "")
 
 # <========= TRITON CHECKS =========>

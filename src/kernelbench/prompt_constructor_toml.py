@@ -191,6 +191,9 @@ def render_prompt_by_option(
     
     # Fill in shared templates with backend-specific terms
     problem_statement = shared.get("problem_statement", "").format(backend_display=backend_display)
+    backend_guidance = backend_data.get("guidance", "").strip()
+    if backend_guidance:
+        problem_statement = f"{problem_statement.rstrip()}\n\n{backend_guidance}\n"
     instruction = shared.get("instruction", "").format(backend_display=backend_display)
     
     # Add backend-specific content to context

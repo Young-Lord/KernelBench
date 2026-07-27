@@ -21,6 +21,7 @@ from importlib.resources import files, as_file
 # API clients
 from openai import OpenAI
 from litellm import completion
+import requests
 
 import numpy as np
 from contextlib import contextmanager
@@ -49,8 +50,6 @@ from kernelbench.gpu import (  # noqa: E402
     get_gpu_platform,
     get_gpu_module,
     resolve_device,
-    configure_musa_env,
-    activate_musa_compat,
 )
 
 def query_server(
@@ -113,6 +112,10 @@ def query_server(
     # Build messages list with system prompt first (if not already present)
     messages = []
     
+    if model_name.startswith("groq/") and max_tokens > 4096:
+        print(f"Capping Groq max_tokens from {max_tokens} to 4096 for API reliability")
+        max_tokens = 4096
+
     # Check if prompt is already a list with a system message
     if isinstance(prompt, list) and prompt and prompt[0].get("role") == "system":
         # Prompt already has system message, use it directly
@@ -155,19 +158,81 @@ def query_server(
             if "openai/" not in model_name.lower() and "gpt" not in model_name.lower():
                 completion_kwargs["top_k"] = top_k
         
-        response = completion(**completion_kwargs)
-        
+        max_attempts = 8 if model_name.startswith("groq/") else 1
+        for attempt in range(max_attempts):
+            try:
+                if model_name.startswith("groq/"):
+                    groq_key = os.environ.get("GROQ_API_KEY")
+                    if not groq_key:
+                        raise ValueError("GROQ_API_KEY is not set")
+                    groq_payload = {
+                        "model": model_name.removeprefix("groq/"),
+                        "messages": messages,
+                        "max_completion_tokens": max_tokens,
+                        "n": num_completions,
+                    }
+                    if is_reasoning_model and reasoning_effort:
+                        groq_payload["reasoning_effort"] = reasoning_effort
+                    elif not is_reasoning_model:
+                        groq_payload["temperature"] = temperature
+                        groq_payload["top_p"] = top_p
+                    groq_session = requests.Session()
+                    groq_session.headers.update({
+                        "Authorization": f"Bearer {groq_key}",
+                        "Content-Type": "application/json",
+                    })
+                    preflight = groq_session.get(
+                        "https://api.groq.com/openai/v1/models", timeout=30
+                    )
+                    if preflight.status_code >= 400:
+                        raise RuntimeError(
+                            f"Groq preflight HTTP {preflight.status_code}, "
+                            f"body={preflight.text[:500]}"
+                        )
+                    raw_response = groq_session.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        json=groq_payload,
+                        timeout=120,
+                    )
+                    if raw_response.status_code >= 400:
+                        request_id = raw_response.headers.get("x-request-id")
+                        raise RuntimeError(
+                            f"Groq HTTP {raw_response.status_code}, "
+                            f"request_id={request_id}, body={raw_response.text[:500]}"
+                        )
+                    response = raw_response.json()
+                else:
+                    response = completion(**completion_kwargs)
+                break
+            except Exception as exc:
+                error_text = str(exc)
+                is_transient_groq_error = model_name.startswith("groq/") and any(
+                    marker in error_text
+                    for marker in ("Forbidden", "Connection", "timed out", "Network")
+                )
+                if not is_transient_groq_error or attempt == max_attempts - 1:
+                    raise
+                delay = 15
+                print(
+                    f"Groq request failed transiently; retrying in {delay}s "
+                    f"({attempt + 2}/{max_attempts})"
+                )
+                time.sleep(delay)
         # output processing
+        if isinstance(response, dict):
+            contents = [choice["message"].get("content") for choice in response["choices"]]
+            if any(content is None for content in contents):
+                raise ValueError(f"Groq returned None content for model {model_name}")
+            return contents[0] if num_completions == 1 else contents
         if num_completions == 1:
             content = response.choices[0].message.content
             if content is None:
                 raise ValueError(f"LLM returned None content for model {model_name}. finish_reason: {response.choices[0].finish_reason}")
             return content
-        else:
-            contents = [choice.message.content for choice in response.choices]
-            if any(c is None for c in contents):
-                raise ValueError(f"LLM returned None content in one or more completions for model {model_name}")
-            return contents
+        contents = [choice.message.content for choice in response.choices]
+        if any(content is None for content in contents):
+            raise ValueError(f"LLM returned None content in one or more completions for model {model_name}")
+        return contents
     except Exception as e:
         print(f"Error in query_server for model {model_name}: {e}")
         raise
@@ -175,6 +240,11 @@ def query_server(
 
 # a list of presets for API server configs
 SERVER_PRESETS = {
+    "groq": {
+        "model_name": "groq/openai/gpt-oss-120b",
+        "temperature": 0.0,
+        "max_tokens": 4096,
+    },
     "deepseek": {
         "temperature": 1.6, 
         "model_name": "deepseek/deepseek-coder",

@@ -82,6 +82,7 @@ class EvalConfig(Config):
         self.check_kernel = True  # [experimental] optional static checker catching potential hacking patterns
 
     def verbose_logging(self):
+        self.verbose = True
         self.log = True
         self.log_prompt = True
         self.log_generated_kernel = True

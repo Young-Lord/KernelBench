@@ -1,8 +1,17 @@
 """
-GPU platform abstraction for KernelBench.
+GPU platform abstraction for KernelBench — powered by torchada.
 
-Supports NVIDIA CUDA, AMD ROCm (via torch.cuda compatibility), and
-Moore Threads MUSA (via torch_musa).
+Supports NVIDIA CUDA and Moore Threads MUSA via a single unified API.
+torchada transparently routes torch.cuda.* calls to torch.musa.* on MUSA hardware,
+eliminating the need for hand-written device-resolution, monkey-patching, or
+environment-configuration code.
+
+Usage:
+    import kernelbench.gpu as gpu
+
+    if gpu.is_gpu_available():
+        device = gpu.resolve_device("cuda:0")
+        # Use device with any torch.cuda.* API — torchada handles MUSA routing
 """
 
 from __future__ import annotations
@@ -10,6 +19,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
+import torchada  # noqa: F401 — Apply patches so torch.cuda.* works on MUSA
 import torch
 
 GpuPlatform = Literal["cuda", "musa"]
@@ -28,89 +38,98 @@ MUSA_ARCH_ALIASES = {
 }
 
 
-def _import_torch_musa():
-    import torch_musa  # noqa: F401
-
-    return torch
-
+# ---------------------------------------------------------------------------
+# Platform detection
+# ---------------------------------------------------------------------------
 
 def get_gpu_platform() -> GpuPlatform | None:
-    """Return the active GPU platform, or None if no GPU is available."""
-    if torch.cuda.is_available():
+    """Return the active GPU platform ('cuda' or 'musa'), or None."""
+    platform = torchada.get_platform()
+    if platform == torchada.Platform.CUDA:
         return "cuda"
-    try:
-        import torch_musa
-
-        if torch_musa.is_available():
-            return "musa"
-    except ImportError:
-        pass
+    if platform == torchada.Platform.MUSA:
+        return "musa"
     return None
 
 
 def is_gpu_available() -> bool:
-    return get_gpu_platform() is not None
+    """Return True if any GPU (NVIDIA CUDA or Moore Threads MUSA) is available.
+
+    Uses torchada.cuda.is_available() instead of torch.cuda.is_available()
+    because torchada intentionally does NOT patch torch.cuda.is_available()
+    (it would break CUDA-specific tooling that expects the original value).
+    """
+    return torchada.cuda.is_available()
 
 
 def get_gpu_module():
-    """Return torch.cuda or torch.musa for device operations."""
-    platform = get_gpu_platform()
-    if platform == "cuda":
-        return torch.cuda
-    if platform == "musa":
-        _import_torch_musa()
-        return torch.musa
-    raise RuntimeError("No GPU platform available (CUDA or MUSA)")
+    """
+    Return the torch.cuda module.
+
+    torchada patches torch.cuda at import time so that all device operations
+    transparently route to torch.musa when running on MUSA hardware.  Callers
+    can use the returned module as if it were vanilla torch.cuda.
+    """
+    return torch.cuda
 
 
 def get_device_type() -> str:
+    """Return the device type string ('cuda' or 'musa')."""
     platform = get_gpu_platform()
     if platform is None:
-        raise RuntimeError("No GPU platform available")
+        raise RuntimeError("No GPU platform available (CUDA or MUSA)")
     return platform
 
 
+# ---------------------------------------------------------------------------
+# Device resolution
+# ---------------------------------------------------------------------------
+
 def resolve_device(device: torch.device | int | str | None = None) -> torch.device:
     """
-    Normalize a device for the current GPU platform.
+    Normalize a device reference for the current GPU platform.
 
-    Maps cuda:N -> musa:N when running on MUSA hardware.
+    With torchada, CUDA devices are automatically routed to MUSA at the API
+    level, so we only need to fill in defaults and validate the type.
     """
-    device_type = get_device_type()
+    fallback_type = get_gpu_platform() or "cuda"
 
     if device is None:
-        return torch.device(f"{device_type}:0")
+        return torch.device(f"{fallback_type}:0")
 
     if isinstance(device, int):
-        return torch.device(f"{device_type}:{device}")
+        return torch.device(f"{fallback_type}:{device}")
 
     if isinstance(device, str):
         device = torch.device(device)
 
-    if device.type == "cuda" and device_type == "musa":
-        index = device.index if device.index is not None else 0
-        return torch.device(f"musa:{index}")
-
     if device.type not in ("cuda", "musa"):
-        raise ValueError(f"Unsupported device type {device.type!r}; expected cuda or musa")
+        raise ValueError(
+            f"Unsupported device type {device.type!r}; expected 'cuda' or 'musa'"
+        )
 
     if device.index is None:
-        return torch.device(f"{device.type}:0")
+        gpu_platform = get_gpu_platform()
+        device_type = gpu_platform if gpu_platform else device.type
+        return torch.device(f"{device_type}:0")
 
     return device
 
 
+# ---------------------------------------------------------------------------
+# Vendor identification
+# ---------------------------------------------------------------------------
+
 def get_gpu_vendor(device: torch.device | int | None = None) -> GpuVendor:
-    """Return GPU vendor for the given device."""
+    """Return the GPU vendor for the given (or current) device."""
     platform = get_gpu_platform()
     if platform is None:
         return "unknown"
 
-    gpu = get_gpu_module()
     if device is None:
-        device = gpu.current_device()
+        device = torch.cuda.current_device()
 
-    name = gpu.get_device_name(device).upper()
+    name = torch.cuda.get_device_name(device).upper()
     if "NVIDIA" in name:
         return "nvidia"
     if "AMD" in name or "MI3" in name:
@@ -122,16 +141,20 @@ def get_gpu_vendor(device: torch.device | int | None = None) -> GpuVendor:
     return "unknown"
 
 
+# ---------------------------------------------------------------------------
+# Architecture configuration for kernel compilation
+# ---------------------------------------------------------------------------
+
 def _normalize_musa_arch(arch: str) -> str:
     return MUSA_ARCH_ALIASES.get(arch, arch)
 
 
 def set_gpu_arch(arch_list: list[str]) -> None:
     """
-    Set environment variables for kernel compilation on the target architecture.
+    Set environment variables for kernel compilation targeting specific GPU architectures.
 
     Supports NVIDIA (TORCH_CUDA_ARCH_LIST), AMD (PYTORCH_ROCM_ARCH),
-    and MUSA (TORCH_MUSA_ARCH / MUSA_ARCH_LIST).
+    and MUSA (MUSA_ARCH_LIST / TORCH_MUSA_ARCH).
     """
     nvidia_archs: list[str] = []
     amd_archs: list[str] = []
@@ -153,7 +176,7 @@ def set_gpu_arch(arch_list: list[str]) -> None:
     configured = sum(bool(x) for x in (nvidia_archs, amd_archs, musa_archs))
     if configured > 1:
         raise ValueError(
-            f"Cannot mix NVIDIA, AMD, and MUSA architectures. "
+            f"Cannot mix architectures from different vendors. "
             f"Got NVIDIA={nvidia_archs}, AMD={amd_archs}, MUSA={musa_archs}"
         )
 
@@ -164,43 +187,5 @@ def set_gpu_arch(arch_list: list[str]) -> None:
     elif musa_archs:
         normalized = musa_archs
         os.environ["MUSA_ARCH_LIST"] = ";".join(normalized)
-        # TORCH_MUSA_ARCH uses numeric form, e.g. mp_22 -> 22
+        # TORCH_MUSA_ARCH uses the numeric form, e.g. mp_22 -> 22
         os.environ["TORCH_MUSA_ARCH"] = normalized[-1].replace("mp_", "")
-
-
-def configure_musa_env() -> None:
-    """Ensure MUSA_HOME and related paths are set for extension builds."""
-    musa_home = os.environ.get("MUSA_HOME") or "/usr/local/musa"
-    os.environ.setdefault("MUSA_HOME", musa_home)
-    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
-    if musa_home not in ld_path:
-        os.environ["LD_LIBRARY_PATH"] = f"{musa_home}/lib:{ld_path}" if ld_path else f"{musa_home}/lib"
-    path = os.environ.get("PATH", "")
-    if f"{musa_home}/bin" not in path:
-        os.environ["PATH"] = f"{musa_home}/bin:{path}" if path else f"{musa_home}/bin"
-
-
-_MUSA_PATCHED = False
-
-
-def activate_musa_compat() -> None:
-    """
-    Patch Tensor/Module .cuda() calls to use musa devices on MUSA hardware.
-
-    Reference KernelBench problems use .cuda() in get_inputs(); this keeps them
-    working without modifying every problem file.
-    """
-    global _MUSA_PATCHED
-    if _MUSA_PATCHED or get_gpu_platform() != "musa":
-        return
-
-    _import_torch_musa()
-    device_type = get_device_type()
-
-    def _to_gpu(self, device=None, non_blocking=False):
-        target = resolve_device(device)
-        return self.to(device=target, non_blocking=non_blocking)
-
-    torch.Tensor.cuda = _to_gpu
-    torch.nn.Module.cuda = lambda self, device=None: self.to(device=resolve_device(device))
-    _MUSA_PATCHED = True

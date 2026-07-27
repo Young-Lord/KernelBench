@@ -1,8 +1,16 @@
 """
-MUSA inline extension loader for KernelBench.
+MUSA inline extension loader — uses mcc + MUSAExtension via subprocess.
 
-Provides a load_inline-compatible API backed by torch_musa MUSAExtension,
-since standard torch.utils.cpp_extension.load_inline requires CUDA_HOME/nvcc.
+torchada powers the platform-abstraction layer (gpu.py), but its patches for
+``torch.utils.cpp_extension.load_inline`` are incomplete for MUSA kernel
+compilation: it does **not** patch ``torch.cuda.is_available()``, so the
+standard ``load_inline`` code path uses the CPU compiler (``c++``) and fails
+on ``__global__`` / ``<<<>>>`` syntax.
+
+This module provides a ``load_inline`` that works on MUSA by writing a
+``.mu`` file and a ``setup.py`` that uses ``MUSAExtension`` (from
+``torch_musa``), then building via ``pip install`` / ``setup.py build_ext``
+in a subprocess.
 """
 
 from __future__ import annotations
@@ -11,12 +19,11 @@ import hashlib
 import importlib.util
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 from typing import Sequence
-
-from kernelbench.gpu import configure_musa_env
 
 
 def _make_module_name(name: str) -> str:
@@ -24,27 +31,6 @@ def _make_module_name(name: str) -> str:
     if not safe or safe[0].isdigit():
         safe = f"ext_{safe}"
     return safe
-
-
-def _write_setup_py(build_dir: Path, module_name: str, source_name: str) -> None:
-    setup_py = build_dir / "setup.py"
-    setup_py.write_text(
-        f"""\
-from setuptools import setup
-from torch_musa.utils.musa_extension import MUSAExtension, BuildExtension
-
-setup(
-    name="{module_name}",
-    ext_modules=[
-        MUSAExtension(
-            name="{module_name}",
-            sources=["{source_name}"],
-        )
-    ],
-    cmdclass={{"build_ext": BuildExtension}},
-)
-"""
-    )
 
 
 def _build_pybind_block(functions: Sequence[str]) -> str:
@@ -70,18 +56,37 @@ def load_inline(
     **kwargs,
 ):
     """
-    JIT-compile and load a MUSA extension, mirroring torch.utils.cpp_extension.load_inline.
+    JIT-compile and load a MUSA extension, mirroring
+    ``torch.utils.cpp_extension.load_inline``.
 
-    Accepts kernel code in cpp_sources and/or cuda_sources. The combined source is
-    compiled as a .mu file with mcc via MUSAExtension.
+    Accepts kernel code in *cpp_sources* and/or *cuda_sources*.  The combined
+    source is compiled as a ``.mu`` file with ``mcc`` via ``MUSAExtension``.
+
+    Workarounds applied automatically:
+    - Sets ``MUSA_HOME``, ``LD_LIBRARY_PATH``, and ``PATH`` for the build.
     """
-    del extra_cflags, extra_ldflags, with_cuda, kwargs  # reserved for API compatibility
+    del extra_cflags, extra_ldflags, with_cuda, kwargs  # API compat only
 
     if not functions:
         raise ValueError("load_inline requires at least one function name")
 
-    configure_musa_env()
+    # ── Ensure MUSA build environment ──────────────────────────────────────
+    musa_home = os.environ.get("MUSA_HOME") or "/usr/local/musa"
+    os.environ.setdefault("MUSA_HOME", musa_home)
 
+    ld_path = os.environ.get("LD_LIBRARY_PATH", "")
+    if musa_home not in ld_path:
+        os.environ["LD_LIBRARY_PATH"] = (
+            f"{musa_home}/lib:{ld_path}" if ld_path else f"{musa_home}/lib"
+        )
+
+    path_env = os.environ.get("PATH", "")
+    if f"{musa_home}/bin" not in path_env:
+        os.environ["PATH"] = (
+            f"{musa_home}/bin:{path_env}" if path_env else f"{musa_home}/bin"
+        )
+
+    # ── Assemble source body ──────────────────────────────────────────────
     parts: list[str] = []
     for src in (cpp_sources, cuda_sources):
         if src is None:
@@ -98,6 +103,7 @@ def load_inline(
     if "PYBIND11_MODULE" not in source_body:
         source_body = source_body.rstrip() + _build_pybind_block(functions)
 
+    # ── Prepare build directory ───────────────────────────────────────────
     module_name = _make_module_name(name)
     source_hash = hashlib.sha256(source_body.encode()).hexdigest()[:16]
     build_root = Path(
@@ -113,12 +119,29 @@ def load_inline(
     if not source_path.exists() or source_path.read_text() != source_body:
         source_path.write_text(source_body)
 
-    _write_setup_py(build_dir, module_name, source_path.name)
+    # ── Write setup.py ────────────────────────────────────────────────────
+    setup_py = build_dir / "setup.py"
+    setup_py.write_text(
+        f"""\
+from setuptools import setup
+from torch_musa.utils.musa_extension import MUSAExtension, BuildExtension
 
+setup(
+    name="{module_name}",
+    ext_modules=[
+        MUSAExtension(
+            name="{module_name}",
+            sources=[r"{source_path}"],
+        )
+    ],
+    cmdclass={{"build_ext": BuildExtension}},
+)
+"""
+    )
+
+    # ── Build ─────────────────────────────────────────────────────────────
     so_candidates = list(build_dir.glob(f"{module_name}*.so"))
     if not so_candidates:
-        import subprocess
-
         cmd = [sys.executable, "setup.py", "build_ext", "--inplace"]
         if verbose:
             print(f"[musa_extension] Building {module_name} in {build_dir}")
@@ -136,6 +159,7 @@ def load_inline(
     if not so_candidates:
         raise RuntimeError(f"MUSA extension build produced no .so for {module_name}")
 
+    # ── Load ──────────────────────────────────────────────────────────────
     so_path = so_candidates[0]
     spec = importlib.util.spec_from_file_location(module_name, so_path)
     if spec is None or spec.loader is None:
