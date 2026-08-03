@@ -19,6 +19,7 @@ import torch
 from importlib.resources import files, as_file
 
 # API clients
+import httpx
 from openai import OpenAI
 from litellm import completion
 import requests
@@ -76,14 +77,17 @@ def query_server(
     - Local Server (SGLang, vLLM, Tokasaurus)
     """
     # Local Server (SGLang, vLLM, Tokasaurus) - special handling
-    if server_type == "local":
+    if server_type in {"local", "cudallm"}:
         url = f"http://{server_address}:{server_port}"
         client = OpenAI(
-            api_key=SGLANG_KEY, base_url=f"{url}/v1", timeout=None, max_retries=0
+            api_key=SGLANG_KEY or "EMPTY",
+            base_url=f"{url}/v1", timeout=None, max_retries=0,
+            # Never route loopback inference traffic through HTTP(S)_PROXY.
+            http_client=httpx.Client(trust_env=False),
         )
         if isinstance(prompt, str):
             response = client.completions.create(
-                model="default",
+                model=model_name,
                 prompt=prompt,
                 temperature=temperature,
                 n=num_completions,
@@ -93,7 +97,7 @@ def query_server(
             outputs = [choice.text for choice in response.choices]
         else:
             response = client.chat.completions.create(
-                model="default",
+                model=model_name,
                 messages=prompt,
                 temperature=temperature,
                 n=num_completions,
@@ -266,6 +270,14 @@ SERVER_PRESETS = {
         "server_port": 10210,
         "server_address": "matx2.stanford.edu",
         "max_tokens": 8192,
+    },
+    "cudallm": {
+        "model_name": "cudaLLM-8B",
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "server_port": 8000,
+        "server_address": "127.0.0.1",
+        "max_tokens": 12288,
     },
     "anthropic": {  # for Claude 3.7 Sonnet
         "model_name": "anthropic/claude-3-7-sonnet-20250219",

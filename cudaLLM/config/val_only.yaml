@@ -1,0 +1,11 @@
+defaults:
+  - ppo_trainer
+
+val_config:
+  from_cook: False
+  cook_response_key: output
+  batch_size: ${data.val_batch_size}
+  iters: -1 # if -1 batch_size is ignored, the whole dataset is validated in 1 step
+  add_sft_messages: True
+  save_log_per_iter: False
+  save_log_path: eval_log.parquet
