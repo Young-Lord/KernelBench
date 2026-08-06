@@ -132,7 +132,9 @@ def evaluate_single_sample_src(ref_arch_src: str, kernel_src: str, configs: dict
     """
 
     kernel_hash = str(hash(kernel_src))
-    build_dir = os.path.join(configs["build_dir_prefix"], "test_build", kernel_hash)
+    build_dir = os.path.abspath(
+        os.path.join(configs["build_dir_prefix"], "test_build", kernel_hash)
+    )
     
     if configs["clear_cache"]: # fresh kernel build
         print(f"[INFO] Clearing cache for build directory: {build_dir}")
@@ -335,7 +337,11 @@ def main(config: ScriptConfig):
                                                     verbose=False,
                                                     precision=config.precision,
                                                     )
-        ref_exec_compile_time = ref_time_compile_result.get("mean", None)
+        ref_exec_compile_time = (
+            ref_time_compile_result.get("mean", None)
+            if ref_time_compile_result is not None
+            else None
+        )
 
     elif config.eval_mode == "modal":
         # Modal evaluation (remote execution)
@@ -383,7 +389,11 @@ def main(config: ScriptConfig):
                 gpu_arch=gpu_arch,
                 precision=config.precision,
             )
-            ref_exec_compile_time = ref_time_compile_result.get("mean", None)
+            ref_exec_compile_time = (
+            ref_time_compile_result.get("mean", None)
+            if ref_time_compile_result is not None
+            else None
+        )
 
     print("="*40)
     print(f"[Eval] Kernel eval result: {kernel_eval_result}")
@@ -395,7 +405,10 @@ def main(config: ScriptConfig):
     
     if kernel_eval_result.correctness:
         print(f"[Speedup] Speedup over eager: {ref_exec_eager_time / kernel_exec_time:.2f}x")
-        print(f"[Speedup] Speedup over torch.compile: {ref_exec_compile_time / kernel_exec_time:.2f}x")
+        if ref_exec_compile_time is not None:
+            print(f"[Speedup] Speedup over torch.compile: {ref_exec_compile_time / kernel_exec_time:.2f}x")
+        else:
+            print("[Speedup] Speedup over torch.compile: N/A (torch.compile/inductor not supported on this backend)")
     else:
         print("[Speedup] Speedup Not Available as Kernel did not pass correctness")
 

@@ -27,6 +27,10 @@ def _strip_comments(code: str) -> str:
     """Remove # and // comments from code."""
     lines = []
     for line in code.split('\n'):
+        # #include directives are C/C++ preprocessor statements, not comments
+        if line.lstrip().startswith('#include'):
+            lines.append(line)
+            continue
         if '#' in line:
             line = line[:line.index('#')]
         if '//' in line:

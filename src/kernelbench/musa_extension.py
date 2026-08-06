@@ -111,7 +111,7 @@ def load_inline(
             "TORCH_EXTENSIONS_DIR",
             os.path.join(os.path.expanduser("~"), ".cache", "torch_extensions"),
         )
-    )
+    ).resolve()  # resolve relative paths (e.g. "test_build/<hash>") so the ninja build sees absolute source paths
     build_dir = build_root / f"musa_{module_name}_{source_hash}"
     build_dir.mkdir(parents=True, exist_ok=True)
 

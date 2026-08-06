@@ -13,3 +13,5 @@ cache/*
 _build_cache/
 uv.lock
 CLAUDE.md
+# Vendored upstream MUSA operator sources (fetch on demand, see docs/musa/source_inventory.md)
+third_party/musa-sources/
