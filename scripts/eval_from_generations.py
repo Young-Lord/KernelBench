@@ -15,7 +15,7 @@ import torch
 from pydra import Config, REQUIRED
 
 # Import only what we need
-from kernelbench import compile, eval, utils
+from kernelbench import compile, eval, utils as kernel_utils
 
 from kernelbench.dataset import construct_kernelbench_dataset
 from kernelbench.eval import (
