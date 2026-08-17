@@ -1,0 +1,37 @@
+{
+  "problem_id": 79,
+  "problem_name": "79_conv_transposed_1D_asymmetric_input_square_kernel___padded____strided____dilated__.py",
+  "reference_path": "KernelBench/level1/79_conv_transposed_1D_asymmetric_input_square_kernel___padded____strided____dilated__.py",
+  "kernel_path": "KernelBench/level1_musa/problem_79/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 461.0,
+  "runtime_stats": {
+    "mean": 461.0,
+    "std": 0.23,
+    "min": 461.0,
+    "max": 464.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 19.1,
+  "reference_runtime_stats": {
+    "mean": 19.1,
+    "std": 0.373,
+    "min": 19.0,
+    "max": 22.8,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.04143167028199567,
+  "wall_time_seconds": 87.267,
+  "status": "ok"
+}

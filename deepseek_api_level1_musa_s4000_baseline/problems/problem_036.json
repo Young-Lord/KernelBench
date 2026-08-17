@@ -1,0 +1,37 @@
+{
+  "problem_id": 36,
+  "problem_name": "36_RMSNorm_.py",
+  "reference_path": "KernelBench/level1/36_RMSNorm_.py",
+  "kernel_path": "KernelBench/level1_musa/problem_36/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 33.9,
+  "runtime_stats": {
+    "mean": 33.9,
+    "std": 0.0662,
+    "min": 33.8,
+    "max": 34.1,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 54.4,
+  "reference_runtime_stats": {
+    "mean": 54.4,
+    "std": 1.86,
+    "min": 53.6,
+    "max": 72.6,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 1.6047197640117994,
+  "wall_time_seconds": 166.789,
+  "status": "ok"
+}

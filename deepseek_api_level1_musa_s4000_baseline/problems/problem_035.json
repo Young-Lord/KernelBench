@@ -1,0 +1,37 @@
+{
+  "problem_id": 35,
+  "problem_name": "35_GroupNorm_.py",
+  "reference_path": "KernelBench/level1/35_GroupNorm_.py",
+  "kernel_path": "KernelBench/level1_musa/problem_35/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 95.6,
+  "runtime_stats": {
+    "mean": 95.6,
+    "std": 1.16,
+    "min": 95.1,
+    "max": 98.7,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 32.9,
+  "reference_runtime_stats": {
+    "mean": 32.9,
+    "std": 1.86,
+    "min": 32.7,
+    "max": 51.4,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.34414225941422594,
+  "wall_time_seconds": 169.858,
+  "status": "ok"
+}

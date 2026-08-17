@@ -1,0 +1,37 @@
+{
+  "problem_id": 2,
+  "problem_name": "2_Standard_matrix_multiplication_.py",
+  "reference_path": "KernelBench/level1/2_Standard_matrix_multiplication_.py",
+  "kernel_path": "KernelBench/level1_musa/problem_2/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 301.0,
+  "runtime_stats": {
+    "mean": 301.0,
+    "std": 1.55,
+    "min": 296.0,
+    "max": 305.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 9.17,
+  "reference_runtime_stats": {
+    "mean": 9.17,
+    "std": 0.781,
+    "min": 8.49,
+    "max": 12.7,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.030465116279069768,
+  "wall_time_seconds": 66.182,
+  "status": "ok"
+}

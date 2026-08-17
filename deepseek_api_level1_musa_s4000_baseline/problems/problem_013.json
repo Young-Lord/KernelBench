@@ -1,0 +1,37 @@
+{
+  "problem_id": 13,
+  "problem_name": "13_Matmul_for_symmetric_matrices.py",
+  "reference_path": "KernelBench/level1/13_Matmul_for_symmetric_matrices.py",
+  "kernel_path": "KernelBench/level1_musa/problem_13/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 272.0,
+  "runtime_stats": {
+    "mean": 272.0,
+    "std": 2.46,
+    "min": 265.0,
+    "max": 277.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 8.7,
+  "reference_runtime_stats": {
+    "mean": 8.7,
+    "std": 0.422,
+    "min": 7.78,
+    "max": 9.83,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.031985294117647056,
+  "wall_time_seconds": 62.389,
+  "status": "ok"
+}

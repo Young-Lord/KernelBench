@@ -1,0 +1,37 @@
+{
+  "problem_id": 43,
+  "problem_name": "43_Max_Pooling_3D.py",
+  "reference_path": "KernelBench/level1/43_Max_Pooling_3D.py",
+  "kernel_path": "KernelBench/level1_musa/problem_43/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 121.0,
+  "runtime_stats": {
+    "mean": 121.0,
+    "std": 0.101,
+    "min": 121.0,
+    "max": 122.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 27.5,
+  "reference_runtime_stats": {
+    "mean": 27.5,
+    "std": 0.201,
+    "min": 27.5,
+    "max": 29.5,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.22727272727272727,
+  "wall_time_seconds": 102.807,
+  "status": "ok"
+}

@@ -1,0 +1,37 @@
+{
+  "problem_id": 26,
+  "problem_name": "26_GELU_.py",
+  "reference_path": "KernelBench/level1/26_GELU_.py",
+  "kernel_path": "KernelBench/level1_musa/problem_26/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 65.8,
+  "runtime_stats": {
+    "mean": 65.8,
+    "std": 2.4,
+    "min": 63.3,
+    "max": 79.3,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 18.1,
+  "reference_runtime_stats": {
+    "mean": 18.1,
+    "std": 1.54,
+    "min": 17.9,
+    "max": 33.5,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.2750759878419453,
+  "wall_time_seconds": 149.173,
+  "status": "ok"
+}

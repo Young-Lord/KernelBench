@@ -1,0 +1,37 @@
+{
+  "problem_id": 99,
+  "problem_name": "99_TripletMarginLoss.py",
+  "reference_path": "KernelBench/level1/99_TripletMarginLoss.py",
+  "kernel_path": "KernelBench/level1_musa/problem_99/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 27.5,
+  "runtime_stats": {
+    "mean": 27.5,
+    "std": 0.0278,
+    "min": 27.5,
+    "max": 27.7,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 18.7,
+  "reference_runtime_stats": {
+    "mean": 18.7,
+    "std": 0.0473,
+    "min": 18.6,
+    "max": 19.1,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.6799999999999999,
+  "wall_time_seconds": 77.23,
+  "status": "ok"
+}

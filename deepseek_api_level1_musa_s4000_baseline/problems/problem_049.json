@@ -1,0 +1,37 @@
+{
+  "problem_id": 49,
+  "problem_name": "49_Max_reduction_over_a_dimension.py",
+  "reference_path": "KernelBench/level1/49_Max_reduction_over_a_dimension.py",
+  "kernel_path": "KernelBench/level1_musa/problem_49/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 17.3,
+  "runtime_stats": {
+    "mean": 17.3,
+    "std": 0.312,
+    "min": 17.0,
+    "max": 18.2,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 15.5,
+  "reference_runtime_stats": {
+    "mean": 15.5,
+    "std": 0.0571,
+    "min": 15.3,
+    "max": 15.8,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.8959537572254335,
+  "wall_time_seconds": 146.137,
+  "status": "ok"
+}

@@ -1,0 +1,37 @@
+{
+  "problem_id": 46,
+  "problem_name": "46_Average_Pooling_3D.py",
+  "reference_path": "KernelBench/level1/46_Average_Pooling_3D.py",
+  "kernel_path": "KernelBench/level1_musa/problem_46/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 250.0,
+  "runtime_stats": {
+    "mean": 250.0,
+    "std": 0.239,
+    "min": 250.0,
+    "max": 252.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 83.1,
+  "reference_runtime_stats": {
+    "mean": 83.1,
+    "std": 0.23,
+    "min": 83.1,
+    "max": 85.4,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.3324,
+  "wall_time_seconds": 179.436,
+  "status": "ok"
+}

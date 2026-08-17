@@ -1,0 +1,904 @@
+{
+  "level1": {
+    "1_Square_matrix_multiplication_.py": {
+      "mean": 8.71,
+      "std": 0.349,
+      "min": 7.79,
+      "max": 9.86,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "2_Standard_matrix_multiplication_.py": {
+      "mean": 9.17,
+      "std": 0.781,
+      "min": 8.49,
+      "max": 12.7,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "3_Batched_matrix_multiplication.py": {
+      "mean": 17.9,
+      "std": 0.245,
+      "min": 16.9,
+      "max": 18.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "4_Matrix_vector_multiplication_.py": {
+      "mean": 12.0,
+      "std": 0.0479,
+      "min": 11.9,
+      "max": 12.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "5_Matrix_scalar_multiplication.py": {
+      "mean": 12.1,
+      "std": 1.05,
+      "min": 11.9,
+      "max": 22.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "6_Matmul_with_large_K_dimension_.py": {
+      "mean": 83.2,
+      "std": 0.00749,
+      "min": 83.2,
+      "max": 83.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "7_Matmul_with_small_K_dimension_.py": {
+      "mean": 11.1,
+      "std": 0.947,
+      "min": 10.4,
+      "max": 20.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "8_Matmul_with_irregular_shapes_.py": {
+      "mean": 19.6,
+      "std": 0.477,
+      "min": 18.7,
+      "max": 20.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "9_Tall_skinny_matrix_multiplication_.py": {
+      "mean": 8.22,
+      "std": 1.01,
+      "min": 7.9,
+      "max": 18.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "10_3D_tensor_matrix_multiplication.py": {
+      "mean": 3.33,
+      "std": 0.169,
+      "min": 3.01,
+      "max": 3.81,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "11_4D_tensor_matrix_multiplication.py": {
+      "mean": 26.3,
+      "std": 0.471,
+      "min": 24.8,
+      "max": 30.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "12_Matmul_with_diagonal_matrices_.py": {
+      "mean": 0.253,
+      "std": 0.00382,
+      "min": 0.25,
+      "max": 0.284,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "13_Matmul_for_symmetric_matrices.py": {
+      "mean": 8.7,
+      "std": 0.422,
+      "min": 7.78,
+      "max": 9.83,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "14_Matmul_for_upper_triangular_matrices.py": {
+      "mean": 11.5,
+      "std": 0.301,
+      "min": 10.5,
+      "max": 12.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "15_Matmul_for_lower_triangular_matrices.py": {
+      "mean": 11.5,
+      "std": 0.32,
+      "min": 10.5,
+      "max": 12.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "16_Matmul_with_transposed_A.py": {
+      "mean": 10.9,
+      "std": 0.807,
+      "min": 8.48,
+      "max": 12.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "17_Matmul_with_transposed_B.py": {
+      "mean": 10.1,
+      "std": 0.926,
+      "min": 8.96,
+      "max": 13.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "18_Matmul_with_transposed_both.py": {
+      "mean": 10.3,
+      "std": 1.04,
+      "min": 9.01,
+      "max": 13.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "19_ReLU.py": {
+      "mean": 18.2,
+      "std": 1.52,
+      "min": 17.9,
+      "max": 33.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "20_LeakyReLU.py": {
+      "mean": 18.2,
+      "std": 1.54,
+      "min": 17.9,
+      "max": 33.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "21_Sigmoid.py": {
+      "mean": 18.1,
+      "std": 1.55,
+      "min": 17.9,
+      "max": 33.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "22_Tanh.py": {
+      "mean": 18.1,
+      "std": 1.54,
+      "min": 17.9,
+      "max": 33.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "23_Softmax.py": {
+      "mean": 35.3,
+      "std": 1.6,
+      "min": 35.1,
+      "max": 51.2,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "24_LogSoftmax.py": {
+      "mean": 35.2,
+      "std": 1.55,
+      "min": 34.9,
+      "max": 50.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "25_Swish.py": {
+      "mean": 124.0,
+      "std": 795.0,
+      "min": 44.4,
+      "max": 8030.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "26_GELU_.py": {
+      "mean": 18.1,
+      "std": 1.54,
+      "min": 17.9,
+      "max": 33.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "27_SELU_.py": {
+      "mean": 18.1,
+      "std": 1.53,
+      "min": 17.9,
+      "max": 33.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "28_HardSigmoid.py": {
+      "mean": 18.2,
+      "std": 1.52,
+      "min": 17.9,
+      "max": 33.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "29_Softplus.py": {
+      "mean": 26.1,
+      "std": 1.51,
+      "min": 25.5,
+      "max": 41.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "30_Softsign.py": {
+      "mean": 142.0,
+      "std": 792.0,
+      "min": 62.3,
+      "max": 8020.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "31_ELU.py": {
+      "mean": 18.1,
+      "std": 1.55,
+      "min": 17.9,
+      "max": 33.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "32_HardTanh.py": {
+      "mean": 18.2,
+      "std": 1.54,
+      "min": 17.9,
+      "max": 33.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "33_BatchNorm.py": {
+      "mean": 22.6,
+      "std": 1.08,
+      "min": 22.4,
+      "max": 33.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "34_InstanceNorm.py": {
+      "mean": 31.5,
+      "std": 1.8,
+      "min": 31.2,
+      "max": 49.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "35_GroupNorm_.py": {
+      "mean": 32.9,
+      "std": 1.86,
+      "min": 32.7,
+      "max": 51.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "36_RMSNorm_.py": {
+      "mean": 54.4,
+      "std": 1.86,
+      "min": 53.6,
+      "max": 72.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "37_FrobeniusNorm_.py": {
+      "mean": 31.6,
+      "std": 0.991,
+      "min": 31.3,
+      "max": 41.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "38_L1Norm_.py": {
+      "mean": 180.0,
+      "std": 1060.0,
+      "min": 72.3,
+      "max": 10700.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "39_L2Norm_.py": {
+      "mean": 157.0,
+      "std": 1060.0,
+      "min": 48.6,
+      "max": 10700.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "40_LayerNorm.py": {
+      "mean": 6.23,
+      "std": 0.0126,
+      "min": 6.2,
+      "max": 6.26,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "41_Max_Pooling_1D.py": {
+      "mean": 55.4,
+      "std": 1.56,
+      "min": 55.2,
+      "max": 70.9,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "42_Max_Pooling_2D.py": {
+      "mean": 62.1,
+      "std": 1.06,
+      "min": 62.0,
+      "max": 72.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "43_Max_Pooling_3D.py": {
+      "mean": 27.5,
+      "std": 0.201,
+      "min": 27.5,
+      "max": 29.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "44_Average_Pooling_1D.py": {
+      "mean": 39.2,
+      "std": 0.497,
+      "min": 39.1,
+      "max": 44.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "45_Average_Pooling_2D.py": {
+      "mean": 164.0,
+      "std": 0.238,
+      "min": 163.0,
+      "max": 165.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "46_Average_Pooling_3D.py": {
+      "mean": 83.1,
+      "std": 0.23,
+      "min": 83.1,
+      "max": 85.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "47_Sum_reduction_over_a_dimension.py": {
+      "mean": 16.0,
+      "std": 0.0378,
+      "min": 15.9,
+      "max": 16.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "48_Mean_reduction_over_a_dimension.py": {
+      "mean": 15.5,
+      "std": 0.0196,
+      "min": 15.5,
+      "max": 15.7,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "49_Max_reduction_over_a_dimension.py": {
+      "mean": 15.5,
+      "std": 0.0571,
+      "min": 15.3,
+      "max": 15.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "50_conv_standard_2D__square_input__square_kernel.py": {
+      "mean": 5.15,
+      "std": 0.0958,
+      "min": 4.72,
+      "max": 5.21,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "51_Argmax_over_a_dimension.py": {
+      "mean": 15.5,
+      "std": 0.0667,
+      "min": 15.3,
+      "max": 15.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "52_Argmin_over_a_dimension.py": {
+      "mean": 15.5,
+      "std": 0.0676,
+      "min": 15.3,
+      "max": 15.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "53_Min_reduction_over_a_dimension.py": {
+      "mean": 15.5,
+      "std": 0.0567,
+      "min": 15.4,
+      "max": 15.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "54_conv_standard_3D__square_input__square_kernel.py": {
+      "mean": 29.3,
+      "std": 0.216,
+      "min": 29.2,
+      "max": 31.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "55_conv_standard_2D__asymmetric_input__square_kernel.py": {
+      "mean": 35.9,
+      "std": 0.368,
+      "min": 34.1,
+      "max": 38.7,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "56_conv_standard_2D__asymmetric_input__asymmetric_kernel.py": {
+      "mean": 32.9,
+      "std": 0.158,
+      "min": 32.6,
+      "max": 33.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "57_conv_transposed_2D__square_input__square_kernel.py": {
+      "mean": 60.4,
+      "std": 0.42,
+      "min": 59.4,
+      "max": 61.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "58_conv_transposed_3D__asymmetric_input__asymmetric_kernel.py": {
+      "mean": 284.0,
+      "std": 0.463,
+      "min": 283.0,
+      "max": 285.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "59_conv_standard_3D__asymmetric_input__square_kernel.py": {
+      "mean": 51.5,
+      "std": 0.636,
+      "min": 51.4,
+      "max": 57.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "60_conv_standard_3D__square_input__asymmetric_kernel.py": {
+      "mean": 71.3,
+      "std": 0.186,
+      "min": 71.2,
+      "max": 73.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "61_conv_transposed_3D__square_input__square_kernel.py": {
+      "mean": 373.0,
+      "std": 0.398,
+      "min": 373.0,
+      "max": 375.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "62_conv_standard_2D__square_input__asymmetric_kernel.py": {
+      "mean": 22.9,
+      "std": 0.141,
+      "min": 21.9,
+      "max": 23.2,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "63_conv_standard_2D__square_input__square_kernel.py": {
+      "mean": 39.3,
+      "std": 1.68,
+      "min": 38.4,
+      "max": 55.9,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "64_conv_transposed_1D.py": {
+      "mean": 29.2,
+      "std": 0.393,
+      "min": 28.8,
+      "max": 32.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "65_conv_transposed_2D__square_input__asymmetric_kernel.py": {
+      "mean": 36.3,
+      "std": 0.239,
+      "min": 35.6,
+      "max": 37.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "66_conv_standard_3D__asymmetric_input__asymmetric_kernel.py": {
+      "mean": 35.4,
+      "std": 0.0787,
+      "min": 35.3,
+      "max": 36.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "67_conv_standard_1D.py": {
+      "mean": 13.8,
+      "std": 0.463,
+      "min": 13.4,
+      "max": 18.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "68_conv_transposed_3D__square_input__asymmetric_kernel.py": {
+      "mean": 1430.0,
+      "std": 0.607,
+      "min": 1430.0,
+      "max": 1430.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "69_conv_transposed_2D__asymmetric_input__asymmetric_kernel.py": {
+      "mean": 36.0,
+      "std": 0.126,
+      "min": 35.5,
+      "max": 36.3,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "70_conv_transposed_3D__asymmetric_input__square_kernel.py": {
+      "mean": 1250.0,
+      "std": 0.49,
+      "min": 1250.0,
+      "max": 1250.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "71_conv_transposed_2D__asymmetric_input__square_kernel.py": {
+      "mean": 15.3,
+      "std": 0.118,
+      "min": 14.6,
+      "max": 15.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "72_conv_transposed_3D_asymmetric_input_asymmetric_kernel___strided_padded_grouped_.py": {
+      "mean": 318.0,
+      "std": 1.02,
+      "min": 315.0,
+      "max": 320.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "73_conv_transposed_3D_asymmetric_input_square_kernel__strided_padded__grouped.py": {
+      "mean": 778.0,
+      "std": 0.277,
+      "min": 778.0,
+      "max": 781.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "74_conv_transposed_1D_dilated.py": {
+      "mean": 9.6,
+      "std": 0.215,
+      "min": 9.09,
+      "max": 11.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "75_conv_transposed_2D_asymmetric_input_asymmetric_kernel_strided__grouped____padded____dilated__.py": {
+      "mean": 32.0,
+      "std": 0.483,
+      "min": 31.9,
+      "max": 36.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "76_conv_standard_1D_dilated_strided__.py": {
+      "mean": 39.4,
+      "std": 1.19,
+      "min": 39.0,
+      "max": 51.2,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "77_conv_transposed_3D_square_input_square_kernel___padded____dilated____strided__.py": {
+      "mean": 203.0,
+      "std": 0.276,
+      "min": 202.0,
+      "max": 204.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "78_conv_transposed_2D_asymmetric_input_asymmetric_kernel___padded__.py": {
+      "mean": 34.8,
+      "std": 0.309,
+      "min": 34.1,
+      "max": 35.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "79_conv_transposed_1D_asymmetric_input_square_kernel___padded____strided____dilated__.py": {
+      "mean": 19.1,
+      "std": 0.373,
+      "min": 19.0,
+      "max": 22.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "80_conv_standard_2D_square_input_asymmetric_kernel___dilated____padded__.py": {
+      "mean": 22.6,
+      "std": 0.132,
+      "min": 22.4,
+      "max": 23.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "81_conv_transposed_2D_asymmetric_input_square_kernel___dilated____padded____strided__.py": {
+      "mean": 12.8,
+      "std": 0.179,
+      "min": 12.8,
+      "max": 14.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "82_conv_depthwise_2D_square_input_square_kernel.py": {
+      "mean": 28.4,
+      "std": 0.242,
+      "min": 28.4,
+      "max": 30.8,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "83_conv_depthwise_2D_square_input_asymmetric_kernel.py": {
+      "mean": 8.01,
+      "std": 0.112,
+      "min": 7.99,
+      "max": 9.11,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "84_conv_depthwise_2D_asymmetric_input_square_kernel.py": {
+      "mean": 113.0,
+      "std": 1.08,
+      "min": 113.0,
+      "max": 124.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "85_conv_depthwise_2D_asymmetric_input_asymmetric_kernel.py": {
+      "mean": 25.9,
+      "std": 0.109,
+      "min": 25.9,
+      "max": 27.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "86_conv_depthwise_separable_2D.py": {
+      "mean": 34.5,
+      "std": 0.723,
+      "min": 34.2,
+      "max": 41.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "87_conv_pointwise_2D.py": {
+      "mean": 23.1,
+      "std": 1.96,
+      "min": 22.4,
+      "max": 42.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "88_MinGPTNewGelu.py": {
+      "mean": 6.91,
+      "std": 0.0048,
+      "min": 6.9,
+      "max": 6.93,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "89_cumsum.py": {
+      "mean": 59.3,
+      "std": 1.03,
+      "min": 59.1,
+      "max": 69.5,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "90_cumprod.py": {
+      "mean": 59.3,
+      "std": 1.09,
+      "min": 59.1,
+      "max": 70.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "91_cumsum_reverse.py": {
+      "mean": 108.0,
+      "std": 1.02,
+      "min": 108.0,
+      "max": 119.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "92_cumsum_exclusive.py": {
+      "mean": 98.9,
+      "std": 1.01,
+      "min": 98.6,
+      "max": 109.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "93_masked_cumsum.py": {
+      "mean": 84.6,
+      "std": 0.323,
+      "min": 84.4,
+      "max": 87.7,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "94_MSELoss.py": {
+      "mean": 35.7,
+      "std": 0.108,
+      "min": 35.6,
+      "max": 36.0,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "95_CrossEntropyLoss.py": {
+      "mean": 3.38,
+      "std": 0.0198,
+      "min": 3.23,
+      "max": 3.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "96_HuberLoss.py": {
+      "mean": 24.2,
+      "std": 1.03,
+      "min": 24.0,
+      "max": 34.4,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "97_ScaledDotProductAttention.py": {
+      "mean": 84.4,
+      "std": 0.915,
+      "min": 82.5,
+      "max": 88.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "98_KLDivLoss.py": {
+      "mean": 16.6,
+      "std": 0.0143,
+      "min": 16.6,
+      "max": 16.7,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "99_TripletMarginLoss.py": {
+      "mean": 18.7,
+      "std": 0.0473,
+      "min": 18.6,
+      "max": 19.1,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    },
+    "100_HingeLoss.py": {
+      "mean": 42.2,
+      "std": 0.115,
+      "min": 42.0,
+      "max": 42.6,
+      "num_trials": 100,
+      "hardware": "MTT S4000",
+      "device": "musa:0"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "problem_id": 51,
+  "problem_name": "51_Argmax_over_a_dimension.py",
+  "reference_path": "KernelBench/level1/51_Argmax_over_a_dimension.py",
+  "kernel_path": "KernelBench/level1_musa/problem_51/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 20.0,
+  "runtime_stats": {
+    "mean": 20.0,
+    "std": 0.356,
+    "min": 19.6,
+    "max": 21.1,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 15.5,
+  "reference_runtime_stats": {
+    "mean": 15.5,
+    "std": 0.0667,
+    "min": 15.3,
+    "max": 15.6,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.775,
+  "wall_time_seconds": 145.32,
+  "status": "ok"
+}

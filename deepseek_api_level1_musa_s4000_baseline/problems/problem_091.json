@@ -1,0 +1,37 @@
+{
+  "problem_id": 91,
+  "problem_name": "91_cumsum_reverse.py",
+  "reference_path": "KernelBench/level1/91_cumsum_reverse.py",
+  "kernel_path": "KernelBench/level1_musa/problem_91/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 589.0,
+  "runtime_stats": {
+    "mean": 589.0,
+    "std": 8.69,
+    "min": 566.0,
+    "max": 619.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 108.0,
+  "reference_runtime_stats": {
+    "mean": 108.0,
+    "std": 1.02,
+    "min": 108.0,
+    "max": 119.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.1833616298811545,
+  "wall_time_seconds": 166.936,
+  "status": "ok"
+}

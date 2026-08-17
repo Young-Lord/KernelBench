@@ -1,0 +1,37 @@
+{
+  "problem_id": 33,
+  "problem_name": "33_BatchNorm.py",
+  "reference_path": "KernelBench/level1/33_BatchNorm.py",
+  "kernel_path": "KernelBench/level1_musa/problem_33/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 236.0,
+  "runtime_stats": {
+    "mean": 236.0,
+    "std": 0.0552,
+    "min": 236.0,
+    "max": 236.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 22.6,
+  "reference_runtime_stats": {
+    "mean": 22.6,
+    "std": 1.08,
+    "min": 22.4,
+    "max": 33.4,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.09576271186440678,
+  "wall_time_seconds": 119.428,
+  "status": "ok"
+}

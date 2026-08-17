@@ -1,0 +1,2209 @@
+{
+  "1": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 462.0,
+      "runtime_stats": {
+        "mean": 462.0,
+        "std": 0.077,
+        "min": 462.0,
+        "max": 462.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "2": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 301.0,
+      "runtime_stats": {
+        "mean": 301.0,
+        "std": 1.55,
+        "min": 296.0,
+        "max": 305.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "3": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 971.0,
+      "runtime_stats": {
+        "mean": 971.0,
+        "std": 0.195,
+        "min": 970.0,
+        "max": 972.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "4": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 18.6,
+      "runtime_stats": {
+        "mean": 18.6,
+        "std": 0.351,
+        "min": 18.1,
+        "max": 19.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "5": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 18.3,
+      "runtime_stats": {
+        "mean": 18.3,
+        "std": 1.05,
+        "min": 18.2,
+        "max": 28.8,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "6": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 115.0,
+      "runtime_stats": {
+        "mean": 115.0,
+        "std": 7.87,
+        "min": 111.0,
+        "max": 145.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "7": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 216.0,
+      "runtime_stats": {
+        "mean": 216.0,
+        "std": 1.05,
+        "min": 216.0,
+        "max": 226.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "8": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 600.0,
+      "runtime_stats": {
+        "mean": 600.0,
+        "std": 5.21,
+        "min": 587.0,
+        "max": 611.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "9": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 112.0,
+      "runtime_stats": {
+        "mean": 112.0,
+        "std": 1.05,
+        "min": 112.0,
+        "max": 122.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "10": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 78.8,
+      "runtime_stats": {
+        "mean": 78.8,
+        "std": 0.065,
+        "min": 78.6,
+        "max": 79.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "11": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1420.0,
+      "runtime_stats": {
+        "mean": 1420.0,
+        "std": 0.89,
+        "min": 1420.0,
+        "max": 1430.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "12": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 0.667,
+      "runtime_stats": {
+        "mean": 0.667,
+        "std": 0.00146,
+        "min": 0.664,
+        "max": 0.673,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "13": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 272.0,
+      "runtime_stats": {
+        "mean": 272.0,
+        "std": 2.46,
+        "min": 265.0,
+        "max": 277.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "14": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 273.0,
+      "runtime_stats": {
+        "mean": 273.0,
+        "std": 2.63,
+        "min": 263.0,
+        "max": 278.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "15": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 273.0,
+      "runtime_stats": {
+        "mean": 273.0,
+        "std": 2.68,
+        "min": 265.0,
+        "max": 279.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "16": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 298.0,
+      "runtime_stats": {
+        "mean": 298.0,
+        "std": 1.59,
+        "min": 294.0,
+        "max": 301.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "17": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 298.0,
+      "runtime_stats": {
+        "mean": 298.0,
+        "std": 1.6,
+        "min": 294.0,
+        "max": 301.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "18": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 298.0,
+      "runtime_stats": {
+        "mean": 298.0,
+        "std": 1.85,
+        "min": 292.0,
+        "max": 301.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "19": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 68.5,
+      "runtime_stats": {
+        "mean": 68.5,
+        "std": 2.74,
+        "min": 65.6,
+        "max": 81.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "20": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 68.2,
+      "runtime_stats": {
+        "mean": 68.2,
+        "std": 2.65,
+        "min": 65.5,
+        "max": 80.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "21": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 66.1,
+      "runtime_stats": {
+        "mean": 66.1,
+        "std": 2.53,
+        "min": 63.5,
+        "max": 79.6,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "22": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 65.9,
+      "runtime_stats": {
+        "mean": 65.9,
+        "std": 2.46,
+        "min": 63.4,
+        "max": 79.1,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "23": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 171.0,
+      "runtime_stats": {
+        "mean": 171.0,
+        "std": 1.6,
+        "min": 171.0,
+        "max": 187.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "24": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 52.8,
+      "runtime_stats": {
+        "mean": 52.8,
+        "std": 1.58,
+        "min": 52.4,
+        "max": 68.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "25": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 66.0,
+      "runtime_stats": {
+        "mean": 66.0,
+        "std": 2.48,
+        "min": 63.5,
+        "max": 79.6,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "26": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 65.8,
+      "runtime_stats": {
+        "mean": 65.8,
+        "std": 2.4,
+        "min": 63.3,
+        "max": 79.3,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "27": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 27.5,
+      "runtime_stats": {
+        "mean": 27.5,
+        "std": 1.57,
+        "min": 27.3,
+        "max": 43.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "28": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 68.0,
+      "runtime_stats": {
+        "mean": 68.0,
+        "std": 2.77,
+        "min": 65.0,
+        "max": 81.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "29": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 68.0,
+      "runtime_stats": {
+        "mean": 68.0,
+        "std": 2.51,
+        "min": 65.3,
+        "max": 81.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "30": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 27.5,
+      "runtime_stats": {
+        "mean": 27.5,
+        "std": 1.58,
+        "min": 27.3,
+        "max": 43.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "31": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 66.7,
+      "runtime_stats": {
+        "mean": 66.7,
+        "std": 2.55,
+        "min": 64.1,
+        "max": 80.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "32": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 68.4,
+      "runtime_stats": {
+        "mean": 68.4,
+        "std": 2.71,
+        "min": 65.6,
+        "max": 81.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "33": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 236.0,
+      "runtime_stats": {
+        "mean": 236.0,
+        "std": 0.0552,
+        "min": 236.0,
+        "max": 236.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "34": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 44.5,
+      "runtime_stats": {
+        "mean": 44.5,
+        "std": 0.0352,
+        "min": 44.4,
+        "max": 44.6,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "35": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 95.6,
+      "runtime_stats": {
+        "mean": 95.6,
+        "std": 1.16,
+        "min": 95.1,
+        "max": 98.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "36": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 33.9,
+      "runtime_stats": {
+        "mean": 33.9,
+        "std": 0.0662,
+        "min": 33.8,
+        "max": 34.1,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "37": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 370.0,
+      "runtime_stats": {
+        "mean": 370.0,
+        "std": 0.102,
+        "min": 369.0,
+        "max": 370.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "38": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 39.9,
+      "runtime_stats": {
+        "mean": 39.9,
+        "std": 0.0209,
+        "min": 39.8,
+        "max": 39.9,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "39": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 39.7,
+      "runtime_stats": {
+        "mean": 39.7,
+        "std": 0.023,
+        "min": 39.7,
+        "max": 39.8,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "40": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 23.1,
+      "runtime_stats": {
+        "mean": 23.1,
+        "std": 0.00401,
+        "min": 23.1,
+        "max": 23.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "41": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 63.9,
+      "runtime_stats": {
+        "mean": 63.9,
+        "std": 0.793,
+        "min": 63.8,
+        "max": 71.8,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "42": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 326.0,
+      "runtime_stats": {
+        "mean": 326.0,
+        "std": 0.541,
+        "min": 326.0,
+        "max": 332.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "43": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 121.0,
+      "runtime_stats": {
+        "mean": 121.0,
+        "std": 0.101,
+        "min": 121.0,
+        "max": 122.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "44": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 40.7,
+      "runtime_stats": {
+        "mean": 40.7,
+        "std": 0.519,
+        "min": 40.6,
+        "max": 45.8,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "45": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 156.0,
+      "runtime_stats": {
+        "mean": 156.0,
+        "std": 0.257,
+        "min": 155.0,
+        "max": 156.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "46": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 250.0,
+      "runtime_stats": {
+        "mean": 250.0,
+        "std": 0.239,
+        "min": 250.0,
+        "max": 252.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "47": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 17.6,
+      "runtime_stats": {
+        "mean": 17.6,
+        "std": 0.387,
+        "min": 17.0,
+        "max": 18.6,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "48": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 17.6,
+      "runtime_stats": {
+        "mean": 17.6,
+        "std": 0.443,
+        "min": 17.0,
+        "max": 18.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "49": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 17.3,
+      "runtime_stats": {
+        "mean": 17.3,
+        "std": 0.312,
+        "min": 17.0,
+        "max": 18.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "50": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 464.0,
+      "runtime_stats": {
+        "mean": 464.0,
+        "std": 0.135,
+        "min": 464.0,
+        "max": 465.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "51": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 20.0,
+      "runtime_stats": {
+        "mean": 20.0,
+        "std": 0.356,
+        "min": 19.6,
+        "max": 21.1,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "52": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 20.0,
+      "runtime_stats": {
+        "mean": 20.0,
+        "std": 0.388,
+        "min": 19.6,
+        "max": 21.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "53": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 17.3,
+      "runtime_stats": {
+        "mean": 17.3,
+        "std": 0.293,
+        "min": 16.9,
+        "max": 18.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "54": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 609.0,
+      "runtime_stats": {
+        "mean": 609.0,
+        "std": 0.245,
+        "min": 608.0,
+        "max": 611.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "55": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 6220.0,
+      "runtime_stats": {
+        "mean": 6220.0,
+        "std": 4.59,
+        "min": 6210.0,
+        "max": 6230.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "56": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 4780.0,
+      "runtime_stats": {
+        "mean": 4780.0,
+        "std": 2.65,
+        "min": 4770.0,
+        "max": 4780.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "57": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 4120.0,
+      "runtime_stats": {
+        "mean": 4120.0,
+        "std": 0.543,
+        "min": 4120.0,
+        "max": 4120.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "58": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 442.0,
+      "runtime_stats": {
+        "mean": 442.0,
+        "std": 0.52,
+        "min": 441.0,
+        "max": 443.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "59": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1110.0,
+      "runtime_stats": {
+        "mean": 1110.0,
+        "std": 0.636,
+        "min": 1110.0,
+        "max": 1120.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "60": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1330.0,
+      "runtime_stats": {
+        "mean": 1330.0,
+        "std": 0.265,
+        "min": 1330.0,
+        "max": 1340.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "61": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1830.0,
+      "runtime_stats": {
+        "mean": 1830.0,
+        "std": 0.155,
+        "min": 1830.0,
+        "max": 1830.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "62": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 3050.0,
+      "runtime_stats": {
+        "mean": 3050.0,
+        "std": 2.18,
+        "min": 3040.0,
+        "max": 3050.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "63": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 7020.0,
+      "runtime_stats": {
+        "mean": 7020.0,
+        "std": 3.12,
+        "min": 7010.0,
+        "max": 7050.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "64": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 2320.0,
+      "runtime_stats": {
+        "mean": 2320.0,
+        "std": 0.625,
+        "min": 2320.0,
+        "max": 2330.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "65": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 2240.0,
+      "runtime_stats": {
+        "mean": 2240.0,
+        "std": 0.244,
+        "min": 2240.0,
+        "max": 2250.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "66": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 647.0,
+      "runtime_stats": {
+        "mean": 647.0,
+        "std": 0.113,
+        "min": 647.0,
+        "max": 648.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "67": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1790.0,
+      "runtime_stats": {
+        "mean": 1790.0,
+        "std": 0.573,
+        "min": 1790.0,
+        "max": 1790.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "68": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 9860.0,
+      "runtime_stats": {
+        "mean": 9860.0,
+        "std": 0.637,
+        "min": 9860.0,
+        "max": 9870.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "69": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 3260.0,
+      "runtime_stats": {
+        "mean": 3260.0,
+        "std": 0.266,
+        "min": 3260.0,
+        "max": 3260.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "70": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 3070.0,
+      "runtime_stats": {
+        "mean": 3070.0,
+        "std": 0.249,
+        "min": 3070.0,
+        "max": 3070.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "71": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 648.0,
+      "runtime_stats": {
+        "mean": 648.0,
+        "std": 0.132,
+        "min": 648.0,
+        "max": 649.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "72": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": false,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "max_difference": [
+          "1.454698",
+          "28381.230469",
+          "1498934528.000000",
+          "77966079950848.000000",
+          "4137035369931603968.000000"
+        ],
+        "avg_difference": [
+          "0.183139",
+          "9437.980469",
+          "486566720.000000",
+          "25065135538176.000000",
+          "1289926975619596288.000000"
+        ],
+        "correctness_issue": "Output mismatch",
+        "correctness_trials": "(0 / 5)"
+      },
+      "runtime": -1.0,
+      "runtime_stats": {}
+    }
+  ],
+  "73": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1240.0,
+      "runtime_stats": {
+        "mean": 1240.0,
+        "std": 0.275,
+        "min": 1240.0,
+        "max": 1240.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "74": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 732.0,
+      "runtime_stats": {
+        "mean": 732.0,
+        "std": 0.242,
+        "min": 732.0,
+        "max": 734.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "75": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 485.0,
+      "runtime_stats": {
+        "mean": 485.0,
+        "std": 0.176,
+        "min": 485.0,
+        "max": 487.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "76": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 4700.0,
+      "runtime_stats": {
+        "mean": 4700.0,
+        "std": 1.69,
+        "min": 4700.0,
+        "max": 4720.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "77": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 725.0,
+      "runtime_stats": {
+        "mean": 725.0,
+        "std": 0.158,
+        "min": 725.0,
+        "max": 726.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "78": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1360.0,
+      "runtime_stats": {
+        "mean": 1360.0,
+        "std": 0.236,
+        "min": 1360.0,
+        "max": 1360.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "79": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 461.0,
+      "runtime_stats": {
+        "mean": 461.0,
+        "std": 0.23,
+        "min": 461.0,
+        "max": 464.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "80": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 2990.0,
+      "runtime_stats": {
+        "mean": 2990.0,
+        "std": 3.07,
+        "min": 2990.0,
+        "max": 3000.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "81": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 323.0,
+      "runtime_stats": {
+        "mean": 323.0,
+        "std": 0.182,
+        "min": 323.0,
+        "max": 325.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "82": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 208.0,
+      "runtime_stats": {
+        "mean": 208.0,
+        "std": 0.278,
+        "min": 208.0,
+        "max": 210.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "83": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 87.6,
+      "runtime_stats": {
+        "mean": 87.6,
+        "std": 0.109,
+        "min": 87.6,
+        "max": 88.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "84": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 840.0,
+      "runtime_stats": {
+        "mean": 840.0,
+        "std": 1.07,
+        "min": 840.0,
+        "max": 851.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "85": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 128.0,
+      "runtime_stats": {
+        "mean": 128.0,
+        "std": 0.105,
+        "min": 128.0,
+        "max": 129.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "86": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1780.0,
+      "runtime_stats": {
+        "mean": 1780.0,
+        "std": 0.519,
+        "min": 1780.0,
+        "max": 1790.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "87": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 6160.0,
+      "runtime_stats": {
+        "mean": 6160.0,
+        "std": 2.27,
+        "min": 6160.0,
+        "max": 6190.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "88": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 0.819,
+      "runtime_stats": {
+        "mean": 0.819,
+        "std": 0.00421,
+        "min": 0.812,
+        "max": 0.831,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "89": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 561.0,
+      "runtime_stats": {
+        "mean": 561.0,
+        "std": 1.94,
+        "min": 555.0,
+        "max": 568.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "90": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 561.0,
+      "runtime_stats": {
+        "mean": 561.0,
+        "std": 2.13,
+        "min": 556.0,
+        "max": 573.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "91": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 589.0,
+      "runtime_stats": {
+        "mean": 589.0,
+        "std": 8.69,
+        "min": 566.0,
+        "max": 619.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "92": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 584.0,
+      "runtime_stats": {
+        "mean": 584.0,
+        "std": 8.66,
+        "min": 567.0,
+        "max": 608.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "93": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 1110.0,
+      "runtime_stats": {
+        "mean": 1110.0,
+        "std": 4.3,
+        "min": 1100.0,
+        "max": 1120.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "94": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 83.2,
+      "runtime_stats": {
+        "mean": 83.2,
+        "std": 0.905,
+        "min": 81.7,
+        "max": 85.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "95": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 13.1,
+      "runtime_stats": {
+        "mean": 13.1,
+        "std": 1.09,
+        "min": 12.6,
+        "max": 23.5,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "96": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 86.0,
+      "runtime_stats": {
+        "mean": 86.0,
+        "std": 1.12,
+        "min": 82.9,
+        "max": 88.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "97": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 38200.0,
+      "runtime_stats": {
+        "mean": 38200.0,
+        "std": 177.0,
+        "min": 37800.0,
+        "max": 39100.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "98": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 27.3,
+      "runtime_stats": {
+        "mean": 27.3,
+        "std": 0.236,
+        "min": 26.1,
+        "max": 28.2,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "99": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 27.5,
+      "runtime_stats": {
+        "mean": 27.5,
+        "std": 0.0278,
+        "min": 27.5,
+        "max": 27.7,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ],
+  "100": [
+    {
+      "sample_id": 0,
+      "compiled": true,
+      "correctness": true,
+      "metadata": {
+        "hardware": "MTT S4000",
+        "device": "musa:0",
+        "correctness_trials": "(5 / 5)"
+      },
+      "runtime": 313.0,
+      "runtime_stats": {
+        "mean": 313.0,
+        "std": 0.0217,
+        "min": 313.0,
+        "max": 313.0,
+        "num_trials": 100,
+        "hardware": "MTT S4000",
+        "device": "musa:0"
+      }
+    }
+  ]
+}

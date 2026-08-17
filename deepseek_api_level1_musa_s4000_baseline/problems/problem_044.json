@@ -1,0 +1,37 @@
+{
+  "problem_id": 44,
+  "problem_name": "44_Average_Pooling_1D.py",
+  "reference_path": "KernelBench/level1/44_Average_Pooling_1D.py",
+  "kernel_path": "KernelBench/level1_musa/problem_44/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 40.7,
+  "runtime_stats": {
+    "mean": 40.7,
+    "std": 0.519,
+    "min": 40.6,
+    "max": 45.8,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 39.2,
+  "reference_runtime_stats": {
+    "mean": 39.2,
+    "std": 0.497,
+    "min": 39.1,
+    "max": 44.1,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.9631449631449631,
+  "wall_time_seconds": 69.556,
+  "status": "ok"
+}

@@ -1,0 +1,37 @@
+{
+  "problem_id": 18,
+  "problem_name": "18_Matmul_with_transposed_both.py",
+  "reference_path": "KernelBench/level1/18_Matmul_with_transposed_both.py",
+  "kernel_path": "KernelBench/level1_musa/problem_18/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 298.0,
+  "runtime_stats": {
+    "mean": 298.0,
+    "std": 1.85,
+    "min": 292.0,
+    "max": 301.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 10.3,
+  "reference_runtime_stats": {
+    "mean": 10.3,
+    "std": 1.04,
+    "min": 9.01,
+    "max": 13.6,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.03456375838926175,
+  "wall_time_seconds": 65.961,
+  "status": "ok"
+}

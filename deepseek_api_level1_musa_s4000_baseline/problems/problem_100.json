@@ -1,0 +1,37 @@
+{
+  "problem_id": 100,
+  "problem_name": "100_HingeLoss.py",
+  "reference_path": "KernelBench/level1/100_HingeLoss.py",
+  "kernel_path": "KernelBench/level1_musa/problem_100/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 313.0,
+  "runtime_stats": {
+    "mean": 313.0,
+    "std": 0.0217,
+    "min": 313.0,
+    "max": 313.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 42.2,
+  "reference_runtime_stats": {
+    "mean": 42.2,
+    "std": 0.115,
+    "min": 42.0,
+    "max": 42.6,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.13482428115015976,
+  "wall_time_seconds": 124.709,
+  "status": "ok"
+}

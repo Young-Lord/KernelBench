@@ -1,0 +1,37 @@
+{
+  "problem_id": 73,
+  "problem_name": "73_conv_transposed_3D_asymmetric_input_square_kernel__strided_padded__grouped.py",
+  "reference_path": "KernelBench/level1/73_conv_transposed_3D_asymmetric_input_square_kernel__strided_padded__grouped.py",
+  "kernel_path": "KernelBench/level1_musa/problem_73/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 1240.0,
+  "runtime_stats": {
+    "mean": 1240.0,
+    "std": 0.275,
+    "min": 1240.0,
+    "max": 1240.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 778.0,
+  "reference_runtime_stats": {
+    "mean": 778.0,
+    "std": 0.277,
+    "min": 778.0,
+    "max": 781.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.6274193548387097,
+  "wall_time_seconds": 253.217,
+  "status": "ok"
+}

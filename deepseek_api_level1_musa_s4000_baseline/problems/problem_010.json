@@ -1,0 +1,37 @@
+{
+  "problem_id": 10,
+  "problem_name": "10_3D_tensor_matrix_multiplication.py",
+  "reference_path": "KernelBench/level1/10_3D_tensor_matrix_multiplication.py",
+  "kernel_path": "KernelBench/level1_musa/problem_10/model_new.py",
+  "sample_id": 0,
+  "compiled": true,
+  "correctness": true,
+  "metadata": {
+    "hardware": "MTT S4000",
+    "device": "musa:0",
+    "correctness_trials": "(5 / 5)"
+  },
+  "runtime_ms": 78.8,
+  "runtime_stats": {
+    "mean": 78.8,
+    "std": 0.065,
+    "min": 78.6,
+    "max": 79.0,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "reference_runtime_ms": 3.33,
+  "reference_runtime_stats": {
+    "mean": 3.33,
+    "std": 0.169,
+    "min": 3.01,
+    "max": 3.81,
+    "num_trials": 100,
+    "hardware": "MTT S4000",
+    "device": "musa:0"
+  },
+  "speedup_over_eager": 0.04225888324873096,
+  "wall_time_seconds": 40.639,
+  "status": "ok"
+}
