@@ -59,6 +59,8 @@ class CudaLLMRuntime:
             kwargs.update(temperature=temperature, top_p=top_p)
         if self.cache == "static":
             kwargs["cache_implementation"] = "static"
+        elif self.cache == "dynamic":
+            kwargs["use_cache"] = True
         else:
             kwargs["use_cache"] = False
 
@@ -163,7 +165,7 @@ def main() -> None:
     parser.add_argument("--model", default="/root/autodl-tmp/models/cudaLLM-8B")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--cache", choices=("static", "off"), default="static")
+    parser.add_argument("--cache", choices=("static", "dynamic", "off"), default="static")
     args = parser.parse_args()
     runtime = CudaLLMRuntime(args.model, args.cache)
     Handler.runtime = runtime
