@@ -1,0 +1,56 @@
+{
+  "problem_id": 6,
+  "reference": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_6_pytorch_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 83213.0,
+    "device_kernels": [
+      {
+        "name": "musa_asm_sgemm_nn_512_128x128_8x4_epilogue",
+        "calls": 1,
+        "self_musa_time_us": 83213.0,
+        "total_musa_time_us": 83213.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "aten::mm",
+        "calls": 1,
+        "self_musa_time_us": 83213.0,
+        "total_musa_time_us": 83213.0,
+        "self_cpu_time_us": 132.0
+      },
+      {
+        "name": "musa_asm_sgemm_nn_512_128x128_8x4_epilogue",
+        "calls": 1,
+        "self_musa_time_us": 83213.0,
+        "total_musa_time_us": 83213.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  },
+  "deepseek": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_6_deepseek_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 111567.0,
+    "device_kernels": [
+      {
+        "name": "large_k_matmul_kernel(float const*, float const*, float*, int, int, int)",
+        "calls": 1,
+        "self_musa_time_us": 111567.0,
+        "total_musa_time_us": 111567.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "large_k_matmul_kernel(float const*, float const*, float*, int, int, int)",
+        "calls": 1,
+        "self_musa_time_us": 111567.0,
+        "total_musa_time_us": 111567.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  }
+}

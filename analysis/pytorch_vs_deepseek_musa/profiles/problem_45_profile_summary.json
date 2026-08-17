@@ -1,0 +1,56 @@
+{
+  "problem_id": 45,
+  "reference": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_45_pytorch_trace.json",
+    "device_kernel_count": 16,
+    "device_kernel_time_us": 163795.0,
+    "device_kernels": [
+      {
+        "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)",
+        "calls": 16,
+        "self_musa_time_us": 163795.0,
+        "total_musa_time_us": 163795.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "aten::avg_pool2d",
+        "calls": 1,
+        "self_musa_time_us": 163795.0,
+        "total_musa_time_us": 163795.0,
+        "self_cpu_time_us": 178.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)",
+        "calls": 16,
+        "self_musa_time_us": 163795.0,
+        "total_musa_time_us": 163795.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  },
+  "deepseek": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_45_deepseek_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 155372.0,
+    "device_kernels": [
+      {
+        "name": "avgpool2d_kernel(float const*, float*, long, long, long, long, long, long, long, long, long, long, long, long)",
+        "calls": 1,
+        "self_musa_time_us": 155372.0,
+        "total_musa_time_us": 155372.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "avgpool2d_kernel(float const*, float*, long, long, long, long, long, long, long, long, long, long, long, long)",
+        "calls": 1,
+        "self_musa_time_us": 155372.0,
+        "total_musa_time_us": 155372.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  }
+}

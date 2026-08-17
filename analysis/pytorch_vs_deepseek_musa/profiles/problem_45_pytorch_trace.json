@@ -1,0 +1,987 @@
+
+{
+  "schemaVersion": 1,
+  "deviceProperties": [
+    {
+      "id": 0, "name": "MTT S4000", "totalGlobalMem": 51444887552,
+      "computeMajor": 3, "computeMinor": 2,
+      "maxThreadsPerBlock": 1024, "maxThreadsPerMultiprocessor": 6144,
+      "regsPerBlock": 262144, "regsPerMultiprocessor": 131072, "warpSize": 128,
+      "sharedMemPerBlock": 73728, "sharedMemPerMultiprocessor": 73728,
+      "numSms": 56, "sharedMemPerBlockOptin": 73728
+    }
+  ],
+  "traceEvents": [
+  {
+    "ph": "X", "cat": "user_annotation", "name": "pytorch_reference_forward", "pid": 11848, "tid": 11848,
+    "ts": 1786793552274898, "dur": 164627,
+    "args": {
+      "External id": 1,"Ev Idx": 0
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::avg_pool2d", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275012, "dur": 946,
+    "args": {
+      "External id": 2,"Ev Idx": 1
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275024, "dur": 113,
+    "args": {
+      "External id": 3,"Ev Idx": 2
+    }
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275215, "dur": 93,
+    "args": {
+      "External id": 80, "Linked id": 2,
+      "cbid": 211, "correlation": 80
+    }
+  },
+  {
+    "ph": "s", "id": 80, "pid": 11848, "tid": 11848, "ts": 1786793552275215,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275287, "dur": 21,
+    "args": {
+      "External id": 80, "Linked id": 2,
+      "cbid": 307, "correlation": 80
+    }
+  },
+  {
+    "ph": "s", "id": 80, "pid": 11848, "tid": 11848, "ts": 1786793552275287,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552275417, "dur": 10152,
+    "args": {
+      "External id": 80, "Linked id": 2,
+      "queued": 41309120771288, "device": 0, "context": 0,
+      "stream": 0, "correlation": 80,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 80, "pid": 0, "tid": 0, "ts": 1786793552275417,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275312, "dur": 61,
+    "args": {
+      "External id": 81, "Linked id": 2,
+      "cbid": 211, "correlation": 81
+    }
+  },
+  {
+    "ph": "s", "id": 81, "pid": 11848, "tid": 11848, "ts": 1786793552275312,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275345, "dur": 28,
+    "args": {
+      "External id": 81, "Linked id": 2,
+      "cbid": 307, "correlation": 81
+    }
+  },
+  {
+    "ph": "s", "id": 81, "pid": 11848, "tid": 11848, "ts": 1786793552275345,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552285579, "dur": 10266,
+    "args": {
+      "External id": 81, "Linked id": 2,
+      "queued": 41309120771355, "device": 0, "context": 0,
+      "stream": 0, "correlation": 81,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 81, "pid": 0, "tid": 0, "ts": 1786793552285579,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275380, "dur": 38,
+    "args": {
+      "External id": 82, "Linked id": 2,
+      "cbid": 211, "correlation": 82
+    }
+  },
+  {
+    "ph": "s", "id": 82, "pid": 11848, "tid": 11848, "ts": 1786793552275380,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275413, "dur": 4,
+    "args": {
+      "External id": 82, "Linked id": 2,
+      "cbid": 307, "correlation": 82
+    }
+  },
+  {
+    "ph": "s", "id": 82, "pid": 11848, "tid": 11848, "ts": 1786793552275413,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552295854, "dur": 10287,
+    "args": {
+      "External id": 82, "Linked id": 2,
+      "queued": 41309120771400, "device": 0, "context": 0,
+      "stream": 0, "correlation": 82,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 82, "pid": 0, "tid": 0, "ts": 1786793552295854,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275422, "dur": 35,
+    "args": {
+      "External id": 83, "Linked id": 2,
+      "cbid": 211, "correlation": 83
+    }
+  },
+  {
+    "ph": "s", "id": 83, "pid": 11848, "tid": 11848, "ts": 1786793552275422,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275455, "dur": 3,
+    "args": {
+      "External id": 83, "Linked id": 2,
+      "cbid": 307, "correlation": 83
+    }
+  },
+  {
+    "ph": "s", "id": 83, "pid": 11848, "tid": 11848, "ts": 1786793552275455,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552306150, "dur": 10248,
+    "args": {
+      "External id": 83, "Linked id": 2,
+      "queued": 41309120771440, "device": 0, "context": 0,
+      "stream": 0, "correlation": 83,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 83, "pid": 0, "tid": 0, "ts": 1786793552306150,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275462, "dur": 34,
+    "args": {
+      "External id": 84, "Linked id": 2,
+      "cbid": 211, "correlation": 84
+    }
+  },
+  {
+    "ph": "s", "id": 84, "pid": 11848, "tid": 11848, "ts": 1786793552275462,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275494, "dur": 2,
+    "args": {
+      "External id": 84, "Linked id": 2,
+      "cbid": 307, "correlation": 84
+    }
+  },
+  {
+    "ph": "s", "id": 84, "pid": 11848, "tid": 11848, "ts": 1786793552275494,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552316407, "dur": 10310,
+    "args": {
+      "External id": 84, "Linked id": 2,
+      "queued": 41309120771479, "device": 0, "context": 0,
+      "stream": 0, "correlation": 84,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 84, "pid": 0, "tid": 0, "ts": 1786793552316407,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275501, "dur": 35,
+    "args": {
+      "External id": 85, "Linked id": 2,
+      "cbid": 211, "correlation": 85
+    }
+  },
+  {
+    "ph": "s", "id": 85, "pid": 11848, "tid": 11848, "ts": 1786793552275501,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275533, "dur": 3,
+    "args": {
+      "External id": 85, "Linked id": 2,
+      "cbid": 307, "correlation": 85
+    }
+  },
+  {
+    "ph": "s", "id": 85, "pid": 11848, "tid": 11848, "ts": 1786793552275533,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552326725, "dur": 10226,
+    "args": {
+      "External id": 85, "Linked id": 2,
+      "queued": 41309120771519, "device": 0, "context": 0,
+      "stream": 0, "correlation": 85,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 85, "pid": 0, "tid": 0, "ts": 1786793552326725,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275541, "dur": 36,
+    "args": {
+      "External id": 86, "Linked id": 2,
+      "cbid": 211, "correlation": 86
+    }
+  },
+  {
+    "ph": "s", "id": 86, "pid": 11848, "tid": 11848, "ts": 1786793552275541,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275575, "dur": 2,
+    "args": {
+      "External id": 86, "Linked id": 2,
+      "cbid": 307, "correlation": 86
+    }
+  },
+  {
+    "ph": "s", "id": 86, "pid": 11848, "tid": 11848, "ts": 1786793552275575,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552336960, "dur": 10236,
+    "args": {
+      "External id": 86, "Linked id": 2,
+      "queued": 41309120771560, "device": 0, "context": 0,
+      "stream": 0, "correlation": 86,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 86, "pid": 0, "tid": 0, "ts": 1786793552336960,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275582, "dur": 35,
+    "args": {
+      "External id": 87, "Linked id": 2,
+      "cbid": 211, "correlation": 87
+    }
+  },
+  {
+    "ph": "s", "id": 87, "pid": 11848, "tid": 11848, "ts": 1786793552275582,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275614, "dur": 2,
+    "args": {
+      "External id": 87, "Linked id": 2,
+      "cbid": 307, "correlation": 87
+    }
+  },
+  {
+    "ph": "s", "id": 87, "pid": 11848, "tid": 11848, "ts": 1786793552275614,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552347204, "dur": 10212,
+    "args": {
+      "External id": 87, "Linked id": 2,
+      "queued": 41309120771599, "device": 0, "context": 0,
+      "stream": 0, "correlation": 87,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 87, "pid": 0, "tid": 0, "ts": 1786793552347204,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275621, "dur": 34,
+    "args": {
+      "External id": 88, "Linked id": 2,
+      "cbid": 211, "correlation": 88
+    }
+  },
+  {
+    "ph": "s", "id": 88, "pid": 11848, "tid": 11848, "ts": 1786793552275621,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275653, "dur": 2,
+    "args": {
+      "External id": 88, "Linked id": 2,
+      "cbid": 307, "correlation": 88
+    }
+  },
+  {
+    "ph": "s", "id": 88, "pid": 11848, "tid": 11848, "ts": 1786793552275653,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552357425, "dur": 10245,
+    "args": {
+      "External id": 88, "Linked id": 2,
+      "queued": 41309120771638, "device": 0, "context": 0,
+      "stream": 0, "correlation": 88,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 88, "pid": 0, "tid": 0, "ts": 1786793552357425,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275660, "dur": 35,
+    "args": {
+      "External id": 89, "Linked id": 2,
+      "cbid": 211, "correlation": 89
+    }
+  },
+  {
+    "ph": "s", "id": 89, "pid": 11848, "tid": 11848, "ts": 1786793552275660,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275692, "dur": 2,
+    "args": {
+      "External id": 89, "Linked id": 2,
+      "cbid": 307, "correlation": 89
+    }
+  },
+  {
+    "ph": "s", "id": 89, "pid": 11848, "tid": 11848, "ts": 1786793552275692,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552367678, "dur": 10253,
+    "args": {
+      "External id": 89, "Linked id": 2,
+      "queued": 41309120771677, "device": 0, "context": 0,
+      "stream": 0, "correlation": 89,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 89, "pid": 0, "tid": 0, "ts": 1786793552367678,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275699, "dur": 34,
+    "args": {
+      "External id": 90, "Linked id": 2,
+      "cbid": 211, "correlation": 90
+    }
+  },
+  {
+    "ph": "s", "id": 90, "pid": 11848, "tid": 11848, "ts": 1786793552275699,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275731, "dur": 2,
+    "args": {
+      "External id": 90, "Linked id": 2,
+      "cbid": 307, "correlation": 90
+    }
+  },
+  {
+    "ph": "s", "id": 90, "pid": 11848, "tid": 11848, "ts": 1786793552275731,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552377940, "dur": 10224,
+    "args": {
+      "External id": 90, "Linked id": 2,
+      "queued": 41309120771716, "device": 0, "context": 0,
+      "stream": 0, "correlation": 90,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 90, "pid": 0, "tid": 0, "ts": 1786793552377940,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275738, "dur": 45,
+    "args": {
+      "External id": 91, "Linked id": 2,
+      "cbid": 211, "correlation": 91
+    }
+  },
+  {
+    "ph": "s", "id": 91, "pid": 11848, "tid": 11848, "ts": 1786793552275738,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275779, "dur": 4,
+    "args": {
+      "External id": 91, "Linked id": 2,
+      "cbid": 307, "correlation": 91
+    }
+  },
+  {
+    "ph": "s", "id": 91, "pid": 11848, "tid": 11848, "ts": 1786793552275779,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552388172, "dur": 10192,
+    "args": {
+      "External id": 91, "Linked id": 2,
+      "queued": 41309120771766, "device": 0, "context": 0,
+      "stream": 0, "correlation": 91,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 91, "pid": 0, "tid": 0, "ts": 1786793552388172,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275788, "dur": 34,
+    "args": {
+      "External id": 92, "Linked id": 2,
+      "cbid": 211, "correlation": 92
+    }
+  },
+  {
+    "ph": "s", "id": 92, "pid": 11848, "tid": 11848, "ts": 1786793552275788,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275820, "dur": 2,
+    "args": {
+      "External id": 92, "Linked id": 2,
+      "cbid": 307, "correlation": 92
+    }
+  },
+  {
+    "ph": "s", "id": 92, "pid": 11848, "tid": 11848, "ts": 1786793552275820,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552398373, "dur": 10243,
+    "args": {
+      "External id": 92, "Linked id": 2,
+      "queued": 41309120771805, "device": 0, "context": 0,
+      "stream": 0, "correlation": 92,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 92, "pid": 0, "tid": 0, "ts": 1786793552398373,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275827, "dur": 36,
+    "args": {
+      "External id": 93, "Linked id": 2,
+      "cbid": 211, "correlation": 93
+    }
+  },
+  {
+    "ph": "s", "id": 93, "pid": 11848, "tid": 11848, "ts": 1786793552275827,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275859, "dur": 4,
+    "args": {
+      "External id": 93, "Linked id": 2,
+      "cbid": 307, "correlation": 93
+    }
+  },
+  {
+    "ph": "s", "id": 93, "pid": 11848, "tid": 11848, "ts": 1786793552275859,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552408624, "dur": 10266,
+    "args": {
+      "External id": 93, "Linked id": 2,
+      "queued": 41309120771846, "device": 0, "context": 0,
+      "stream": 0, "correlation": 93,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 93, "pid": 0, "tid": 0, "ts": 1786793552408624,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275868, "dur": 34,
+    "args": {
+      "External id": 94, "Linked id": 2,
+      "cbid": 211, "correlation": 94
+    }
+  },
+  {
+    "ph": "s", "id": 94, "pid": 11848, "tid": 11848, "ts": 1786793552275868,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275900, "dur": 2,
+    "args": {
+      "External id": 94, "Linked id": 2,
+      "cbid": 307, "correlation": 94
+    }
+  },
+  {
+    "ph": "s", "id": 94, "pid": 11848, "tid": 11848, "ts": 1786793552275900,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552418898, "dur": 10184,
+    "args": {
+      "External id": 94, "Linked id": 2,
+      "queued": 41309120771885, "device": 0, "context": 0,
+      "stream": 0, "correlation": 94,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 94, "pid": 0, "tid": 0, "ts": 1786793552418898,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275907, "dur": 34,
+    "args": {
+      "External id": 95, "Linked id": 2,
+      "cbid": 211, "correlation": 95
+    }
+  },
+  {
+    "ph": "s", "id": 95, "pid": 11848, "tid": 11848, "ts": 1786793552275907,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 11848, "tid": 11848,
+    "ts": 1786793552275939, "dur": 2,
+    "args": {
+      "External id": 95, "Linked id": 2,
+      "cbid": 307, "correlation": 95
+    }
+  },
+  {
+    "ph": "s", "id": 95, "pid": 11848, "tid": 11848, "ts": 1786793552275939,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::AvgPool2dKernel<float, (musa::dnn::TensorImpl::Format)3, true, false, 1>(float*, float const*, int, int, int, int, int, int, int, int, int, int, int, int, int, musa::dnn::FastDivmod, musa::dnn::FastDivmod, musa::dnn::FastDivmod, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793552429090, "dur": 10251,
+    "args": {
+      "External id": 95, "Linked id": 2,
+      "queued": 41309120771924, "device": 0, "context": 0,
+      "stream": 0, "correlation": 95,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 38.625,
+      "warps per SM": 1236,
+      "grid": [2163, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 95, "pid": 0, "tid": 0, "ts": 1786793552429090,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaDeviceSynchronize", "pid": 11848, "tid": 11848,
+    "ts": 1786793552276010, "dur": 163335,
+    "args": {
+      "External id": 99,
+      "cbid": 165, "correlation": 99
+    }
+  },
+  {
+    "ph": "s", "id": 99, "pid": 11848, "tid": 11848, "ts": 1786793552276010,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaDeviceSynchronize", "pid": 11848, "tid": 11848,
+    "ts": 1786793552439576, "dur": 7,
+    "args": {
+      "External id": 103,
+      "cbid": 165, "correlation": 103
+    }
+  },
+  {
+    "ph": "s", "id": 103, "pid": 11848, "tid": 11848, "ts": 1786793552439576,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 0,
+    "args": {
+      "labels": "CPU"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 0,
+    "args": {
+      "sort_index": 11848
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 0, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 0, "tid": 0,
+    "args": {
+      "labels": "GPU 0"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 0, "tid": 0,
+    "args": {
+      "sort_index": 16777216
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 1, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 1, "tid": 0,
+    "args": {
+      "labels": "GPU 1"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 1, "tid": 0,
+    "args": {
+      "sort_index": 16777217
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 2, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 2, "tid": 0,
+    "args": {
+      "labels": "GPU 2"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 2, "tid": 0,
+    "args": {
+      "sort_index": 16777218
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 3, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 3, "tid": 0,
+    "args": {
+      "labels": "GPU 3"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 3, "tid": 0,
+    "args": {
+      "sort_index": 16777219
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 4, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 4, "tid": 0,
+    "args": {
+      "labels": "GPU 4"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 4, "tid": 0,
+    "args": {
+      "sort_index": 16777220
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 5, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 5, "tid": 0,
+    "args": {
+      "labels": "GPU 5"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 5, "tid": 0,
+    "args": {
+      "sort_index": 16777221
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 6, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 6, "tid": 0,
+    "args": {
+      "labels": "GPU 6"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 6, "tid": 0,
+    "args": {
+      "sort_index": 16777222
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793552274481, "pid": 7, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793552274481, "pid": 7, "tid": 0,
+    "args": {
+      "labels": "GPU 7"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 7, "tid": 0,
+    "args": {
+      "sort_index": 16777223
+    }
+  },
+  {
+    "name": "thread_name", "ph": "M", "ts": 1786793552274481, "pid": 0, "tid": 0,
+    "args": {
+      "name": "stream 0 "
+    }
+  },
+  {
+    "name": "thread_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 0, "tid": 0,
+    "args": {
+      "sort_index": 0
+    }
+  },
+  {
+    "name": "thread_name", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 11848,
+    "args": {
+      "name": "thread 11848 (python)"
+    }
+  },
+  {
+    "name": "thread_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 11848,
+    "args": {
+      "sort_index": 11848
+    }
+  },
+  {
+    "name": "thread_name", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 11848,
+    "args": {
+      "name": "thread 11848 (python)"
+    }
+  },
+  {
+    "name": "thread_sort_index", "ph": "M", "ts": 1786793552274481, "pid": 11848, "tid": 11848,
+    "args": {
+      "sort_index": 11848
+    }
+  },
+  {
+    "ph": "X", "cat": "Trace", "ts": 1786793552274354, "dur": 165250,
+    "pid": "Spans", "tid": "PyTorch Profiler",
+    "name": "PyTorch Profiler (0)",
+    "args": {
+      "Op count": 0
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793552274354,
+    "pid": "Spans", "tid": 0,
+    "args": {
+      "sort_index": 536870912
+    }
+  },
+  {
+    "name": "Iteration Start: PyTorch Profiler", "ph": "i", "s": "g",
+    "pid": "Traces", "tid": "Trace PyTorch Profiler", "ts": 1786793552274354
+  },
+  {
+    "name": "Record Window End", "ph": "i", "s": "g",
+    "pid": "", "tid": "", "ts": 1786793552439776
+  }
+  ],
+  "traceName": "/root/autodl-tmp/KernelBench/analysis/pytorch_vs_deepseek_musa/profiles/problem_45_pytorch_trace.json"
+}

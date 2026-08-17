@@ -1,0 +1,84 @@
+{
+  "problem_id": 97,
+  "reference": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_97_pytorch_trace.json",
+    "device_kernel_count": 5,
+    "device_kernel_time_us": 78709.0,
+    "device_kernels": [
+      {
+        "name": "musa_asm_sgemm_nt_512_128x128_8x4_epilogue",
+        "calls": 2,
+        "self_musa_time_us": 42596.0,
+        "total_musa_time_us": 42596.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "musa_asm_sgemm_nn_256_128x128_epilogue",
+        "calls": 2,
+        "self_musa_time_us": 33019.0,
+        "total_musa_time_us": 33019.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::softmax_accurate_column<float, float, (musa::dnn::SoftmaxMode)0, 4, 64, 16, (musa::dnn::SoftmaxDir)0, 2, 8, (musa::dnn::SoftmaxFusedMode)0, musa::dnn::SoftmaxFusedOp<float, (musa::dnn::SoftmaxFusedMode)0> >(float*, float const*, musa::dnn::DeviceTensor, int, int, int, musa::dnn::SoftmaxFusedOp<float, (musa::dnn::SoftmaxFusedMode)0>, float const*, musa::dnn::FastDivmod)",
+        "calls": 1,
+        "self_musa_time_us": 3094.0,
+        "total_musa_time_us": 3094.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "aten::_scaled_dot_product_attention_math_musa",
+        "calls": 1,
+        "self_musa_time_us": 78709.0,
+        "total_musa_time_us": 78709.0,
+        "self_cpu_time_us": 203.0
+      },
+      {
+        "name": "musa_asm_sgemm_nt_512_128x128_8x4_epilogue",
+        "calls": 2,
+        "self_musa_time_us": 42596.0,
+        "total_musa_time_us": 42596.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "musa_asm_sgemm_nn_256_128x128_epilogue",
+        "calls": 2,
+        "self_musa_time_us": 33019.0,
+        "total_musa_time_us": 33019.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::softmax_accurate_column<float, float, (musa::dnn::SoftmaxMode)0, 4, 64, 16, (musa::dnn::SoftmaxDir)0, 2, 8, (musa::dnn::SoftmaxFusedMode)0, musa::dnn::SoftmaxFusedOp<float, (musa::dnn::SoftmaxFusedMode)0> >(float*, float const*, musa::dnn::DeviceTensor, int, int, int, musa::dnn::SoftmaxFusedOp<float, (musa::dnn::SoftmaxFusedMode)0>, float const*, musa::dnn::FastDivmod)",
+        "calls": 1,
+        "self_musa_time_us": 3094.0,
+        "total_musa_time_us": 3094.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  },
+  "deepseek": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_97_deepseek_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 38348590.0,
+    "device_kernels": [
+      {
+        "name": "scaled_dot_product_attention_kernel(float const*, float const*, float const*, float*, int, int, float)",
+        "calls": 1,
+        "self_musa_time_us": 38348590.0,
+        "total_musa_time_us": 38348590.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "scaled_dot_product_attention_kernel(float const*, float const*, float const*, float*, int, int, float)",
+        "calls": 1,
+        "self_musa_time_us": 38348590.0,
+        "total_musa_time_us": 38348590.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  }
+}

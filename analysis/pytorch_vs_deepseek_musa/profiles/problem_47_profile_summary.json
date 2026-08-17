@@ -1,0 +1,56 @@
+{
+  "problem_id": 47,
+  "reference": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_47_pytorch_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 15879.0,
+    "device_kernels": [
+      {
+        "name": "void musa::dnn::(anonymous namespace)::ReduceABCKernel<float, float, float, musa::dnn::ReduceType<float, (musa::dnn::ReduceImplType)0>, musa::dnn::ReduceOp<float, float, float, musa::dnn::ReduceType<float, (musa::dnn::ReduceImplType)0>, (musa::dnn::ReduceMode)1>, (musa::dnn::ReduceMode)1, 16, 1, 128>(float*, float const*, long, long, int, musa::dnn::ReduceOp<float, float, float, musa::dnn::ReduceType<float, (musa::dnn::ReduceImplType)0>, (musa::dnn::ReduceMode)1>, musa::dnn::FastDivmod)",
+        "calls": 1,
+        "self_musa_time_us": 15879.0,
+        "total_musa_time_us": 15879.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "aten::sum",
+        "calls": 1,
+        "self_musa_time_us": 15879.0,
+        "total_musa_time_us": 15879.0,
+        "self_cpu_time_us": 147.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::ReduceABCKernel<float, float, float, musa::dnn::ReduceType<float, (musa::dnn::ReduceImplType)0>, musa::dnn::ReduceOp<float, float, float, musa::dnn::ReduceType<float, (musa::dnn::ReduceImplType)0>, (musa::dnn::ReduceMode)1>, (musa::dnn::ReduceMode)1, 16, 1, 128>(float*, float const*, long, long, int, musa::dnn::ReduceOp<float, float, float, musa::dnn::ReduceType<float, (musa::dnn::ReduceImplType)0>, (musa::dnn::ReduceMode)1>, musa::dnn::FastDivmod)",
+        "calls": 1,
+        "self_musa_time_us": 15879.0,
+        "total_musa_time_us": 15879.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  },
+  "deepseek": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_47_deepseek_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 17970.0,
+    "device_kernels": [
+      {
+        "name": "kernelbench_47_sum_kernel(float const*, float*, long, long, long, long)",
+        "calls": 1,
+        "self_musa_time_us": 17970.0,
+        "total_musa_time_us": 17970.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "kernelbench_47_sum_kernel(float const*, float*, long, long, long, long)",
+        "calls": 1,
+        "self_musa_time_us": 17970.0,
+        "total_musa_time_us": 17970.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  }
+}

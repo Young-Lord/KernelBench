@@ -1,0 +1,21 @@
+{
+  "problem_88": {
+    "description": "Literal PyTorch expression versus torch fused GELU tanh approximation on the same MTT S4000 input",
+    "literal_expression_mean_ms": 6.959765,
+    "literal_expression_std_ms": 0.152918,
+    "torch_fused_gelu_tanh_mean_ms": 0.821986,
+    "torch_fused_gelu_tanh_std_ms": 0.013100,
+    "trials": 20,
+    "allclose": true,
+    "max_abs_difference": 1.1920928955078125e-07
+  },
+  "problem_47": {
+    "description": "DeepSeek original versus pointer-increment plus four-way loop-unroll variant; accumulation order preserved",
+    "deepseek_original_ms": 17.6,
+    "optimized_variant_ms": 14.4,
+    "relative_reduction_percent": 18.182,
+    "correctness_trials": 5,
+    "performance_trials": 100,
+    "source": "runs/cudallm_musa_level1_improvement/eval_results.json"
+  }
+}

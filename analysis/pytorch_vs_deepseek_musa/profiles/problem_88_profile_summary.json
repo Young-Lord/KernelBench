@@ -1,0 +1,147 @@
+{
+  "problem_id": 88,
+  "reference": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_88_pytorch_trace.json",
+    "device_kernel_count": 8,
+    "device_kernel_time_us": 6860.0,
+    "device_kernels": [
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 3,
+        "self_musa_time_us": 2293.0,
+        "total_musa_time_us": 2293.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_binary<float, musa::dnn::(anonymous namespace)::AddOp, float, float, 128>(musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 1131.0,
+        "total_musa_time_us": 1131.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_binary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 1130.0,
+        "total_musa_time_us": 1130.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::PowOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 771.0,
+        "total_musa_time_us": 771.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::TanhOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 768.0,
+        "total_musa_time_us": 768.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::AddOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 767.0,
+        "total_musa_time_us": 767.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "aten::mul",
+        "calls": 4,
+        "self_musa_time_us": 3423.0,
+        "total_musa_time_us": 3423.0,
+        "self_cpu_time_us": 512.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 3,
+        "self_musa_time_us": 2293.0,
+        "total_musa_time_us": 2293.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "aten::add",
+        "calls": 2,
+        "self_musa_time_us": 1898.0,
+        "total_musa_time_us": 1898.0,
+        "self_cpu_time_us": 236.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_binary<float, musa::dnn::(anonymous namespace)::AddOp, float, float, 128>(musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 1131.0,
+        "total_musa_time_us": 1131.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_binary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 1130.0,
+        "total_musa_time_us": 1130.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "aten::pow",
+        "calls": 1,
+        "self_musa_time_us": 771.0,
+        "total_musa_time_us": 771.0,
+        "self_cpu_time_us": 95.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::PowOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 771.0,
+        "total_musa_time_us": 771.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "aten::tanh",
+        "calls": 1,
+        "self_musa_time_us": 768.0,
+        "total_musa_time_us": 768.0,
+        "self_cpu_time_us": 73.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::TanhOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 768.0,
+        "total_musa_time_us": 768.0,
+        "self_cpu_time_us": 0.0
+      },
+      {
+        "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::AddOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)",
+        "calls": 1,
+        "self_musa_time_us": 767.0,
+        "total_musa_time_us": 767.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  },
+  "deepseek": {
+    "trace": "analysis/pytorch_vs_deepseek_musa/profiles/problem_88_deepseek_trace.json",
+    "device_kernel_count": 1,
+    "device_kernel_time_us": 773.0,
+    "device_kernels": [
+      {
+        "name": "new_gelu_kernel(float const*, float*, unsigned long)",
+        "calls": 1,
+        "self_musa_time_us": 773.0,
+        "total_musa_time_us": 773.0,
+        "self_cpu_time_us": 0.0
+      }
+    ],
+    "top_musa_events_including_aten_aggregates": [
+      {
+        "name": "new_gelu_kernel(float const*, float*, unsigned long)",
+        "calls": 1,
+        "self_musa_time_us": 773.0,
+        "total_musa_time_us": 773.0,
+        "self_cpu_time_us": 0.0
+      }
+    ]
+  }
+}

@@ -1,0 +1,943 @@
+
+{
+  "schemaVersion": 1,
+  "deviceProperties": [
+    {
+      "id": 0, "name": "MTT S4000", "totalGlobalMem": 51444887552,
+      "computeMajor": 3, "computeMinor": 2,
+      "maxThreadsPerBlock": 1024, "maxThreadsPerMultiprocessor": 6144,
+      "regsPerBlock": 262144, "regsPerMultiprocessor": 131072, "warpSize": 128,
+      "sharedMemPerBlock": 73728, "sharedMemPerMultiprocessor": 73728,
+      "numSms": 56, "sharedMemPerBlockOptin": 73728
+    }
+  ],
+  "traceEvents": [
+  {
+    "ph": "X", "cat": "user_annotation", "name": "pytorch_reference_forward", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605369, "dur": 8028,
+    "args": {
+      "External id": 1,"Ev Idx": 0
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::mul", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605458, "dur": 363,
+    "args": {
+      "External id": 2,"Ev Idx": 1
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::to", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605479, "dur": 66,
+    "args": {
+      "External id": 3,"Ev Idx": 2
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_to_copy", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605497, "dur": 48,
+    "args": {
+      "External id": 4,"Ev Idx": 3
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605519, "dur": 6,
+    "args": {
+      "External id": 5,"Ev Idx": 4
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::copy_", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605531, "dur": 14,
+    "args": {
+      "External id": 6,"Ev Idx": 5
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::item", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605635, "dur": 6,
+    "args": {
+      "External id": 7,"Ev Idx": 6
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_local_scalar_dense", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605639, "dur": 2,
+    "args": {
+      "External id": 8,"Ev Idx": 7
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::pow", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605849, "dur": 235,
+    "args": {
+      "External id": 9,"Ev Idx": 8
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::transpose", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605872, "dur": 18,
+    "args": {
+      "External id": 10,"Ev Idx": 9
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::as_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605879, "dur": 4,
+    "args": {
+      "External id": 11,"Ev Idx": 10
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_like", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605902, "dur": 73,
+    "args": {
+      "External id": 12,"Ev Idx": 11
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605904, "dur": 70,
+    "args": {
+      "External id": 13,"Ev Idx": 12
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::mul", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606089, "dur": 158,
+    "args": {
+      "External id": 14,"Ev Idx": 13
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::to", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606091, "dur": 8,
+    "args": {
+      "External id": 15,"Ev Idx": 14
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_to_copy", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606092, "dur": 7,
+    "args": {
+      "External id": 16,"Ev Idx": 15
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606094, "dur": 1,
+    "args": {
+      "External id": 17,"Ev Idx": 16
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::copy_", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606096, "dur": 2,
+    "args": {
+      "External id": 18,"Ev Idx": 17
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::item", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606151, "dur": 1,
+    "args": {
+      "External id": 19,"Ev Idx": 18
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_local_scalar_dense", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606152, "dur": 0,
+    "args": {
+      "External id": 20,"Ev Idx": 19
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::add", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606256, "dur": 162,
+    "args": {
+      "External id": 21,"Ev Idx": 20
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::mul", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606422, "dur": 150,
+    "args": {
+      "External id": 22,"Ev Idx": 21
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::to", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606423, "dur": 4,
+    "args": {
+      "External id": 23,"Ev Idx": 22
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_to_copy", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606423, "dur": 3,
+    "args": {
+      "External id": 24,"Ev Idx": 23
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606424, "dur": 0,
+    "args": {
+      "External id": 25,"Ev Idx": 24
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::copy_", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606425, "dur": 1,
+    "args": {
+      "External id": 26,"Ev Idx": 25
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::item", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606478, "dur": 1,
+    "args": {
+      "External id": 27,"Ev Idx": 26
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_local_scalar_dense", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606479, "dur": 0,
+    "args": {
+      "External id": 28,"Ev Idx": 27
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::tanh", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606576, "dur": 186,
+    "args": {
+      "External id": 29,"Ev Idx": 28
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::transpose", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606591, "dur": 2,
+    "args": {
+      "External id": 30,"Ev Idx": 29
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::as_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606592, "dur": 1,
+    "args": {
+      "External id": 31,"Ev Idx": 30
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_like", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606594, "dur": 65,
+    "args": {
+      "External id": 32,"Ev Idx": 31
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606594, "dur": 65,
+    "args": {
+      "External id": 33,"Ev Idx": 32
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::add", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606765, "dur": 174,
+    "args": {
+      "External id": 34,"Ev Idx": 33
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::to", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606766, "dur": 4,
+    "args": {
+      "External id": 35,"Ev Idx": 34
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_to_copy", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606767, "dur": 3,
+    "args": {
+      "External id": 36,"Ev Idx": 35
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606767, "dur": 1,
+    "args": {
+      "External id": 37,"Ev Idx": 36
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::copy_", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606769, "dur": 0,
+    "args": {
+      "External id": 38,"Ev Idx": 37
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::item", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606821, "dur": 1,
+    "args": {
+      "External id": 39,"Ev Idx": 38
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_local_scalar_dense", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606822, "dur": 0,
+    "args": {
+      "External id": 40,"Ev Idx": 39
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::to", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606827, "dur": 3,
+    "args": {
+      "External id": 41,"Ev Idx": 40
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_to_copy", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606827, "dur": 3,
+    "args": {
+      "External id": 42,"Ev Idx": 41
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::empty_strided", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606827, "dur": 1,
+    "args": {
+      "External id": 43,"Ev Idx": 42
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::copy_", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606828, "dur": 2,
+    "args": {
+      "External id": 44,"Ev Idx": 43
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::item", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606835, "dur": 1,
+    "args": {
+      "External id": 45,"Ev Idx": 44
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::_local_scalar_dense", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606835, "dur": 1,
+    "args": {
+      "External id": 46,"Ev Idx": 45
+    }
+  },
+  {
+    "ph": "X", "cat": "cpu_op", "name": "aten::mul", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606942, "dur": 155,
+    "args": {
+      "External id": 47,"Ev Idx": 46
+    }
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605696, "dur": 107,
+    "args": {
+      "External id": 132, "Linked id": 2,
+      "cbid": 211, "correlation": 132
+    }
+  },
+  {
+    "ph": "s", "id": 132, "pid": 14081, "tid": 14081, "ts": 1786793824605696,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824605784, "dur": 19,
+    "args": {
+      "External id": 132, "Linked id": 2,
+      "cbid": 307, "correlation": 132
+    }
+  },
+  {
+    "ph": "s", "id": 132, "pid": 14081, "tid": 14081, "ts": 1786793824605784,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824606099, "dur": 767,
+    "args": {
+      "External id": 132, "Linked id": 2,
+      "queued": 41309393101783, "device": 0, "context": 0,
+      "stream": 0, "correlation": 132,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 132, "pid": 0, "tid": 0, "ts": 1786793824606099,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606020, "dur": 50,
+    "args": {
+      "External id": 143, "Linked id": 9,
+      "cbid": 211, "correlation": 143
+    }
+  },
+  {
+    "ph": "s", "id": 143, "pid": 14081, "tid": 14081, "ts": 1786793824606020,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606064, "dur": 6,
+    "args": {
+      "External id": 143, "Linked id": 9,
+      "cbid": 307, "correlation": 143
+    }
+  },
+  {
+    "ph": "s", "id": 143, "pid": 14081, "tid": 14081, "ts": 1786793824606064,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::PowOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824606876, "dur": 771,
+    "args": {
+      "External id": 143, "Linked id": 9,
+      "queued": 41309393102051, "device": 0, "context": 0,
+      "stream": 0, "correlation": 143,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 143, "pid": 0, "tid": 0, "ts": 1786793824606876,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606194, "dur": 39,
+    "args": {
+      "External id": 152, "Linked id": 14,
+      "cbid": 211, "correlation": 152
+    }
+  },
+  {
+    "ph": "s", "id": 152, "pid": 14081, "tid": 14081, "ts": 1786793824606194,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606228, "dur": 4,
+    "args": {
+      "External id": 152, "Linked id": 14,
+      "cbid": 307, "correlation": 152
+    }
+  },
+  {
+    "ph": "s", "id": 152, "pid": 14081, "tid": 14081, "ts": 1786793824606228,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824607656, "dur": 767,
+    "args": {
+      "External id": 152, "Linked id": 14,
+      "queued": 41309393102214, "device": 0, "context": 0,
+      "stream": 0, "correlation": 152,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 152, "pid": 0, "tid": 0, "ts": 1786793824607656,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606356, "dur": 47,
+    "args": {
+      "External id": 161, "Linked id": 21,
+      "cbid": 211, "correlation": 161
+    }
+  },
+  {
+    "ph": "s", "id": 161, "pid": 14081, "tid": 14081, "ts": 1786793824606356,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606399, "dur": 4,
+    "args": {
+      "External id": 161, "Linked id": 21,
+      "cbid": 307, "correlation": 161
+    }
+  },
+  {
+    "ph": "s", "id": 161, "pid": 14081, "tid": 14081, "ts": 1786793824606399,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_binary<float, musa::dnn::(anonymous namespace)::AddOp, float, float, 128>(musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824608432, "dur": 1131,
+    "args": {
+      "External id": 161, "Linked id": 21,
+      "queued": 41309393102385, "device": 0, "context": 0,
+      "stream": 0, "correlation": 161,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 161, "pid": 0, "tid": 0, "ts": 1786793824608432,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606520, "dur": 38,
+    "args": {
+      "External id": 170, "Linked id": 22,
+      "cbid": 211, "correlation": 170
+    }
+  },
+  {
+    "ph": "s", "id": 170, "pid": 14081, "tid": 14081, "ts": 1786793824606520,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606554, "dur": 4,
+    "args": {
+      "External id": 170, "Linked id": 22,
+      "cbid": 307, "correlation": 170
+    }
+  },
+  {
+    "ph": "s", "id": 170, "pid": 14081, "tid": 14081, "ts": 1786793824606554,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824609573, "dur": 759,
+    "args": {
+      "External id": 170, "Linked id": 22,
+      "queued": 41309393102540, "device": 0, "context": 0,
+      "stream": 0, "correlation": 170,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 170, "pid": 0, "tid": 0, "ts": 1786793824609573,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606702, "dur": 45,
+    "args": {
+      "External id": 181, "Linked id": 29,
+      "cbid": 211, "correlation": 181
+    }
+  },
+  {
+    "ph": "s", "id": 181, "pid": 14081, "tid": 14081, "ts": 1786793824606702,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606743, "dur": 4,
+    "args": {
+      "External id": 181, "Linked id": 29,
+      "cbid": 307, "correlation": 181
+    }
+  },
+  {
+    "ph": "s", "id": 181, "pid": 14081, "tid": 14081, "ts": 1786793824606743,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::TanhOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824610341, "dur": 768,
+    "args": {
+      "External id": 181, "Linked id": 29,
+      "queued": 41309393102729, "device": 0, "context": 0,
+      "stream": 0, "correlation": 181,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 181, "pid": 0, "tid": 0, "ts": 1786793824610341,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606879, "dur": 46,
+    "args": {
+      "External id": 190, "Linked id": 34,
+      "cbid": 211, "correlation": 190
+    }
+  },
+  {
+    "ph": "s", "id": 190, "pid": 14081, "tid": 14081, "ts": 1786793824606879,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824606920, "dur": 4,
+    "args": {
+      "External id": 190, "Linked id": 34,
+      "cbid": 307, "correlation": 190
+    }
+  },
+  {
+    "ph": "s", "id": 190, "pid": 14081, "tid": 14081, "ts": 1786793824606920,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_unary<float, musa::dnn::(anonymous namespace)::AddOp, float, float, 128>(float*, float const*, unsigned long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824611117, "dur": 767,
+    "args": {
+      "External id": 190, "Linked id": 34,
+      "queued": 41309393102906, "device": 0, "context": 0,
+      "stream": 0, "correlation": 190,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 190, "pid": 0, "tid": 0, "ts": 1786793824611117,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824607036, "dur": 46,
+    "args": {
+      "External id": 199, "Linked id": 47,
+      "cbid": 211, "correlation": 199
+    }
+  },
+  {
+    "ph": "s", "id": 199, "pid": 14081, "tid": 14081, "ts": 1786793824607036,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_driver", "name": "muLaunchKernel", "pid": 14081, "tid": 14081,
+    "ts": 1786793824607078, "dur": 4,
+    "args": {
+      "External id": 199, "Linked id": 47,
+      "cbid": 307, "correlation": 199
+    }
+  },
+  {
+    "ph": "s", "id": 199, "pid": 14081, "tid": 14081, "ts": 1786793824607078,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "kernel", "name": "void musa::dnn::(anonymous namespace)::kernel_binary<float, musa::dnn::(anonymous namespace)::MulOp, float, float, 128>(musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, musa::dnn::DeviceTensor, long, float, float, void const*, void const*, musa::dnn::ParamType, musa::dnn::ParamType, float, float, float)", "pid": 0, "tid": 0,
+    "ts": 1786793824611893, "dur": 1130,
+    "args": {
+      "External id": 199, "Linked id": 47,
+      "queued": 41309393103064, "device": 0, "context": 0,
+      "stream": 0, "correlation": 199,
+      "registers per thread": 0,
+      "shared memory": 73728,
+      "blocks per SM": 292.57144,
+      "warps per SM": 9362.286,
+      "grid": [16384, 1, 1],
+      "block": [1024, 1, 1],
+      "est. achieved occupancy %": 17
+    }
+  },
+  {
+    "ph": "f", "id": 199, "pid": 0, "tid": 0, "ts": 1786793824611893,
+    "cat": "ac2g", "name": "ac2g", "bp": "e"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaDeviceSynchronize", "pid": 14081, "tid": 14081,
+    "ts": 1786793824607150, "dur": 5870,
+    "args": {
+      "External id": 203,
+      "cbid": 165, "correlation": 203
+    }
+  },
+  {
+    "ph": "s", "id": 203, "pid": 14081, "tid": 14081, "ts": 1786793824607150,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "ph": "X", "cat": "musa_runtime", "name": "musaDeviceSynchronize", "pid": 14081, "tid": 14081,
+    "ts": 1786793824613452, "dur": 7,
+    "args": {
+      "External id": 207,
+      "cbid": 165, "correlation": 207
+    }
+  },
+  {
+    "ph": "s", "id": 207, "pid": 14081, "tid": 14081, "ts": 1786793824613452,
+    "cat": "ac2g", "name": "ac2g"
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 0,
+    "args": {
+      "labels": "CPU"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 0,
+    "args": {
+      "sort_index": 14081
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 0, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 0, "tid": 0,
+    "args": {
+      "labels": "GPU 0"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 0, "tid": 0,
+    "args": {
+      "sort_index": 16777216
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 1, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 1, "tid": 0,
+    "args": {
+      "labels": "GPU 1"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 1, "tid": 0,
+    "args": {
+      "sort_index": 16777217
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 2, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 2, "tid": 0,
+    "args": {
+      "labels": "GPU 2"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 2, "tid": 0,
+    "args": {
+      "sort_index": 16777218
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 3, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 3, "tid": 0,
+    "args": {
+      "labels": "GPU 3"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 3, "tid": 0,
+    "args": {
+      "sort_index": 16777219
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 4, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 4, "tid": 0,
+    "args": {
+      "labels": "GPU 4"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 4, "tid": 0,
+    "args": {
+      "sort_index": 16777220
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 5, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 5, "tid": 0,
+    "args": {
+      "labels": "GPU 5"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 5, "tid": 0,
+    "args": {
+      "sort_index": 16777221
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 6, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 6, "tid": 0,
+    "args": {
+      "labels": "GPU 6"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 6, "tid": 0,
+    "args": {
+      "sort_index": 16777222
+    }
+  },
+  {
+    "name": "process_name", "ph": "M", "ts": 1786793824604913, "pid": 7, "tid": 0,
+    "args": {
+      "name": "python"
+    }
+  },
+  {
+    "name": "process_labels", "ph": "M", "ts": 1786793824604913, "pid": 7, "tid": 0,
+    "args": {
+      "labels": "GPU 7"
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 7, "tid": 0,
+    "args": {
+      "sort_index": 16777223
+    }
+  },
+  {
+    "name": "thread_name", "ph": "M", "ts": 1786793824604913, "pid": 0, "tid": 0,
+    "args": {
+      "name": "stream 0 "
+    }
+  },
+  {
+    "name": "thread_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 0, "tid": 0,
+    "args": {
+      "sort_index": 0
+    }
+  },
+  {
+    "name": "thread_name", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 14081,
+    "args": {
+      "name": "thread 14081 (python)"
+    }
+  },
+  {
+    "name": "thread_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 14081,
+    "args": {
+      "sort_index": 14081
+    }
+  },
+  {
+    "name": "thread_name", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 14081,
+    "args": {
+      "name": "thread 14081 (python)"
+    }
+  },
+  {
+    "name": "thread_sort_index", "ph": "M", "ts": 1786793824604913, "pid": 14081, "tid": 14081,
+    "args": {
+      "sort_index": 14081
+    }
+  },
+  {
+    "ph": "X", "cat": "Trace", "ts": 1786793824604808, "dur": 8671,
+    "pid": "Spans", "tid": "PyTorch Profiler",
+    "name": "PyTorch Profiler (0)",
+    "args": {
+      "Op count": 0
+    }
+  },
+  {
+    "name": "process_sort_index", "ph": "M", "ts": 1786793824604808,
+    "pid": "Spans", "tid": 0,
+    "args": {
+      "sort_index": 536870912
+    }
+  },
+  {
+    "name": "Iteration Start: PyTorch Profiler", "ph": "i", "s": "g",
+    "pid": "Traces", "tid": "Trace PyTorch Profiler", "ts": 1786793824604808
+  },
+  {
+    "name": "Record Window End", "ph": "i", "s": "g",
+    "pid": "", "tid": "", "ts": 1786793824613663
+  }
+  ],
+  "traceName": "/root/autodl-tmp/KernelBench/analysis/pytorch_vs_deepseek_musa/profiles/problem_88_pytorch_trace.json"
+}

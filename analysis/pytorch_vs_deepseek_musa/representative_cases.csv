@@ -1,0 +1,8 @@
+problem_id,operator,category,formal_speedup,selection_reason
+88,MinGPTNewGelu,strong_speedup_ge_1.1,8.437118,Elementwise expression fusion with a controlled fused-PyTorch ablation
+45,Average Pooling 2D,near_parity_0.9_to_1.1,1.051282,Large non-overlapping pooling workload near the same traversal lower bound
+47,Sum reduction,near_parity_0.9_to_1.1,0.909091,One kernel on both paths; isolates indexing and reduction constants
+6,Large-K matrix multiplication,moderate_slowdown_0.1_to_0.9,0.723478,Shape contrast with square GEMM
+1,Square matrix multiplication,severe_slowdown_lt_0.1,0.018853,Assembly SGEMM versus untiled per-output dot product
+55,Conv2d,severe_slowdown_lt_0.1,0.005772,Assembly convolution versus direct convolution with the same launch count
+97,Scaled dot-product attention,severe_slowdown_lt_0.1,0.002209,Fewer launches but loss of GEMM tiling and cross-query K/V reuse
