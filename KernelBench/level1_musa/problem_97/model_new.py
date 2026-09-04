@@ -1,4 +1,4 @@
-"""Level 1 / problem 97 SDPA MUSA implementation (GEMM form, MT=NT=8).
+"""Level 1 / problem 97 SDPA MUSA implementation (GEMM form, tuned).
 
 Two register-tiled SIMT SGEMMs with a hand row-softmax between them, tuned for
 the (32,32,512,1024) fp32 non-causal shape on MTT S4000 / mp_22:
@@ -6,7 +6,7 @@ the (32,32,512,1024) fp32 non-causal shape on MTT S4000 / mp_22:
   soft: P = row_softmax(S)         per (bh, row)
   pv  : O = P V                    (NN gemm, K dim = seq 512)
 Each GEMM uses 128x128 output tiles, 256 threads (16x16) with 8x8 register
-micro-tiles and K-dim chunks of 16 staged in shared memory.
+micro-tiles, K-dim chunks of 16 staged via float4 loads.
 """
 
 import torch
@@ -52,13 +52,19 @@ __global__ void qk_nt_kernel(
         for (int b = 0; b < NT; ++b) acc[a][b] = 0.0f;
 
     for (int k0 = 0; k0 < d; k0 += BK) {
-        for (int idx = tid; idx < TM * BK; idx += THREADS) {
-            const int r = idx / BK, c = idx % BK;
-            As[r * PADK + c] = Q[bq + static_cast<int64_t>(m0 + r) * d + k0 + c];
+        for (int idx = tid; idx < TM * (BK / 4); idx += THREADS) {
+            const int r = idx / (BK / 4), c4 = (idx % (BK / 4)) * 4;
+            const float4 v = *reinterpret_cast<const float4*>(
+                Q + bq + static_cast<int64_t>(m0 + r) * d + k0 + c4);
+            As[r * PADK + c4] = v.x; As[r * PADK + c4 + 1] = v.y;
+            As[r * PADK + c4 + 2] = v.z; As[r * PADK + c4 + 3] = v.w;
         }
-        for (int idx = tid; idx < TN * BK; idx += THREADS) {
-            const int r = idx / BK, c = idx % BK;
-            Bs[r * PADK + c] = K[bq + static_cast<int64_t>(n0 + r) * d + k0 + c];
+        for (int idx = tid; idx < TN * (BK / 4); idx += THREADS) {
+            const int r = idx / (BK / 4), c4 = (idx % (BK / 4)) * 4;
+            const float4 v = *reinterpret_cast<const float4*>(
+                K + bq + static_cast<int64_t>(n0 + r) * d + k0 + c4);
+            Bs[r * PADK + c4] = v.x; Bs[r * PADK + c4 + 1] = v.y;
+            Bs[r * PADK + c4 + 2] = v.z; Bs[r * PADK + c4 + 3] = v.w;
         }
         __syncthreads();
         for (int kk = 0; kk < BK; ++kk) {
@@ -131,15 +137,20 @@ __global__ void pv_nn_kernel(
         for (int b = 0; b < NT; ++b) acc[a][b] = 0.0f;
 
     for (int k0 = 0; k0 < T; k0 += BK) {
-        for (int idx = tid; idx < TM * BK; idx += THREADS) {
-            const int r = idx / BK, c = idx % BK;
-            As[r * PADK + c] = P[bp + static_cast<int64_t>(m0 + r) * T + k0 + c];
+        for (int idx = tid; idx < TM * (BK / 4); idx += THREADS) {
+            const int r = idx / (BK / 4), c4 = (idx % (BK / 4)) * 4;
+            const float4 v = *reinterpret_cast<const float4*>(
+                P + bp + static_cast<int64_t>(m0 + r) * T + k0 + c4);
+            As[r * PADK + c4] = v.x; As[r * PADK + c4 + 1] = v.y;
+            As[r * PADK + c4 + 2] = v.z; As[r * PADK + c4 + 3] = v.w;
         }
-        for (int idx = tid; idx < BK * TN; idx += THREADS) {
-            const int kk = idx / TN, c = idx % TN;
-            Bs[kk * PADN + c] =
-                V[static_cast<int64_t>(bh) * T * d +
-                  static_cast<int64_t>(k0 + kk) * d + n0 + c];
+        for (int idx = tid; idx < BK * (TN / 4); idx += THREADS) {
+            const int kk = idx / (TN / 4), c4 = (idx % (TN / 4)) * 4;
+            const float4 v = *reinterpret_cast<const float4*>(
+                V + static_cast<int64_t>(bh) * T * d +
+                    static_cast<int64_t>(k0 + kk) * d + n0 + c4);
+            Bs[kk * PADN + c4] = v.x; Bs[kk * PADN + c4 + 1] = v.y;
+            Bs[kk * PADN + c4 + 2] = v.z; Bs[kk * PADN + c4 + 3] = v.w;
         }
         __syncthreads();
         for (int kk = 0; kk < BK; ++kk) {
@@ -190,7 +201,7 @@ torch::Tensor sdpa_gemm(torch::Tensor Q, torch::Tensor K, torch::Tensor V) {
 """
 
 sdpa_extension = load_inline(
-    name="level1_problem97_sdpa_gemm_mt8_musa",
+    name="level1_problem97_sdpa_gemm_mt8vec_musa",
     cpp_sources=sdpa_source,
     functions=["sdpa_gemm"],
     verbose=False,
