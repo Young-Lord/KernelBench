@@ -1,11 +1,11 @@
-"""Level 1 / problem 97 SDPA MUSA implementation (GEMM form).
+"""Level 1 / problem 97 SDPA MUSA implementation (GEMM form, MT=NT=8).
 
-Two register-tiled SIMT SGEMMs with a row-softmax between them, tuned for the
-(32,32,512,1024) fp32 non-causal shape on MTT S4000 / mp_22:
+Two register-tiled SIMT SGEMMs with a hand row-softmax between them, tuned for
+the (32,32,512,1024) fp32 non-causal shape on MTT S4000 / mp_22:
   qk  : S = scale * Q K^T          (NT gemm, K dim = head_dim 1024)
   soft: P = row_softmax(S)         per (bh, row)
   pv  : O = P V                    (NN gemm, K dim = seq 512)
-Each GEMM uses 64x64 output tiles, 256 threads (16x16) with 4x4 register
+Each GEMM uses 128x128 output tiles, 256 threads (16x16) with 8x8 register
 micro-tiles and K-dim chunks of 16 staged in shared memory.
 """
 
@@ -22,12 +22,12 @@ sdpa_source = r"""
 #include <cfloat>
 #include <cmath>
 
-#define TM 64
-#define TN 64
+#define TM 128
+#define TN 128
 #define BK 16
 #define THREADS 256           // 16 x 16
-#define MT 4
-#define NT 4
+#define MT 8
+#define NT 8
 #define PADK (BK + 1)         // row stride when columns are kk
 #define PADN (TN + 1)         // row stride when columns are n
 
@@ -190,7 +190,7 @@ torch::Tensor sdpa_gemm(torch::Tensor Q, torch::Tensor K, torch::Tensor V) {
 """
 
 sdpa_extension = load_inline(
-    name="level1_problem97_sdpa_gemm_musa",
+    name="level1_problem97_sdpa_gemm_mt8_musa",
     cpp_sources=sdpa_source,
     functions=["sdpa_gemm"],
     verbose=False,
