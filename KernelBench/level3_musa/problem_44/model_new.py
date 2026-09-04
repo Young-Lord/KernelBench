@@ -17,22 +17,30 @@ FMHA_SOURCE = r"""#include <torch/extension.h>
 #include <cfloat>
 #include <cmath>
 
-// Tuned FMHA forward (MUSA / MTT S4000, mp_22, warp = 128).
+// Flash-style tiled forward attention (MUSA / MTT S4000, mp_22).
 //
-// Instead of one CTA per query row (huge grid, redundant K/V traffic, one
-// full-block tree reduction per row), each CTA owns a *band of BM query rows*
-// of one (batch, head) and keeps their causal scores in shared memory:
-//   - BM rows are reduced in lockstep by fixed 32-thread row groups, so the
-//     whole softmax needs only O(log2(32)) barriers instead of several full
-//     block reductions *per row*;
-//   - the Q tile is read once for all BM rows and the score pass reuses it;
-//   - masked (upper-triangle) entries are kept at -inf in softmax mode (the
-//     reference semantics) and dropped to 0 in relu mode.
-// Numerics remain fp32 max-subtraction softmax over the causal window.
-// mode: 0 = softmax, 1 = relu. causal: restrict j <= row.
+// One CTA owns a band of FMHA_TILE_BM query rows of a single (batch, head)
+// pair and streams K/V through shared memory in FMHA_TILE_BN-key tiles, so the
+// K/V tile is read once per band instead of once per query row and no full
+// score row is ever materialized.
+//
+// Softmax mode (mode 0) is a true online softmax: running per-row max/sum with
+// an O rescale every tile. ReLU mode (mode 1, DeepSeek-style relu attention)
+// has no denominator and is just a streaming weighted sum of relu(logits).
+// Causal masking only keeps keys j <= query row, matching the reference
+// masked_fill(..., -inf) / relu(masked_fill(...)) semantics.
+//
+// Layout notes: shared arrays use a per-row padded stride sd = head_dim + 1
+// (and BP = FMHA_TILE_BN + 1 for the score tile) so lanes reading different
+// rows/keys of the same column do not land in the same shared bank
+// (head_dim % 32 == 0 would otherwise serialize them). Each query row is owned
+// by FMHA_TILE_ROW_LANES lanes; a lane always writes the same O columns, so the
+// O accumulator needs no cross-lane traffic.
 
-#define FMHA_BM 8
-#define FMHA_GROUP 32
+#define FMHA_TILE_BM 32
+#define FMHA_TILE_ROW_LANES 32
+#define FMHA_TILE_BN 32
+#define FMHA_TILE_BP (FMHA_TILE_BN + 1)
 
 __global__ void fmha_fwd_kernel(
     const float* __restrict__ Q,
@@ -44,107 +52,157 @@ __global__ void fmha_fwd_kernel(
     const int bh = blockIdx.x;
     const int b = bh / heads;
     const int h = bh % heads;
-    const int band = blockIdx.y;
+    const int q_band = blockIdx.y;
     const int tid = threadIdx.x;
     const int T = seq_len;
     const int d = head_dim;
-    const int row0 = band * FMHA_BM;
-    const int r = tid / FMHA_GROUP;        // 0..FMHA_BM-1 row inside band
-    const int g = tid % FMHA_GROUP;        // 0..31 key/col lane for this row
+    const int sd = d + 1;                       // padded per-row stride
+    const int threads = FMHA_TILE_BM * FMHA_TILE_ROW_LANES;
+    const int row0 = q_band * FMHA_TILE_BM;
+    const int r = tid / FMHA_TILE_ROW_LANES;    // query row inside the band
+    const int lane = tid % FMHA_TILE_ROW_LANES; // lane group of the row
 
-    extern __shared__ float shared_mem[];
-    float* q_tile = shared_mem;                 // FMHA_BM * d
-    float* scores = q_tile + FMHA_BM * d;       // FMHA_BM * T
-    float* red = scores + FMHA_BM * T;          // FMHA_BM * FMHA_GROUP
+    extern __shared__ float smem[];
+    float* q_s = smem;                                 // BM * sd
+    float* k_s = q_s + FMHA_TILE_BM * sd;              // BN * sd
+    float* v_s = k_s + FMHA_TILE_BN * sd;              // BN * sd
+    float* s_s = v_s + FMHA_TILE_BN * sd;              // BM * BP (scores / probs)
+    float* o_s = s_s + FMHA_TILE_BM * FMHA_TILE_BP;    // BM * sd (accumulator)
+    float* red = o_s + FMHA_TILE_BM * sd;              // BM * ROW_LANES
 
     const int64_t bh_offset = (static_cast<int64_t>(b) * heads + h) * T * d;
     const float* q_bh = Q + bh_offset;
     const float* k_bh = K + bh_offset;
     const float* v_bh = V + bh_offset;
+    float* o_bh = O + bh_offset;
 
-    // Load this band's Q rows.
-    for (int idx = tid; idx < FMHA_BM * d; idx += blockDim.x) {
-        int rr = idx / d;
-        q_tile[rr * d + (idx % d)] = q_bh[(row0 + rr) * d + (idx % d)];
+    const int row_global = row0 + r;
+
+    for (int idx = tid; idx < FMHA_TILE_BM * d; idx += threads) {
+        q_s[(idx / d) * sd + (idx % d)] = q_bh[(row0 + idx / d) * d + (idx % d)];
+        o_s[(idx / d) * sd + (idx % d)] = 0.0f;
     }
     __syncthreads();
 
-    // scores[r][j] = scale * (q_row . k[j]); causal mask -> -FLT_MAX.
-    {
-        const int row = row0 + r;
-        const float* qr = q_tile + r * d;
-        for (int j = g; j < T; j += FMHA_GROUP) {
-            if (causal && j > row) {
-                scores[r * T + j] = -FLT_MAX;
-            } else {
-                const float* k_j = k_bh + j * d;
-                float s = 0.0f;
-                for (int i = 0; i < d; ++i) s += qr[i] * k_j[i];
-                scores[r * T + j] = s * scale;
-            }
-        }
-    }
-    __syncthreads();
+    // Keys a band can ever touch: causal bands stop at the last row of the
+    // band, dense bands scan the whole sequence. Uniform across the block so
+    // every thread takes the same barriers.
+    const int kv_end = causal ? (row0 + FMHA_TILE_BM < T ? row0 + FMHA_TILE_BM : T)
+                              : T;
 
     if (mode == 0) {
-        // Row-group max reduction.
-        float local_max = -FLT_MAX;
-        for (int j = g; j < T; j += FMHA_GROUP) {
-            if (scores[r * T + j] > -FLT_MAX / 2.0f)
-                local_max = fmaxf(local_max, scores[r * T + j]);
-        }
-        red[r * FMHA_GROUP + g] = local_max;
-        __syncthreads();
-        for (int stride = FMHA_GROUP / 2; stride > 0; stride >>= 1) {
-            if (g < stride)
-                red[r * FMHA_GROUP + g] = fmaxf(red[r * FMHA_GROUP + g],
-                                                red[r * FMHA_GROUP + g + stride]);
-            __syncthreads();
-        }
-        const float row_max = red[r * FMHA_GROUP];
+        float row_max = -FLT_MAX;
+        float row_sum = 0.0f;
+        for (int j0 = 0; j0 < kv_end; j0 += FMHA_TILE_BN) {
+            const int tile_keys = (kv_end - j0) < FMHA_TILE_BN ? (kv_end - j0)
+                                                               : FMHA_TILE_BN;
+            // This row only attends to keys <= row_global.
+            const int valid_n = causal && (row_global + 1 - j0) < tile_keys
+                                    ? (row_global + 1 - j0) : tile_keys;
 
-        float local_sum = 0.0f;
-        for (int j = g; j < T; j += FMHA_GROUP) {
-            float e = scores[r * T + j] > -FLT_MAX / 2.0f
-                          ? expf(scores[r * T + j] - row_max)
-                          : 0.0f;
-            scores[r * T + j] = e;
-            local_sum += e;
-        }
-        red[r * FMHA_GROUP + g] = local_sum;
-        __syncthreads();
-        for (int stride = FMHA_GROUP / 2; stride > 0; stride >>= 1) {
-            if (g < stride)
-                red[r * FMHA_GROUP + g] += red[r * FMHA_GROUP + g + stride];
-            __syncthreads();
-        }
-        const float row_sum = red[r * FMHA_GROUP];
-
-        for (int j = g; j < T; j += FMHA_GROUP) {
-            scores[r * T + j] = row_sum > 0.0f ? scores[r * T + j] / row_sum : 0.0f;
-        }
-        __syncthreads();
-    } else {
-        // ReLU attention: relu(masked scores) == 0 on the masked triangle.
-        for (int j = g; j < T; j += FMHA_GROUP) {
-            float s = scores[r * T + j];
-            scores[r * T + j] = s > -FLT_MAX / 2.0f ? fmaxf(s, 0.0f) : 0.0f;
-        }
-        __syncthreads();
-    }
-
-    // Output: row group computes the output columns it owns.
-    {
-        const float* srow = scores + r * T;
-        float* orow = O + bh_offset + (row0 + r) * d;
-        for (int c = g; c < d; c += FMHA_GROUP) {
-            float acc = 0.0f;
-            for (int j = 0; j < T; ++j) {
-                float w = srow[j];
-                if (w != 0.0f) acc += w * v_bh[j * d + c];
+            for (int idx = tid; idx < tile_keys * d; idx += threads) {
+                const int jj = idx / d;
+                const int c = idx % d;
+                k_s[jj * sd + c] = k_bh[(j0 + jj) * d + c];
+                v_s[jj * sd + c] = v_bh[(j0 + jj) * d + c];
             }
-            orow[c] = acc;
+            __syncthreads();
+
+            float local_max = -FLT_MAX;
+            const float* q_row = q_s + r * sd;
+            for (int jj = lane; jj < valid_n; jj += FMHA_TILE_ROW_LANES) {
+                const float* k_row = k_s + jj * sd;
+                float acc = 0.0f;
+                for (int i = 0; i < d; ++i) acc += q_row[i] * k_row[i];
+                const float s = acc * scale;
+                s_s[r * FMHA_TILE_BP + jj] = s;
+                local_max = fmaxf(local_max, s);
+            }
+
+            red[r * FMHA_TILE_ROW_LANES + lane] = local_max;
+            __syncthreads();
+            for (int stride = FMHA_TILE_ROW_LANES / 2; stride > 0; stride >>= 1) {
+                if (lane < stride)
+                    red[r * FMHA_TILE_ROW_LANES + lane] = fmaxf(
+                        red[r * FMHA_TILE_ROW_LANES + lane],
+                        red[r * FMHA_TILE_ROW_LANES + lane + stride]);
+                __syncthreads();
+            }
+            const float new_max = fmaxf(row_max, red[r * FMHA_TILE_ROW_LANES]);
+            const float rescale = expf(row_max - new_max);  // 0 on the first tile
+            row_max = new_max;
+
+            float local_sum = 0.0f;
+            for (int jj = lane; jj < valid_n; jj += FMHA_TILE_ROW_LANES) {
+                const float p = expf(s_s[r * FMHA_TILE_BP + jj] - row_max);
+                s_s[r * FMHA_TILE_BP + jj] = p;
+                local_sum += p;
+            }
+            red[r * FMHA_TILE_ROW_LANES + lane] = local_sum;
+            __syncthreads();
+            for (int stride = FMHA_TILE_ROW_LANES / 2; stride > 0; stride >>= 1) {
+                if (lane < stride)
+                    red[r * FMHA_TILE_ROW_LANES + lane] +=
+                        red[r * FMHA_TILE_ROW_LANES + lane + stride];
+                __syncthreads();
+            }
+            const float tile_sum = red[r * FMHA_TILE_ROW_LANES];
+            row_sum = row_sum * rescale + tile_sum;
+
+            // Rescale the O accumulator and add this tile's contribution. Each
+            // lane owns the columns c = lane (mod ROW_LANES).
+            for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
+                o_s[r * sd + c] *= rescale;
+            for (int jj = 0; jj < valid_n; ++jj) {
+                const float p = s_s[r * FMHA_TILE_BP + jj];
+                if (p == 0.0f) continue;
+                const float* v_row = v_s + jj * sd;
+                for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
+                    o_s[r * sd + c] += p * v_row[c];
+            }
+            __syncthreads();  // tile fully consumed before shared reuse
         }
+        if (row_sum > 0.0f) {
+            for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
+                o_bh[row_global * d + c] = o_s[r * sd + c] / row_sum;
+        }
+    } else {
+        // ReLU attention: out += relu(scale * q.k) * v over the causal window.
+        for (int j0 = 0; j0 < kv_end; j0 += FMHA_TILE_BN) {
+            const int tile_keys = (kv_end - j0) < FMHA_TILE_BN ? (kv_end - j0)
+                                                               : FMHA_TILE_BN;
+            const int valid_n = causal && (row_global + 1 - j0) < tile_keys
+                                    ? (row_global + 1 - j0) : tile_keys;
+
+            for (int idx = tid; idx < tile_keys * d; idx += threads) {
+                const int jj = idx / d;
+                const int c = idx % d;
+                k_s[jj * sd + c] = k_bh[(j0 + jj) * d + c];
+                v_s[jj * sd + c] = v_bh[(j0 + jj) * d + c];
+            }
+            __syncthreads();
+
+            const float* q_row = q_s + r * sd;
+            for (int jj = lane; jj < valid_n; jj += FMHA_TILE_ROW_LANES) {
+                const float* k_row = k_s + jj * sd;
+                float acc = 0.0f;
+                for (int i = 0; i < d; ++i) acc += q_row[i] * k_row[i];
+                const float s = acc * scale;
+                s_s[r * FMHA_TILE_BP + jj] = fmaxf(s, 0.0f);
+            }
+            __syncthreads();
+
+            for (int jj = 0; jj < valid_n; ++jj) {
+                const float p = s_s[r * FMHA_TILE_BP + jj];
+                if (p == 0.0f) continue;
+                const float* v_row = v_s + jj * sd;
+                for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
+                    o_s[r * sd + c] += p * v_row[c];
+            }
+            __syncthreads();
+        }
+        for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
+            o_bh[row_global * d + c] = o_s[r * sd + c];
     }
 }
 
@@ -164,13 +222,17 @@ torch::Tensor fmha_fwd(
     const int heads = static_cast<int>(Q.size(1));
     const int seq_len = static_cast<int>(Q.size(2));
     const int head_dim = static_cast<int>(Q.size(3));
+    TORCH_CHECK(seq_len % FMHA_TILE_BM == 0, "seq_len must be a multiple of FMHA_TILE_BM");
 
     torch::Tensor output = torch::empty_like(Q);
-    const int threads = FMHA_BM * FMHA_GROUP;  // 256
-    const dim3 grid(batch * heads, (seq_len + FMHA_BM - 1) / FMHA_BM);
+    const int threads = FMHA_TILE_BM * FMHA_TILE_ROW_LANES;
+    const dim3 grid(batch * heads, seq_len / FMHA_TILE_BM);
+    const int sd = head_dim + 1;
     const size_t shared_bytes =
-        (static_cast<size_t>(FMHA_BM) * (head_dim + seq_len) +
-         FMHA_BM * FMHA_GROUP + FMHA_BM) * sizeof(float);
+        (static_cast<size_t>(FMHA_TILE_BM) * sd * 2 +          // q_s + o_s
+         static_cast<size_t>(2) * FMHA_TILE_BN * sd +          // k_s + v_s
+         static_cast<size_t>(FMHA_TILE_BM) * FMHA_TILE_BP +    // s_s
+         static_cast<size_t>(FMHA_TILE_BM) * FMHA_TILE_ROW_LANES) * sizeof(float);
     const float scale = 1.0f / sqrtf(static_cast<float>(head_dim));
 
     fmha_fwd_kernel<<<grid, threads, shared_bytes>>>(
