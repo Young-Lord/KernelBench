@@ -1,11 +1,12 @@
-"""Level 3 / problem 31 VisionAttention MUSA implementation.
+"""Level 3 / problem 31 VisionAttention MUSA implementation (GEMM form).
 
 nn.MultiheadAttention is instantiated only to keep the exact reference weight
-layout; the forward computes the packed-weights self-attention with the scaled
-dot-product core on a hand-written flash-style tiled MUSA kernel (BM32 x BN32 x
-32 lanes/row, tuned on MTT S4000 / mp_22).  The 16k-token key dimension is
-streamed in KV tiles through shared memory with online-softmax rescaling, so
-no full row of scores is ever materialized.
+layout; the forward computes the packed-weights self-attention on a hand
+two-stage GEMM pipeline tuned on MTT S4000 / mp_22 for the (L=16384, d=32)
+dense shape:
+  qk  : S = scale * Q K^T          (M=N=T single-stage tiles, K dim = 32)
+  soft: P = row_softmax(S)         per (bh, row)
+  pv  : O = P V                    (row tile x 32 cols, K dim = T chunked)
 """
 
 import torch
@@ -15,248 +16,177 @@ import torch.nn.functional as F
 from kernelbench.musa_extension import load_inline
 
 FMHA_SOURCE = r"""
+
 #include <torch/extension.h>
 #include <musa_runtime.h>
 #include <cstdint>
 #include <cfloat>
 #include <cmath>
 
-// Flash-style tiled forward attention (MUSA / MTT S4000, mp_22).
-//
-// One CTA owns a band of FMHA_TILE_BM query rows of a single (batch, head)
-// pair and streams K/V through shared memory in FMHA_TILE_BN-key tiles, so the
-// K/V tile is read once per band instead of once per query row and no full
-// score row is ever materialized.
-//
-// Softmax mode (mode 0) is a true online softmax: running per-row max/sum with
-// an O rescale every tile. ReLU mode (mode 1, DeepSeek-style relu attention)
-// has no denominator and is just a streaming weighted sum of relu(logits).
-// Causal masking only keeps keys j <= query row, matching the reference
-// masked_fill(..., -inf) / relu(masked_fill(...)) semantics.
-//
-// Layout notes: shared arrays use a per-row padded stride sd = head_dim + 1
-// (and BP = FMHA_TILE_BN + 1 for the score tile) so lanes reading different
-// rows/keys of the same column do not land in the same shared bank
-// (head_dim % 32 == 0 would otherwise serialize them). Each query row is owned
-// by FMHA_TILE_ROW_LANES lanes; a lane always writes the same O columns, so the
-// O accumulator needs no cross-lane traffic.
+#define TM 128
+#define TN 128
+#define THREADS 256
+#define MT 8
+#define NT 8
+#define PAD (TM > TN ? TM : TN)  // unused placeholder
 
-#define FMHA_TILE_BM 128
-#define FMHA_TILE_ROW_LANES 8
-#define FMHA_TILE_BN 32
-#define FMHA_TILE_BP (FMHA_TILE_BN + 1)
-
-__global__ void fmha_fwd_kernel(
-    const float* __restrict__ Q,
-    const float* __restrict__ K,
-    const float* __restrict__ V,
-    float* __restrict__ O,
-    int batch, int heads, int seq_len, int head_dim,
-    float scale, int mode, int causal) {
+// ---- S[m][n] = sum_k Q[m][k] K[n][k] * scale ; single-stage (k over d) ----
+__global__ void qk_tinyk_kernel(
+    const float* __restrict__ Q, const float* __restrict__ K,
+    float* __restrict__ S, int T, int d, float scale) {
     const int bh = blockIdx.x;
-    const int b = bh / heads;
-    const int h = bh % heads;
-    const int q_band = blockIdx.y;
+    const int m0 = blockIdx.y * TM;
+    const int n0 = blockIdx.z * TN;
+    const int tx = threadIdx.x & 15;
+    const int ty = threadIdx.x >> 4;
     const int tid = threadIdx.x;
-    const int T = seq_len;
-    const int d = head_dim;
-    const int sd = d + 1;                       // padded per-row stride
-    const int threads = FMHA_TILE_BM * FMHA_TILE_ROW_LANES;
-    const int row0 = q_band * FMHA_TILE_BM;
-    const int r = tid / FMHA_TILE_ROW_LANES;    // query row inside the band
-    const int lane = tid % FMHA_TILE_ROW_LANES; // lane group of the row
+    const int64_t bq = static_cast<int64_t>(bh) * T * d;
+    const int PADK = d + 1;
 
     extern __shared__ float smem[];
-    float* q_s = smem;                                 // BM * sd
-    float* k_s = q_s + FMHA_TILE_BM * sd;              // BN * sd
-    float* v_s = k_s + FMHA_TILE_BN * sd;              // BN * sd
-    float* s_s = v_s + FMHA_TILE_BN * sd;              // BM * BP (scores / probs)
-    float* o_s = s_s + FMHA_TILE_BM * FMHA_TILE_BP;    // BM * sd (accumulator)
-    float* red = o_s + FMHA_TILE_BM * sd;              // BM * ROW_LANES
+    float* As = smem;                  // TM * PADK
+    float* Bs = smem + TM * PADK;      // TN * PADK
 
-    const int64_t bh_offset = (static_cast<int64_t>(b) * heads + h) * T * d;
-    const float* q_bh = Q + bh_offset;
-    const float* k_bh = K + bh_offset;
-    const float* v_bh = V + bh_offset;
-    float* o_bh = O + bh_offset;
-
-    const int row_global = row0 + r;
-
-    for (int idx = tid; idx < FMHA_TILE_BM * d; idx += threads) {
-        q_s[(idx / d) * sd + (idx % d)] = q_bh[(row0 + idx / d) * d + (idx % d)];
-        o_s[(idx / d) * sd + (idx % d)] = 0.0f;
+    for (int idx = tid; idx < TM * (d / 4); idx += THREADS) {
+        const int r = idx / (d / 4), c4 = (idx % (d / 4)) * 4;
+        const float4 v = *reinterpret_cast<const float4*>(
+            Q + bq + static_cast<int64_t>(m0 + r) * d + c4);
+        As[r * PADK + c4] = v.x; As[r * PADK + c4 + 1] = v.y;
+        As[r * PADK + c4 + 2] = v.z; As[r * PADK + c4 + 3] = v.w;
+    }
+    for (int idx = tid; idx < TN * (d / 4); idx += THREADS) {
+        const int r = idx / (d / 4), c4 = (idx % (d / 4)) * 4;
+        const float4 v = *reinterpret_cast<const float4*>(
+            K + bq + static_cast<int64_t>(n0 + r) * d + c4);
+        Bs[r * PADK + c4] = v.x; Bs[r * PADK + c4 + 1] = v.y;
+        Bs[r * PADK + c4 + 2] = v.z; Bs[r * PADK + c4 + 3] = v.w;
     }
     __syncthreads();
 
-    // Keys a band can ever touch: causal bands stop at the last row of the
-    // band, dense bands scan the whole sequence. Uniform across the block so
-    // every thread takes the same barriers.
-    const int kv_end = causal ? (row0 + FMHA_TILE_BM < T ? row0 + FMHA_TILE_BM : T)
-                              : T;
-
-    if (mode == 0) {
-        float row_max = -FLT_MAX;
-        float row_sum = 0.0f;
-        for (int j0 = 0; j0 < kv_end; j0 += FMHA_TILE_BN) {
-            const int tile_keys = (kv_end - j0) < FMHA_TILE_BN ? (kv_end - j0)
-                                                               : FMHA_TILE_BN;
-            // This row only attends to keys <= row_global.
-            const int valid_n = causal && (row_global + 1 - j0) < tile_keys
-                                    ? (row_global + 1 - j0) : tile_keys;
-
-            for (int idx = tid; idx < tile_keys * d; idx += threads) {
-                const int jj = idx / d;
-                const int c = idx % d;
-                k_s[jj * sd + c] = k_bh[(j0 + jj) * d + c];
-                v_s[jj * sd + c] = v_bh[(j0 + jj) * d + c];
-            }
-            __syncthreads();
-
-            float local_max = -FLT_MAX;
-            const float* q_row = q_s + r * sd;
-            for (int jj = lane; jj < valid_n; jj += FMHA_TILE_ROW_LANES) {
-                const float* k_row = k_s + jj * sd;
-                float acc = 0.0f;
-                for (int i = 0; i < d; ++i) acc += q_row[i] * k_row[i];
-                const float s = acc * scale;
-                s_s[r * FMHA_TILE_BP + jj] = s;
-                local_max = fmaxf(local_max, s);
-            }
-
-            red[r * FMHA_TILE_ROW_LANES + lane] = local_max;
-            __syncthreads();
-            for (int stride = FMHA_TILE_ROW_LANES / 2; stride > 0; stride >>= 1) {
-                if (lane < stride)
-                    red[r * FMHA_TILE_ROW_LANES + lane] = fmaxf(
-                        red[r * FMHA_TILE_ROW_LANES + lane],
-                        red[r * FMHA_TILE_ROW_LANES + lane + stride]);
-                __syncthreads();
-            }
-            const float new_max = fmaxf(row_max, red[r * FMHA_TILE_ROW_LANES]);
-            const float rescale = expf(row_max - new_max);  // 0 on the first tile
-            row_max = new_max;
-
-            float local_sum = 0.0f;
-            for (int jj = lane; jj < valid_n; jj += FMHA_TILE_ROW_LANES) {
-                const float p = expf(s_s[r * FMHA_TILE_BP + jj] - row_max);
-                s_s[r * FMHA_TILE_BP + jj] = p;
-                local_sum += p;
-            }
-            red[r * FMHA_TILE_ROW_LANES + lane] = local_sum;
-            __syncthreads();
-            for (int stride = FMHA_TILE_ROW_LANES / 2; stride > 0; stride >>= 1) {
-                if (lane < stride)
-                    red[r * FMHA_TILE_ROW_LANES + lane] +=
-                        red[r * FMHA_TILE_ROW_LANES + lane + stride];
-                __syncthreads();
-            }
-            const float tile_sum = red[r * FMHA_TILE_ROW_LANES];
-            row_sum = row_sum * rescale + tile_sum;
-
-            // Rescale the O accumulator and add this tile's contribution. Each
-            // lane owns the columns c = lane (mod ROW_LANES).
-            for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
-                o_s[r * sd + c] *= rescale;
-            for (int jj = 0; jj < valid_n; ++jj) {
-                const float p = s_s[r * FMHA_TILE_BP + jj];
-                if (p == 0.0f) continue;
-                const float* v_row = v_s + jj * sd;
-                for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
-                    o_s[r * sd + c] += p * v_row[c];
-            }
-            __syncthreads();  // tile fully consumed before shared reuse
+    float acc[MT][NT];
+    for (int a = 0; a < MT; ++a)
+        for (int b = 0; b < NT; ++b) acc[a][b] = 0.0f;
+    for (int k = 0; k < d; ++k) {
+        for (int a = 0; a < MT; ++a) {
+            const float av = As[(ty * MT + a) * PADK + k];
+            for (int b = 0; b < NT; ++b)
+                acc[a][b] += av * Bs[(tx * NT + b) * PADK + k];
         }
-        if (row_sum > 0.0f) {
-            for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
-                o_bh[row_global * d + c] = o_s[r * sd + c] / row_sum;
-        }
-    } else {
-        // ReLU attention: out += relu(scale * q.k) * v over the causal window.
-        for (int j0 = 0; j0 < kv_end; j0 += FMHA_TILE_BN) {
-            const int tile_keys = (kv_end - j0) < FMHA_TILE_BN ? (kv_end - j0)
-                                                               : FMHA_TILE_BN;
-            const int valid_n = causal && (row_global + 1 - j0) < tile_keys
-                                    ? (row_global + 1 - j0) : tile_keys;
-
-            for (int idx = tid; idx < tile_keys * d; idx += threads) {
-                const int jj = idx / d;
-                const int c = idx % d;
-                k_s[jj * sd + c] = k_bh[(j0 + jj) * d + c];
-                v_s[jj * sd + c] = v_bh[(j0 + jj) * d + c];
-            }
-            __syncthreads();
-
-            const float* q_row = q_s + r * sd;
-            for (int jj = lane; jj < valid_n; jj += FMHA_TILE_ROW_LANES) {
-                const float* k_row = k_s + jj * sd;
-                float acc = 0.0f;
-                for (int i = 0; i < d; ++i) acc += q_row[i] * k_row[i];
-                const float s = acc * scale;
-                s_s[r * FMHA_TILE_BP + jj] = fmaxf(s, 0.0f);
-            }
-            __syncthreads();
-
-            for (int jj = 0; jj < valid_n; ++jj) {
-                const float p = s_s[r * FMHA_TILE_BP + jj];
-                if (p == 0.0f) continue;
-                const float* v_row = v_s + jj * sd;
-                for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
-                    o_s[r * sd + c] += p * v_row[c];
-            }
-            __syncthreads();
-        }
-        for (int c = lane; c < d; c += FMHA_TILE_ROW_LANES)
-            o_bh[row_global * d + c] = o_s[r * sd + c];
     }
+    const int64_t bs = static_cast<int64_t>(bh) * T * T;
+    for (int a = 0; a < MT; ++a)
+        for (int b = 0; b < NT; ++b)
+            S[bs + static_cast<int64_t>(m0 + ty * MT + a) * T + (n0 + tx * NT + b)] =
+                acc[a][b] * scale;
 }
 
-torch::Tensor fmha_fwd(
-    torch::Tensor Q,
-    torch::Tensor K,
-    torch::Tensor V,
-    int64_t mode,
-    bool causal) {
-    TORCH_CHECK(Q.is_contiguous() && K.is_contiguous() && V.is_contiguous(),
-                "Q/K/V must be contiguous");
-    TORCH_CHECK(Q.scalar_type() == torch::kFloat32, "Q must be float32");
-    TORCH_CHECK(Q.dim() == 4 && K.dim() == 4 && V.dim() == 4, "inputs must be (B,H,T,hs)");
-    TORCH_CHECK(Q.sizes() == K.sizes() && Q.sizes() == V.sizes(), "shape mismatch");
+// ---- P = softmax(S) row-wise ----
+__global__ void softmax_kernel(const float* __restrict__ S, float* __restrict__ P, int T) {
+    const int bh = blockIdx.x;
+    const int row = blockIdx.y;
+    const int tid = threadIdx.x;
+    const int64_t off = (static_cast<int64_t>(bh) * T + row) * T;
+    extern __shared__ float red[];
+    float lm = -FLT_MAX;
+    for (int j = tid; j < T; j += THREADS) lm = fmaxf(lm, S[off + j]);
+    red[tid] = lm;
+    __syncthreads();
+    for (int st = THREADS / 2; st > 0; st >>= 1) {
+        if (tid < st) red[tid] = fmaxf(red[tid], red[tid + st]);
+        __syncthreads();
+    }
+    const float mx = red[0];
+    __syncthreads();
+    float ls = 0.0f;
+    for (int j = tid; j < T; j += THREADS) ls += expf(S[off + j] - mx);
+    red[tid] = ls;
+    __syncthreads();
+    for (int st = THREADS / 2; st > 0; st >>= 1) {
+        if (tid < st) red[tid] += red[tid + st];
+        __syncthreads();
+    }
+    const float inv = 1.0f / red[0];
+    for (int j = tid; j < T; j += THREADS) P[off + j] = expf(S[off + j] - mx) * inv;
+}
 
-    const int batch = static_cast<int>(Q.size(0));
-    const int heads = static_cast<int>(Q.size(1));
-    const int seq_len = static_cast<int>(Q.size(2));
-    const int head_dim = static_cast<int>(Q.size(3));
-    TORCH_CHECK(seq_len % FMHA_TILE_BM == 0, "seq_len must be a multiple of FMHA_TILE_BM");
+// ---- O = P V : M rows x d cols, K dim = T (chunked) ----
+#define MV 128          // row tile
+#define BK 32
+#define PADK2 (BK + 1)
+#define PADB (32 + 1)   // cols padded (d assumed 32 here)
+__global__ void pv_smalln_kernel(
+    const float* __restrict__ P, const float* __restrict__ V,
+    float* __restrict__ O, int T, int d) {
+    const int bh = blockIdx.x;
+    const int m0 = blockIdx.y * MV;
+    const int tid = threadIdx.x;
+    const int row = m0 + (tid >> 1);      // 128 rows, 2 col-halves per row
+    const int half = tid & 1;             // owns cols [half*16, half*16+16)
+    const int64_t bp = static_cast<int64_t>(bh) * T * T;
 
-    torch::Tensor output = torch::empty_like(Q);
-    const int threads = FMHA_TILE_BM * FMHA_TILE_ROW_LANES;
-    const dim3 grid(batch * heads, seq_len / FMHA_TILE_BM);
-    const int sd = head_dim + 1;
-    const size_t shared_bytes =
-        (static_cast<size_t>(FMHA_TILE_BM) * sd * 2 +          // q_s + o_s
-         static_cast<size_t>(2) * FMHA_TILE_BN * sd +          // k_s + v_s
-         static_cast<size_t>(FMHA_TILE_BM) * FMHA_TILE_BP +    // s_s
-         static_cast<size_t>(FMHA_TILE_BM) * FMHA_TILE_ROW_LANES) * sizeof(float);
-    const float scale = 1.0f / sqrtf(static_cast<float>(head_dim));
+    extern __shared__ float smem[];
+    float* As = smem;                  // MV * PADK2
+    float* Bs = smem + MV * PADK2;     // BK * PADB
 
-    fmha_fwd_kernel<<<grid, threads, shared_bytes>>>(
-        Q.data_ptr<float>(), K.data_ptr<float>(), V.data_ptr<float>(),
-        output.data_ptr<float>(), batch, heads, seq_len, head_dim, scale,
-        static_cast<int>(mode), static_cast<int>(causal));
-    return output;
+    float acc[16];
+    for (int c = 0; c < 16; ++c) acc[c] = 0.0f;
+
+    for (int k0 = 0; k0 < T; k0 += BK) {
+        for (int idx = tid; idx < MV * BK; idx += THREADS) {
+            const int r = idx / BK, c = idx % BK;
+            As[r * PADK2 + c] = P[bp + static_cast<int64_t>(m0 + r) * T + (k0 + c)];
+        }
+        for (int idx = tid; idx < BK * 32; idx += THREADS) {
+            const int kk = idx / 32, c = idx % 32;
+            Bs[kk * PADB + c] =
+                V[static_cast<int64_t>(bh) * T * d +
+                  static_cast<int64_t>(k0 + kk) * d + c];
+        }
+        __syncthreads();
+        const float* arow = As + ((row - m0) * PADK2);
+        for (int kk = 0; kk < BK; ++kk) {
+            const float av = arow[kk];
+            const float* brow = Bs + kk * PADB + half * 16;
+            for (int c = 0; c < 16; ++c) acc[c] += av * brow[c];
+        }
+        __syncthreads();
+    }
+    float* orow = O + static_cast<int64_t>(bh) * T * d + static_cast<int64_t>(row) * d + half * 16;
+    for (int c = 0; c < 16; ++c) orow[c] = acc[c];
+}
+
+torch::Tensor sdpa_gemm31(torch::Tensor Q, torch::Tensor K, torch::Tensor V) {
+    TORCH_CHECK(Q.is_contiguous() && K.is_contiguous() && V.is_contiguous(), "contig");
+    TORCH_CHECK(Q.scalar_type() == torch::kFloat32, "f32");
+    const int batch = Q.size(0), heads = Q.size(1), T = Q.size(2), d = Q.size(3);
+    TORCH_CHECK(T % TM == 0 && d % 4 == 0, "tile div");
+    const int bh = batch * heads;
+    auto opts = Q.options();
+    torch::Tensor S = torch::empty({bh, T, T}, opts);
+    torch::Tensor P = torch::empty({bh, T, T}, opts);
+    torch::Tensor O = torch::empty_like(Q);
+    const float scale = 1.0f / sqrtf(static_cast<float>(d));
+    const size_t sm_qk = static_cast<size_t>(2 * TM * (d + 1)) * sizeof(float);
+    dim3 g1(bh, T / TM, T / TN);
+    qk_tinyk_kernel<<<g1, THREADS, sm_qk>>>(
+        Q.data_ptr<float>(), K.data_ptr<float>(), S.data_ptr<float>(), T, d, scale);
+    dim3 g2(bh, T);
+    softmax_kernel<<<g2, THREADS, THREADS * sizeof(float)>>>(
+        S.data_ptr<float>(), P.data_ptr<float>(), T);
+    const size_t sm_pv = static_cast<size_t>(MV * PADK2 + BK * PADB) * sizeof(float);
+    dim3 g3(bh, T / MV);
+    pv_smalln_kernel<<<g3, THREADS, sm_pv>>>(
+        P.data_ptr<float>(), V.data_ptr<float>(), O.data_ptr<float>(), T, d);
+    return O;
 }
 """
 
 _fmha_ext = load_inline(
-    name="level3_fmha_musa_p31",
+    name="level3_fmha_gemm_musa_p31",
     cpp_sources=FMHA_SOURCE,
-    functions=["fmha_fwd"],
+    functions=["sdpa_gemm31"],
     verbose=False,
 )
-
-
-def _fmha(q, k, v, causal):
-    return _fmha_ext.fmha_fwd(q.contiguous(), k.contiguous(), v.contiguous(), 0, causal)
 
 
 def _mha_self_attn(x, attn):
@@ -271,7 +201,7 @@ def _mha_self_attn(x, attn):
     qh = q.view(L, N, heads, hs).permute(1, 2, 0, 3).contiguous()
     kh = k.view(L, N, heads, hs).permute(1, 2, 0, 3).contiguous()
     vh = v.view(L, N, heads, hs).permute(1, 2, 0, 3).contiguous()
-    yh = _fmha(qh, kh, vh, False)  # (N, heads, L, hs)
+    yh = _fmha_ext.sdpa_gemm31(qh, kh, vh)  # dense softmax attention
     y = yh.permute(2, 0, 1, 3).contiguous().view(L, N, E)
     return F.linear(y, attn.out_proj.weight, attn.out_proj.bias)
 
