@@ -22,101 +22,87 @@ def _ntuple(n):
 to_2tuple = _ntuple(2)
 
 
-FMHA_BIAS_SOURCE = r"""
-#include <torch/extension.h>
+FMHA_BIAS_SOURCE = r"""#include <torch/extension.h>
 #include <musa_runtime.h>
 #include <cstdint>
 #include <cfloat>
 #include <cmath>
 
-__device__ float wblock_reduce_max(float val, float* shared) {
-    int tid = threadIdx.x;
-    shared[tid] = val;
-    __syncthreads();
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) shared[tid] = fmaxf(shared[tid], shared[tid + stride]);
-        __syncthreads();
-    }
-    return shared[0];
-}
+// Swin window attention core.  One CTA owns one (window, head) and computes
+// the whole N x N window attention:  Q/K/V rows are staged once in shared
+// memory, raw scores (dot * logit[h] + relative_position_bias (+ mask)) fill
+// a shared N x N tile, each row is softmaxed, then O = P V.  Compared to a
+// row-per-CTA scheme this removes the redundant per-row K/V re-reads and cuts
+// the launch grid by ~N.  q/k arrive L2-normalized from the caller.
+#define WBLK 256
 
-__device__ float wblock_reduce_sum(float val, float* shared) {
-    int tid = threadIdx.x;
-    shared[tid] = val;
-    __syncthreads();
-    for (int stride = blockDim.x / 2; stride > 0; stride >>= 1) {
-        if (tid < stride) shared[tid] += shared[tid + stride];
-        __syncthreads();
-    }
-    return shared[0];
-}
-
-// Swin window attention core: q/k are L2-normalized; scores =
-// (q.k) * logit[h] + relative_position_bias[h, row, col] (+ mask[w, row, col]),
-// then softmax over the window and a weighted sum with v.  Each CTA handles one
-// query row of one (window, head); the window has <= 128 tokens.
 __global__ void fmha_bias_kernel(
-    const float* __restrict__ Q, const float* __restrict__ K, const float* __restrict__ V,
-    float* __restrict__ O, const float* __restrict__ logits,
-    const float* __restrict__ rel_bias, const float* __restrict__ mask,
-    int use_mask, int mask_nw, int num_heads, int win, int head_dim) {
+    const float* __restrict__ Q, const float* __restrict__ K,
+    const float* __restrict__ V, float* __restrict__ O,
+    const float* __restrict__ logits, const float* __restrict__ rel_bias,
+    const float* __restrict__ mask, int use_mask, int mask_nw,
+    int num_heads, int win, int head_dim) {
     const int bh = blockIdx.x;
     const int wid = bh / num_heads;
     const int h = bh % num_heads;
-    const int row = blockIdx.y;
     const int tid = threadIdx.x;
     const int N = win;
     const int d = head_dim;
     const int w = use_mask ? (wid % mask_nw) : 0;
+    const int64_t pair = static_cast<int64_t>(wid) * num_heads + h;
+    const int64_t bh_offset = pair * N * d;
 
-    extern __shared__ float shared_mem[];
-    float* scores = shared_mem;
-    float* q_row = shared_mem + N;
-    float* reduce_buf = shared_mem + N + d;
+    extern __shared__ float smem[];
+    float* q_s = smem;               // N * d
+    float* k_s = q_s + N * d;        // N * d
+    float* v_s = k_s + N * d;        // N * d
+    float* s_s = v_s + N * d;        // N * N scores / probs
 
-    const int64_t bh_offset = (static_cast<int64_t>(wid) * num_heads + h) * N * d;
-    const float* q_bh = Q + bh_offset;
-    const float* k_bh = K + bh_offset;
-    const float* v_bh = V + bh_offset;
-
-    for (int i = tid; i < d; i += blockDim.x) q_row[i] = q_bh[row * d + i];
+    for (int idx = tid; idx < N * d; idx += WBLK) {
+        q_s[idx] = Q[bh_offset + idx];
+        k_s[idx] = K[bh_offset + idx];
+        v_s[idx] = V[bh_offset + idx];
+    }
     __syncthreads();
 
     const float logit = logits[h];
     const float* rel_h = rel_bias + h * N * N;
-    const float* mask_h = mask + w * N * N;
-    for (int j = tid; j < N; j += blockDim.x) {
-        const float* k_j = k_bh + j * d;
-        float s = 0.0f;
-        for (int i = 0; i < d; ++i) s += q_row[i] * k_j[i];
-        s = s * logit + rel_h[row * N + j];
-        if (use_mask) s += mask_h[row * N + j];
-        scores[j] = s;
+    const float* mask_h = use_mask ? (mask + w * N * N) : nullptr;
+
+    // Raw scores tile.
+    for (int idx = tid; idx < N * N; idx += WBLK) {
+        const int r = idx / N;
+        const int j = idx % N;
+        const float* qr = q_s + r * d;
+        const float* kj = k_s + j * d;
+        float a = 0.0f;
+        for (int i = 0; i < d; ++i) a += qr[i] * kj[i];
+        float s = a * logit + rel_h[idx];
+        if (use_mask) s += mask_h[idx];
+        s_s[idx] = s;
     }
     __syncthreads();
 
-    float local_max = -FLT_MAX;
-    for (int j = tid; j < N; j += blockDim.x) local_max = fmaxf(local_max, scores[j]);
-    float row_max = wblock_reduce_max(local_max, reduce_buf);
-    __syncthreads();
-
-    float local_sum = 0.0f;
-    for (int j = tid; j < N; j += blockDim.x) {
-        float e = expf(scores[j] - row_max);
-        scores[j] = e;
-        local_sum += e;
+    // Per-row softmax in place: rows are independent so one thread per row.
+    for (int r = tid; r < N; r += WBLK) {
+        const float* row = s_s + r * N;
+        float mx = -FLT_MAX;
+        for (int j = 0; j < N; ++j) mx = fmaxf(mx, row[j]);
+        float sum = 0.0f;
+        for (int j = 0; j < N; ++j) sum += expf(row[j] - mx);
+        const float inv = 1.0f / sum;
+        float* prow = s_s + r * N;
+        for (int j = 0; j < N; ++j) prow[j] = expf(prow[j] - mx) * inv;
     }
-    float row_sum = wblock_reduce_sum(local_sum, reduce_buf);
     __syncthreads();
 
-    for (int j = tid; j < N; j += blockDim.x) scores[j] /= row_sum;
-    __syncthreads();
-
-    float* o_row = O + bh_offset + row * d;
-    for (int c = tid; c < d; c += blockDim.x) {
+    // O[r][c] = sum_j P[r][j] V[j][c].
+    for (int idx = tid; idx < N * d; idx += WBLK) {
+        const int r = idx / d;
+        const int c = idx % d;
         float acc = 0.0f;
-        for (int j = 0; j < N; ++j) acc += scores[j] * v_bh[j * d + c];
-        o_row[c] = acc;
+        for (int j = 0; j < N; ++j) acc += s_s[r * N + j] * v_s[j * d + c];
+        O[bh_offset + idx] = acc;
     }
 }
 
@@ -126,13 +112,13 @@ torch::Tensor fmha_bias(torch::Tensor Q, torch::Tensor K, torch::Tensor V,
     TORCH_CHECK(Q.is_contiguous() && K.is_contiguous() && V.is_contiguous(), "contiguous");
     TORCH_CHECK(Q.scalar_type() == torch::kFloat32, "Q must be float32");
     const int wid = Q.size(0), heads = Q.size(1), win = Q.size(2), head_dim = Q.size(3);
-    const int threads = 128;
-    TORCH_CHECK(win <= threads, "window tokens must be <= 128");
+    TORCH_CHECK(win <= 512, "window tokens must be <= 512");
     torch::Tensor output = torch::empty_like(Q);
-    const dim3 grid(wid * heads, win);
-    const size_t shared_bytes = static_cast<size_t>(win + head_dim + threads) * sizeof(float);
+    const dim3 grid(wid * heads);
+    const size_t shared_bytes =
+        static_cast<size_t>(3 * win * head_dim + win * win + WBLK) * sizeof(float);
     const int mask_nw = use_mask ? static_cast<int>(mask.size(0)) : 0;
-    fmha_bias_kernel<<<grid, threads, shared_bytes>>>(
+    fmha_bias_kernel<<<grid, WBLK, shared_bytes>>>(
         Q.data_ptr<float>(), K.data_ptr<float>(), V.data_ptr<float>(),
         output.data_ptr<float>(), logits.data_ptr<float>(), rel_bias.data_ptr<float>(),
         use_mask ? mask.data_ptr<float>() : nullptr,
