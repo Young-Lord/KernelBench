@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "sdpa_forward_b_v0",
+  "tier": "B_library",
+  "visibility": "public",
+  "cases": [
+    {"case_id": "smoke_001", "tag": "smoke", "seed": 1101, "dtype": "float16", "shape": {"B": 1, "H_q": 4, "H_kv": 4, "S_q": 16, "S_kv": 16, "D": 32}, "attributes": {"scale": 0.1767766952966369, "causal": false, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}, "golden": "generated/smoke_001/golden/tensors.json", "expected_path": "fused_library"},
+    {"case_id": "smoke_002", "tag": "smoke", "seed": 1102, "dtype": "bfloat16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 32, "S_kv": 32, "D": 64}, "attributes": {"scale": 0.125, "causal": false, "window_left": -1, "window_right": -1}, "distribution": "uniform", "tolerance": {"atol": 0.02, "rtol": 0.02}, "golden": "generated/smoke_002/golden/tensors.json", "expected_path": "fused_library"},
+    {"case_id": "smoke_003", "tag": "smoke", "seed": 1103, "dtype": "float16", "shape": {"B": 2, "H_q": 4, "H_kv": 4, "S_q": 33, "S_kv": 33, "D": 64}, "attributes": {"scale": 0.125, "causal": true, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}, "golden": "generated/smoke_003/golden/tensors.json", "expected_path": "fused_library"},
+    {"case_id": "smoke_004", "tag": "smoke", "seed": 1104, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 64, "S_kv": 64, "D": 128}, "attributes": {"scale": 0.08838834764831845, "causal": false, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}, "golden": "generated/smoke_004/golden/tensors.json", "expected_path": "fused_library"},
+    {"case_id": "smoke_005", "tag": "smoke", "seed": 1105, "dtype": "float16", "shape": {"B": 2, "H_q": 2, "H_kv": 2, "S_q": 17, "S_kv": 17, "D": 32}, "attributes": {"scale": 0.1767766952966369, "causal": false, "window_left": -1, "window_right": -1}, "distribution": "adversarial_extremes", "tolerance": {"atol": 0.01, "rtol": 0.01}, "golden": "generated/smoke_005/golden/tensors.json", "expected_path": "fused_library"}
+  ]
+}

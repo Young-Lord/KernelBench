@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "tier": "B_library",
+  "id": "sdpa_forward_b_v0",
+  "name": "SDPA forward library dispatch",
+  "family": "sdpa_forward",
+  "source": {
+    "project": "attention-source-001",
+    "revision": "snapshot-20260901",
+    "license": "maintainer-verified-open-source",
+    "snapshot": "sources/sdpa_forward_b_v0"
+  },
+  "target_environment": {
+    "device_families": ["MTT S4000", "MTT S5000"],
+    "architectures": ["mp_22", "mp_31"],
+    "toolkit_constraint": "exact version is fixed by the active environment snapshot"
+  },
+  "tensor_contract": {
+    "input_dtypes": ["float16", "bfloat16"],
+    "accumulation_dtype": "float32",
+    "layouts": ["BHSD"],
+    "dynamic_axes": ["B", "H_q", "H_kv", "S_q", "S_kv", "D"]
+  },
+  "hyperparameters": {
+    "scale": "inverse_sqrt_d_or_case_value",
+    "causal_alignment": "top_left",
+    "window_unlimited_value": -1
+  },
+  "tolerances": {"atol": 0.01, "rtol": 0.01, "max_abs_error": 0.05},
+  "prohibited": ["non-whitelisted libraries", "ATen", "CUDA residue", "host-side tensor math", "network fetch", "version-string dispatch"],
+  "entrypoint": "starter/build.py",
+  "editable_files": ["starter/src/dispatch.cpp", "starter/src/launch.mu", "starter/src/fallback_kernel.mu"],
+  "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
+  "outputs": {"required": ["output", "dispatch_trace"], "optional": ["lse"]},
+  "library_policy": {
+    "allowed_libraries": ["libmusa", "libmudnn"],
+    "allowed_symbol_prefixes": ["musa", "mudnn"],
+    "dispatch_file": "starter/src/dispatch.cpp",
+    "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+    "minimum_gap_cases": 3,
+    "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"]
+  }
+}

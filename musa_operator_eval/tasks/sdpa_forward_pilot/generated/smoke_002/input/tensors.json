@@ -1,0 +1,51 @@
+{
+  "schema_version": "1.0.0",
+  "case_id": "smoke_002",
+  "tensors": [
+    {
+      "name": "q",
+      "file": "q.bin",
+      "dtype": "bfloat16",
+      "shape": [
+        1,
+        8,
+        32,
+        64
+      ],
+      "layout": "BHSD",
+      "byte_order": "little",
+      "nbytes": 32768,
+      "sha256": "7f8ebfeaaef01768e7c86ed5bff09a869b677790743496ebc20084b1b70370f8"
+    },
+    {
+      "name": "k",
+      "file": "k.bin",
+      "dtype": "bfloat16",
+      "shape": [
+        1,
+        8,
+        32,
+        64
+      ],
+      "layout": "BHSD",
+      "byte_order": "little",
+      "nbytes": 32768,
+      "sha256": "6fe41095bb40a58e6b464487faf20ef9c18cb015ccca723e11f4079d43b2b13d"
+    },
+    {
+      "name": "v",
+      "file": "v.bin",
+      "dtype": "bfloat16",
+      "shape": [
+        1,
+        8,
+        32,
+        64
+      ],
+      "layout": "BHSD",
+      "byte_order": "little",
+      "nbytes": 32768,
+      "sha256": "6fc3a861aa544859fb02ab81bffe3b067a54ef496f21b18f77379fb98a4cfd80"
+    }
+  ]
+}

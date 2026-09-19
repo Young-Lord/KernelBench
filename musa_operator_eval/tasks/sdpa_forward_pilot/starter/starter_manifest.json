@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "sdpa_forward_b_v0",
+  "build_commands": {
+    "host_smoke": "python build.py --host-only --output-dir build/host",
+    "mp_22": "python build.py --musa --arch mp_22 --output-dir build/mp_22",
+    "mp_31": "python build.py --musa --arch mp_31 --output-dir build/mp_31"
+  },
+  "abi": "../ABI.md",
+  "link_whitelist": ["libmusa", "libmudnn"],
+  "frozen_files": ["build.py", "include/tensor_io.h", "include/runner_api.h", "src/tensor_io.cpp", "src/main.cpp", "src/host_io_smoke.cpp"],
+  "editable_files": [
+    {"path": "src/dispatch.cpp", "regions": ["DISPATCH"]},
+    {"path": "src/launch.mu", "regions": ["HOST_LAUNCH"]},
+    {"path": "src/fallback_kernel.mu", "regions": ["FALLBACK_KERNEL"]}
+  ]
+}

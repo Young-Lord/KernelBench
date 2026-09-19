@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "family": "sdpa_forward",
+  "purpose": "Classify candidate configurations before assigning A_kernel or B_library tier",
+  "required_routes": ["torch_musa_sdpa", "mudnn_fused", "mate_fmha"],
+  "record_fields": ["accepted", "correct", "selected_route", "latency_ms", "peak_memory_bytes", "error", "evidence"],
+  "cases": [
+    {"probe_id": "base_fp16", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 64, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "base_bf16", "dtype": "bfloat16", "layout": "BHSD", "B": 2, "H_q": 16, "H_kv": 16, "S_q": 256, "S_kv": 256, "D": 128, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "base_fp32", "dtype": "float32", "layout": "BHSD", "B": 1, "H_q": 4, "H_kv": 4, "S_q": 96, "S_kv": 96, "D": 64, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "causal_square", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 257, "S_kv": 257, "D": 64, "causal": true, "window_left": -1, "window_right": -1},
+    {"probe_id": "cross_attention", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 127, "S_kv": 193, "D": 64, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "gqa_ratio_4", "dtype": "bfloat16", "layout": "BHSD", "B": 2, "H_q": 16, "H_kv": 4, "S_q": 256, "S_kv": 256, "D": 128, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "head_dim_80", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 255, "S_kv": 255, "D": 80, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "head_dim_96", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 12, "H_kv": 12, "S_q": 511, "S_kv": 511, "D": 96, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "bshd_layout", "dtype": "float16", "layout": "BSHD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 64, "causal": false, "window_left": -1, "window_right": -1},
+    {"probe_id": "left_window", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 257, "S_kv": 257, "D": 64, "causal": false, "window_left": 64, "window_right": 0},
+    {"probe_id": "bidirectional_window", "dtype": "bfloat16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 257, "S_kv": 257, "D": 64, "causal": false, "window_left": 32, "window_right": 16},
+    {"probe_id": "non_aligned_all", "dtype": "float16", "layout": "BHSD", "B": 3, "H_q": 7, "H_kv": 7, "S_q": 131, "S_kv": 197, "D": 72, "causal": false, "window_left": -1, "window_right": -1}
+  ]
+}
