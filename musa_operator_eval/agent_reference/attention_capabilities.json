@@ -1,0 +1,62 @@
+{
+  "schema_version": "1.0.0",
+  "visibility": "agent_visible",
+  "family": "sdpa_forward",
+  "purpose": "generic_capability_guidance_without_solution_disclosure",
+  "contract_reference": "../semantics.json",
+  "capability_classes": [
+    {
+      "id": "fused_library",
+      "priority": 1,
+      "role": "preferred_fast_path",
+      "availability": "runtime_probe_required",
+      "typical_constraints": ["limited_dtype_set", "layout_dependent", "bounded_head_dimension", "attribute_combination_dependent", "device_dependent", "workspace_dependent"],
+      "cost_profile": "lowest_expected_latency"
+    },
+    {
+      "id": "library_composition",
+      "priority": 2,
+      "role": "secondary_library_path",
+      "availability": "runtime_probe_required",
+      "typical_constraints": ["broader_shape_coverage", "intermediate_tensor_overhead", "attribute_combination_dependent"],
+      "cost_profile": "additional_launches_and_intermediates"
+    },
+    {
+      "id": "custom_fallback",
+      "priority": 3,
+      "role": "unsupported_configuration_fallback",
+      "availability": "runtime_probe_required",
+      "typical_constraints": ["implementation_required", "device_dependent", "layout_dependent"],
+      "cost_profile": "implementation_dependent"
+    }
+  ],
+  "dispatch_contract": {
+    "ordered_paths": ["fused_library", "library_composition", "custom_fallback"],
+    "decision_basis": "runtime_capability_result",
+    "forbidden_basis": "version_string",
+    "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+    "failure_reasons": ["unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
+  },
+  "semantic_summary": {
+    "layout": "BHSD",
+    "causal_alignment": "top_left",
+    "window_interval": "[query_index-left, query_index+right]",
+    "window_unlimited_value": -1,
+    "softmax_stability": "max_shift_required",
+    "accumulation_dtype": "float32",
+    "fully_masked_output": "zeros",
+    "fully_masked_lse": "negative_infinity"
+  },
+  "engineering_hints": [
+    "probe_before_dispatch",
+    "avoid_materializing_score_matrix_when_possible",
+    "use_online_softmax_for_fallback",
+    "reuse_key_value_tiles",
+    "handle_non_aligned_dimensions",
+    "keep_accumulation_in_float32",
+    "check_runtime_status_before_fallback",
+    "emit_one_trace_record_per_case"
+  ],
+  "uncertainty_policy": "unknown_configuration_must_be_probed_and_must_not_be_assumed_supported",
+  "prohibited_disclosures": ["repository_name", "commit", "url", "library_function_name", "version", "hidden_case", "exact_gap_configuration", "expert_source"]
+}

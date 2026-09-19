@@ -1,0 +1,6 @@
+{
+  "environment_snapshot": "REPLACE_WITH_SNAPSHOT_ID",
+  "gaps": [
+    {"case_id": "hidden_gap_001", "reason": "REPLACE_WITH_MEASURED_REASON", "expected_path": "REPLACE_WITH_LIBRARY_COMPOSITION_OR_CUSTOM_FALLBACK", "evidence": "REPLACE_WITH_PROBE_RESULT_AND_ERROR"}
+  ]
+}

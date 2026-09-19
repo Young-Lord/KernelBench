@@ -1,0 +1,6 @@
+{
+  "schema_version": "1.0.0", "task_id": "sdpa_forward_a", "tier": "A_kernel", "environment_snapshot": "environment.snapshot.json",
+  "measurement_protocol": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median", "timer": "musa_event", "clock_locked": false},
+  "implementations": ["upstream_musa", "mudnn_fused", "torch_musa_sdpa", "torch_musa_eager"], "results": [],
+  "scoring": {"speedup_denominator": "upstream_musa", "reference_implementation": "torch_musa_eager", "correctness_gate": "all_hidden_cases"}
+}

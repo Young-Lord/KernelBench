@@ -1,0 +1,11 @@
+{
+  "schema_version": "1.0.0", "tier": "B_library", "id": "sdpa_forward_b", "name": "SDPA forward dispatch", "family": "sdpa_forward",
+  "source": {"project": "archived_upstream", "revision": "0123456789abcdef", "license": "Apache-2.0", "snapshot": "sources/sdpa_forward"},
+  "target_environment": {"device_families": ["MTT S4000", "MTT S5000"], "architectures": ["mp_22", "mp_31"], "toolkit_constraint": "task snapshot decides exact version"},
+  "tensor_contract": {"input_dtypes": ["float16", "bfloat16"], "accumulation_dtype": "float32", "layouts": ["BHSD"], "dynamic_axes": ["B", "H_q", "H_kv", "S_q", "S_kv", "D"]},
+  "tolerances": {"atol": 0.01, "rtol": 0.01, "max_abs_error": 0.05},
+  "prohibited": ["non-whitelisted libraries", "ATen", "CUDA residue", "host math", "network fetch"], "entrypoint": "starter/run.sh",
+  "editable_files": ["starter/src/dispatch.cpp", "starter/src/launch.mu", "starter/src/kernel.mu"], "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
+  "outputs": {"required": ["output", "dispatch_trace"], "optional": ["lse"]},
+  "library_policy": {"allowed_libraries": ["libmusa", "libmudnn"], "allowed_symbol_prefixes": ["musa", "mudnn"], "dispatch_file": "starter/src/dispatch.cpp", "required_trace_fields": ["case_id", "selected_path", "probe_status"], "minimum_gap_cases": 3, "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"]}
+}

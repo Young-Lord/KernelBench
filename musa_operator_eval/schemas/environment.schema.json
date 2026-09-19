@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/environment-1.0.0.json",
+  "title": "MUSA environment snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "snapshot_id", "visibility", "captured_at", "hardware", "software", "compiler", "build", "container"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "snapshot_id": {"type": "string", "minLength": 3},
+    "visibility": {"enum": ["full", "redacted"]},
+    "captured_at": {"type": "string", "format": "date-time"},
+    "hardware": {"type": "object", "required": ["device_name", "architecture", "device_count"], "properties": {"device_name": {"type": "string"}, "architecture": {"enum": ["mp_22", "mp_31"]}, "device_count": {"type": "integer", "minimum": 1}}},
+    "software": {"type": "object", "required": ["driver", "musa_toolkit", "torch", "torch_musa", "mudnn", "mublas"], "properties": {"driver": {"type": "string"}, "musa_toolkit": {"type": "string"}, "torch": {"type": "string"}, "torch_musa": {"type": "string"}, "mudnn": {"type": "string"}, "mublas": {"type": "string"}}},
+    "compiler": {"type": "object", "required": ["mcc_version", "target_arch"], "properties": {"mcc_version": {"type": "string"}, "target_arch": {"enum": ["mp_22", "mp_31"]}}},
+    "build": {"type": "object", "required": ["flags", "fast_math"], "properties": {"flags": {"type": "array", "items": {"type": "string"}}, "fast_math": {"type": "boolean"}}},
+    "container": {"type": "object", "required": ["image_digest"], "properties": {"image_digest": {"type": "string", "minLength": 3}}},
+    "host": {"type": "object"},
+    "raw_probes": {"type": "object"}
+  }
+}

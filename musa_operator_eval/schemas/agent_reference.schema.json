@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/agent-reference-1.0.0.json",
+  "title": "Sanitized Attention capability reference for agents",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "visibility", "family", "purpose", "contract_reference",
+    "capability_classes", "dispatch_contract", "semantic_summary",
+    "engineering_hints", "uncertainty_policy", "prohibited_disclosures"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "visibility": {"const": "agent_visible"},
+    "family": {"const": "sdpa_forward"},
+    "purpose": {"const": "generic_capability_guidance_without_solution_disclosure"},
+    "contract_reference": {"const": "../semantics.json"},
+    "capability_classes": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "priority", "role", "availability", "typical_constraints", "cost_profile"],
+        "properties": {
+          "id": {"enum": ["fused_library", "library_composition", "custom_fallback"]},
+          "priority": {"type": "integer", "minimum": 1, "maximum": 3},
+          "role": {"enum": ["preferred_fast_path", "secondary_library_path", "unsupported_configuration_fallback"]},
+          "availability": {"const": "runtime_probe_required"},
+          "typical_constraints": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "limited_dtype_set", "layout_dependent", "bounded_head_dimension",
+                "attribute_combination_dependent", "device_dependent",
+                "workspace_dependent", "broader_shape_coverage",
+                "intermediate_tensor_overhead", "implementation_required"
+              ]
+            }
+          },
+          "cost_profile": {"enum": ["lowest_expected_latency", "additional_launches_and_intermediates", "implementation_dependent"]}
+        }
+      }
+    },
+    "dispatch_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordered_paths", "decision_basis", "forbidden_basis", "required_trace_fields", "failure_reasons"],
+      "properties": {
+        "ordered_paths": {"const": ["fused_library", "library_composition", "custom_fallback"]},
+        "decision_basis": {"const": "runtime_capability_result"},
+        "forbidden_basis": {"const": "version_string"},
+        "required_trace_fields": {"const": ["case_id", "selected_path", "probe_status"]},
+        "failure_reasons": {
+          "const": ["unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
+        }
+      }
+    },
+    "semantic_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout", "causal_alignment", "window_interval", "window_unlimited_value", "softmax_stability", "accumulation_dtype", "fully_masked_output", "fully_masked_lse"],
+      "properties": {
+        "layout": {"const": "BHSD"},
+        "causal_alignment": {"const": "top_left"},
+        "window_interval": {"const": "[query_index-left, query_index+right]"},
+        "window_unlimited_value": {"const": -1},
+        "softmax_stability": {"const": "max_shift_required"},
+        "accumulation_dtype": {"const": "float32"},
+        "fully_masked_output": {"const": "zeros"},
+        "fully_masked_lse": {"const": "negative_infinity"}
+      }
+    },
+    "engineering_hints": {
+      "type": "array",
+      "minItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "probe_before_dispatch", "avoid_materializing_score_matrix_when_possible",
+          "use_online_softmax_for_fallback", "reuse_key_value_tiles",
+          "handle_non_aligned_dimensions", "keep_accumulation_in_float32",
+          "check_runtime_status_before_fallback", "emit_one_trace_record_per_case"
+        ]
+      }
+    },
+    "uncertainty_policy": {
+      "const": "unknown_configuration_must_be_probed_and_must_not_be_assumed_supported"
+    },
+    "prohibited_disclosures": {
+      "const": ["repository_name", "commit", "url", "library_function_name", "version", "hidden_case", "exact_gap_configuration", "expert_source"]
+    }
+  }
+}

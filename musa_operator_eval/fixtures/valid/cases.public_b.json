@@ -1,0 +1,4 @@
+{
+  "schema_version": "1.0.0", "task_id": "sdpa_forward_b", "tier": "B_library", "visibility": "public",
+  "cases": [{"case_id": "smoke_001", "tag": "smoke", "seed": 101, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 64}, "attributes": {"causal": false, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}, "golden": "golden/smoke_001/output.bin", "expected_path": "fused_library"}]
+}

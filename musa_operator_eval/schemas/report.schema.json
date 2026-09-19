@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/report-1.0.0.json",
+  "title": "MUSA evaluation report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "task_id", "tier", "environment_snapshot", "submission_digest", "status", "stages", "metrics"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"}, "task_id": {"type": "string"}, "tier": {"enum": ["A_kernel", "B_library"]},
+    "environment_snapshot": {"type": "string"}, "submission_digest": {"type": "string", "minLength": 8},
+    "status": {"enum": ["pass", "fail", "incomplete"]},
+    "stages": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["name", "status", "exit_code"], "properties": {"name": {"type": "string"}, "status": {"enum": ["pass", "fail", "skipped"]}, "exit_code": {"type": "integer"}, "details": {"type": "object"}}}},
+    "metrics": {"type": "object", "required": ["compile_rate", "correctness_rate"], "properties": {"compile_rate": {"type": "number", "minimum": 0, "maximum": 1}, "correctness_rate": {"type": "number", "minimum": 0, "maximum": 1}, "coverage_rate": {"type": "number", "minimum": 0, "maximum": 1}, "dispatch_efficiency": {"type": "number", "minimum": 0, "maximum": 1}, "speedup": {"type": ["number", "null"]}}}
+  }
+}

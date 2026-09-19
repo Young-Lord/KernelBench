@@ -1,0 +1,40 @@
+{
+  "schema_version": "1.0.0",
+  "source_id": "attention-source-001",
+  "visibility": "maintainer_only",
+  "entries": [
+    {
+      "project": "torch_musa",
+      "revision": "246d43e3525a9102162cbebfb25c067d634d95a2",
+      "revision_label": "2.11.0.post1",
+      "license": "BSD-3-Clause",
+      "snapshot": "../../musa_attention_set/implementations/torch_musa/2.11.0.post1",
+      "role": "framework SDPA and muDNN attention integration"
+    },
+    {
+      "project": "MATE",
+      "revision": "bbcd8b8c715eabddf663a30e000e0f2ebcb39bc3",
+      "revision_label": "v0.2.6",
+      "license": "Apache-2.0",
+      "snapshot": "../../musa_attention_set/implementations/mate/v0.2.6",
+      "role": "MP31 fused attention library candidate"
+    },
+    {
+      "project": "MUTLASS",
+      "revision": "78b349514831ed54a797b717f2fc0534646acff2",
+      "revision_label": "MATE-v0.2.6-dependency",
+      "license": "BSD-3-Clause",
+      "snapshot": "../../musa_attention_set/implementations/mutlass/commit-78b349514831",
+      "role": "FMHA implementation dependency and expert reference"
+    },
+    {
+      "project": "TileLang-MUSA legacy",
+      "revision": "4b59fea16afce49d39d7bca0eb936a14bf472dd1",
+      "revision_label": "deprecated-final-snapshot",
+      "license": "MIT",
+      "snapshot": "../../musa_attention_set/implementations/tilelang_musa_legacy/commit-4b59fea16afc",
+      "role": "S4000/S5000 kernel reference candidate"
+    }
+  ],
+  "release_rule": "This file and all referenced snapshots are excluded from the agent-visible package."
+}

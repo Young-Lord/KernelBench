@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "sdpa_forward_b_v0",
+  "tier": "B_library",
+  "environment_snapshot": "REPLACE_WITH_SNAPSHOT_ID",
+  "measurement_protocol": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median", "timer": "musa_event", "clock_locked": false},
+  "implementations": ["upstream_musa", "mudnn_fused", "torch_musa_sdpa", "torch_musa_eager", "naive_library_composition", "expert_dispatch"],
+  "results": [],
+  "scoring": {"speedup_denominator": "expert_dispatch", "reference_implementation": "naive_library_composition", "correctness_gate": "all_hidden_cases", "minimum_naive_to_expert_ratio": 1.3}
+}
