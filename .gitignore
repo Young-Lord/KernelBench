@@ -15,3 +15,6 @@ uv.lock
 CLAUDE.md
 # Vendored upstream MUSA operator sources (fetch on demand, see docs/musa/source_inventory.md)
 third_party/musa-sources/
+# Hidden MUSA evaluation assets must never enter the agent-visible repository.
+musa_operator_eval/private/**
+!musa_operator_eval/private/README.md
