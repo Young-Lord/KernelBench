@@ -1,153 +1,78 @@
-# MUSA hardware completion runbook
+# MUSA task policy
 
-Run every command in the same immutable image on each admitted target
-architecture. Never reuse latency numbers across environments.
+The rules that code does not enforce. How to probe a device, take a measurement
+or drive a case is described by the tool that does it -- repeating any of that
+here would only create a copy that drifts away from the source.
 
-## 1. Capture the environment
+## Measurements belong to an environment
 
-```bash
-python musa_operator_eval/tools/collect_environment.py --output-dir runs/<task>/env
-```
+Every measurement is tied to a snapshot from `tools/collect_environment.py`. The
+snapshot carries two identifiers because two different things can change:
 
-Nothing needs to be passed: the device is read through `mthreads-gmi`, every
-toolkit component through its own `<name>_version` helper, the architecture from
-`torch.musa` device properties, and the driver through `driver_version_query`
-(host-side, so no container image can pin it). The `--device-name`, `--driver`,
-`--toolkit`, `--mudnn`, `--mublas` and `--architecture` flags exist only to
-override a probe that misread.
-
-Store the snapshot next to the task contract; it is the identifier every later
-measurement is tied to. It carries two of them, because they answer different
-questions:
-
-- `snapshot_id` — the software and hardware configuration. Two machines built
-  the same way share it.
-- `device_instance_id` — the specific physical card, derived from the GPU UUID.
+- `snapshot_id` identifies the configuration: device model, architecture,
+  driver, toolkit components, torch stack. Two machines built the same way share
+  it.
+- `device_instance_id` identifies the physical card, derived from its GPU UUID.
   On a rented host this is the identifier that changes when an instance comes up
-  on a different machine, which is the failure a container image digest cannot
-  detect at all.
+  elsewhere, which is the failure a container image digest cannot detect at all.
 
-Latency numbers may only be compared between runs whose `snapshot_id` matches,
-and only reused for `device_instance_id` when the rentable instance is known to
-be pinned to one host.
+Latencies may only be compared between runs whose `snapshot_id` matches, and
+reused across `device_instance_id` values only when the instance is known to be
+pinned to a single host.
 
 A container image digest is recorded when the platform exposes one and set to
 `null` with an `image_digest_unavailable_reason` otherwise. A missing digest is
-not an error: it would not have covered the driver, the GPU identity or the
-cgroup limits, all of which are collected directly. A field that could not be
-read is always reported as missing with its reason, never as a silent null.
+not an error -- it would not have covered the host-side driver, the GPU identity
+or the cgroup limits, all of which are collected directly.
 
-## 2. Probe capabilities
+## The hidden case set
 
-Run `tools/probe_sdpa.py`, then add native muDNN and MATE probes. The probe
-resolves `selected_route` from the aten op the dispatcher actually runs, so a
-successful high-level call is never mistaken for a fused-library success. It
-still reports `unverified` when profiling is unavailable, and `mudnn_fused` and
-`mate_fmha` stay `not_probed` until their native adapters exist.
-
-Two constraints this probe already encodes, both measured on `mp_22` with
-torch_musa 1.3.0: `enable_gqa` does not exist before torch 2.5, so grouped-query
-cases are served by expanding the key/value heads; and the library rejects any
-`scale` other than `1/sqrt(head_dim)`.
-
-Record at least three real library gaps covering at least two reason
-categories. Use those records to fill
-`templates/private_gap_evidence.template.json`, then run:
-
-```bash
-python musa_operator_eval/tools/make_private_manifest.py \
-  --evidence <private-gap-evidence.json> \
-  --output musa_operator_eval/private/sdpa_forward_b_v0/cases.private.json
-```
-
-## 3. Implement the reference and expert solutions
-
-The reference `Model` stays plain PyTorch and lives in the task's `problem.py`
-alongside `get_inputs` / `get_init_inputs`, matching how every other KernelBench
-problem is written. The maintainer-side expert dispatch is a `ModelNew`
-implementing the `fused_library → library_composition → custom_fallback` order
-with runtime probing; build it against the real muDNN / torch_musa APIs and
-verify it against the reference before it becomes the speedup denominator.
-
-Run the submission-side audit with the task's own policy:
-
-```python
-from kernelbench.kernel_static_checker import validate_library_kernel_static
-valid, errors, warnings = validate_library_kernel_static(source, LIBRARY_POLICY)
-```
-
-This inverts the A-tier premise: whitelisted library compute is allowed, and the
-hard errors become non-whitelisted imports, version-string dispatch, and a
-missing dispatch trace.
-
-## 4. Establish baselines
-
-Copy `templates/baseline.b.template.json` into the private task directory and
-measure all six implementations in the same image:
-
-1. upstream MUSA implementation;
-2. muDNN fused implementation;
-3. torch_musa SDPA;
-4. torch_musa eager;
-5. naive library composition;
-6. expert dispatch.
-
-Use MUSA events, 10 warmups, 100 measurements, 5 rounds, and the median unless
-the task contract is versioned to change this protocol. Then apply:
-
-```bash
-python musa_operator_eval/tools/candidate_gate.py \
-  musa_operator_eval/private/sdpa_forward_b_v0/baseline.json \
-  --output musa_operator_eval/private/sdpa_forward_b_v0/admission.json
-```
-
-Do not publish the task unless the decision is `admit` and the measured ratio
-is at least 1.3.
-
-## 5. Run the evaluation
-
-Mount the private directory only into the evaluator. `tools/run_task.py` drives
-the whole task: it specializes the reference per case, evaluates the submission,
-and checks the dispatch trace.
+A submission is graded on the hidden set; the public one exists so something can
+be run before submitting. `run_task.py` evaluates whatever `--cases` points at,
+defaulting to the task's `public_cases.json`:
 
 ```bash
 python musa_operator_eval/tools/run_task.py \
+  --cases musa_operator_eval/private/sdpa_forward_b_v0/cases.private.json \
   --submission <model_new.py> --backend musa --precision fp16 \
-  --output runs/sdpa_forward_b_v0/report.json
+  --output runs/sdpa_forward_b_v0/hidden_report.json
 ```
 
-Underneath, correctness, timing and speedup run through the KernelBench
-framework:
+The hidden manifest is built by `make_private_manifest.py` from recorded gap
+evidence. It refuses to build a manifest that does not cover at least
+`minimum_gap_cases` gaps across at least `required_gap_reasons` categories, both
+read from the task contract.
 
-- `src/kernelbench/eval.py` (`eval_library_dispatch_against_ref`) with `backend="musa"`;
-- `num_correct_trials` drives randomized correctness inputs, so evaluation
-  inputs are never a fixed public file;
-- `src/kernelbench/dispatch_trace.py` supplies the trace transport and check;
-- `src/kernelbench/timing.py` supplies the timer;
-- `src/kernelbench/kernel_static_checker.py` supplies the tier-aware source audit;
-- `scripts/generate_baseline_time.py` supplies the baseline measurement path.
+## Admission
 
-The audit runs before anything is compiled, and the tier is read from the
-`TIER` / `LIBRARY_POLICY` names in the problem source, so a B-tier task is
-audited with the inverted rule set. A rejected submission never reaches the
-device. Every result carries `metadata["tier"]`, `dispatch_trace_passed`, and the
-trace summary, errors and path under metadata.
+`candidate_gate.py` decides from measured latencies: the geometric mean of
+`naive_library_composition / expert_dispatch` over the cases where both passed.
+A task is not published unless the decision is `admit`.
 
-The release gate is:
+The mean is geometric on purpose. A task that wins one case tenfold and loses two
+at 0.1x is not worth grading, and an arithmetic mean would admit it.
 
-- all source audits pass;
+## What the agent sees
+
+The agent-visible tree is the task package as committed. The maintainer side --
+the expert dispatch, the gap evidence, the hidden manifest, the environment
+snapshot and the admission decision -- lives under `musa_operator_eval/private/`,
+which `.gitignore` keeps out of the repository apart from its README. There is no
+export step: publishing is what is already committed.
+
+That separation is a claim, so it is tested rather than assumed. `tests/test_private_assets.py`
+fails if anything under `private/` other than its README is tracked by git.
+
+## Release gate
+
+Before a task is published:
+
+- every source audit passes;
 - public and hidden correctness pass;
 - every dispatch trace matches the expected path;
 - stability reruns pass;
-- all performance measurements come from the active environment snapshot;
-- final report status is `pass`, never `incomplete`.
+- every performance measurement comes from the active environment snapshot;
+- the run reports `pass`, never `incomplete`.
 
-## 6. Publish the task
-
-The evaluator-only tree (`private/`, `sources/`, `capability_plan.json` and the
-expert solution) is never copied into the agent-visible checkout; keep it in a
-separate repository or access-controlled artifact store and mount it only into
-the evaluator. A dedicated exporter is not currently implemented — the previous
-one was removed, and its replacement should be a thin copy step plus a lint that
-rejects upstream provenance (repository URL, commit hash, source project name)
-leaking into the task files.
+`incomplete` is a real state rather than a failure: it means a hardware stage has
+not produced evidence yet, and it must not be reported as a pass.

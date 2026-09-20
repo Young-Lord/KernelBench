@@ -36,8 +36,15 @@ DEFAULT_TASK_DIR = ROOT / "tasks" / "sdpa_forward_pilot"
 CASE_OVERRIDE_HEADER = "# --- case overrides injected by run_task.py for {case_id} ---"
 
 
-def load_task(task_dir: Path) -> Tuple[dict, dict, str]:
+def load_task(task_dir: Path, cases_path: Optional[Path] = None) -> Tuple[dict, dict, str]:
     """Load the contract, the case list and the reference source for a task.
+
+    Args:
+        task_dir: the task package
+        cases_path: the case manifest to evaluate. Defaults to the task's
+            `public_cases.json`; point it at a private manifest to evaluate the
+            hidden set. The cases live outside the task package because the
+            hidden ones must not be readable from it.
 
     Returns:
         (task, cases_manifest, problem_source)
@@ -47,7 +54,7 @@ def load_task(task_dir: Path) -> Tuple[dict, dict, str]:
         ValueError: the contract does not name a problem file or case parameters.
     """
     task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-    cases = json.loads((task_dir / "public_cases.json").read_text(encoding="utf-8"))
+    cases = json.loads((cases_path or task_dir / "public_cases.json").read_text(encoding="utf-8"))
 
     problem_file = task.get("problem_file")
     if not problem_file:
@@ -241,6 +248,7 @@ def run_case(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--task-dir", type=Path, default=DEFAULT_TASK_DIR)
+    parser.add_argument("--cases", type=Path, help="case manifest to evaluate; defaults to the task's public_cases.json")
     parser.add_argument("--submission", type=Path, required=True)
     parser.add_argument("--backend", default="musa")
     parser.add_argument("--precision", default="fp16", choices=["fp16", "bf16", "fp32"])
@@ -251,7 +259,7 @@ def main() -> int:
     parser.add_argument("--verbose", action="store_true")
     args = parser.parse_args()
 
-    task, cases_manifest, problem_source = load_task(args.task_dir)
+    task, cases_manifest, problem_source = load_task(args.task_dir, args.cases)
     submission_source = args.submission.read_text(encoding="utf-8")
     cases = cases_manifest["cases"]
 

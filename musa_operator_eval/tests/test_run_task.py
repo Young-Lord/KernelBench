@@ -104,6 +104,26 @@ class LoadTaskTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 run_task.load_task(task_dir)
 
+    def test_an_explicit_case_manifest_replaces_the_public_one(self):
+        """The hidden set lives outside the task package, so it must be passable."""
+        hidden = {"visibility": "hidden", "cases": [{"case_id": "hidden_gap_001"}]}
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "cases.private.json"
+            path.write_text(json.dumps(hidden), encoding="utf-8")
+            _, cases, _ = run_task.load_task(TASK_DIR, path)
+        self.assertEqual(cases["visibility"], "hidden")
+        self.assertEqual([case["case_id"] for case in cases["cases"]], ["hidden_gap_001"])
+
+    def test_an_explicit_manifest_does_not_need_to_live_in_the_task_dir(self):
+        """A private manifest must be readable without being copied into the package."""
+        hidden = {"cases": [{"case_id": "c1"}]}
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "anywhere.json"
+            path.write_text(json.dumps(hidden), encoding="utf-8")
+            self.assertFalse(str(path).startswith(str(TASK_DIR)))
+            _, cases, _ = run_task.load_task(TASK_DIR, path)
+        self.assertEqual(len(cases["cases"]), 1)
+
 
 class ResolveCaseFieldTests(unittest.TestCase):
     def test_resolves_a_nested_path(self):
