@@ -305,6 +305,13 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
+    # Removed before the work starts rather than written at the end, so a run that
+    # dies partway leaves nothing behind. It used to leave the previous run's file,
+    # and `candidate_gate.py` read it and reported a decision for a baseline that
+    # had not been measured -- which is worse than no decision, because it looks
+    # like one.
+    args.output.unlink(missing_ok=True)
+
     task, cases_manifest, problem_source = load_task(args.task_dir, args.cases)
 
     implementations = {NAIVE_ROLE: load_model_class(args.naive), EXPERT_ROLE: load_model_class(args.expert)}
@@ -342,11 +349,12 @@ def main() -> int:
         # the framework's per-dtype value, so a task can loosen grading and not
         # tighten it.
         "declared_tolerance": (task.get("tolerances") or {}).get("max_abs_error"),
+        # Keyed by the manifest's dtype name, resolved from the torch dtype: the
+        # framework's string vocabulary is the driver's (`fp16`, `bf16`, `fp32`),
+        # which is not the manifest's (`float16`, `bfloat16`, `float32`).
         "resolved_tolerances": {
-            dtype: resolve_tolerance(
-                dtype, (task.get("tolerances") or {}).get("max_abs_error")
-            )
-            for dtype in sorted({case["dtype"] for case in cases_manifest["cases"]})
+            name: resolve_tolerance(DTYPES[name], (task.get("tolerances") or {}).get("max_abs_error"))
+            for name in sorted({case["dtype"] for case in cases_manifest["cases"]})
         },
         "implementations": sorted({row["implementation"] for row in results}),
         "results": results,
