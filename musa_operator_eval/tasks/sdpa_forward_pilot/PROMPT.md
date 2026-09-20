@@ -6,7 +6,7 @@
 
 ## 交付物
 
-一个 Python 模块，定义 `ModelNew`（与 KernelBench 其它题目一致）：
+一个 Python 模块，定义 `ModelNew`：
 
 - `ModelNew.__init__` 接收与 reference `Model` 相同的初始化参数（`scale`、`causal`、`window_left`、`window_right`）。
 - `ModelNew.forward` 接收与 reference 相同的输入，返回**单个 `output` 张量**。不要返回元组：评测端直接在返回值上取 `.shape` 做比较，返回元组会在比较之前抛 `AttributeError`，导致每个 Case 的每次 trial 全部失败。
@@ -62,6 +62,7 @@ with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
 - 将输入复制回 Host 执行张量数学。
 - 联网、动态下载或动态加载外部实现。
 - 将第三方 kernel 源码改名后内联到提交中。
+- 全局降级成朴素实现：整条路径都不走库，性能分拿不到。
 - 用固定输出、Case ID 分支或 shape 查表绕过计算。
 - 继承或包裹 reference `Model` 后直接调用它来产出结果。
 

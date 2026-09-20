@@ -15,6 +15,7 @@ what the byte-for-byte check below is for.
 import ast
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -333,6 +334,112 @@ class LibraryPolicyTests(unittest.TestCase):
                 self.assertEqual(reference.name, f"{task['family']}_capabilities.json")
                 self.assertEqual(
                     json.loads(reference.read_text(encoding="utf-8"))["family"], task["family"])
+
+
+class PromptTests(unittest.TestCase):
+    """§4.5: the prompt is what the model reads, so its rules are a property of the package.
+
+    Two of them are worth a machine check. The first is the tier direction: §4.5
+    says the `必须做` and `禁止做` lists point in opposite directions between the
+    tiers and that getting one backwards is worse than leaving it out, because a
+    B-tier prompt that forbids the library makes the task unsolvable rather than
+    merely underspecified. The second is the disclosure rule: the prompt must not
+    hand the model the upstream project, a library function name, or a version
+    string, since any of those turns a measurement of the dispatch decision into a
+    lookup.
+
+    The budget is checked too, because it is stated twice -- here and in the
+    contract -- and a model that budgets against the wrong number is being told
+    something the evaluator will not honour.
+    """
+
+    #: §4.5's seven sections, in the guide's own words.
+    REQUIRED_SECTIONS = ("目标", "交付物", "必须做", "禁止做", "工程提示", "评分口径", "尝试预算")
+
+    #: §4.5 says this must not appear in `工程提示`. Function names are matched
+    #: without `muDNN`, which the A tier is required to *forbid* by name and which
+    #: therefore appears legitimately in a different section.
+    DISCLOSURES = {
+        "the upstream project": r"KernelBench|ScalingIntelligence",
+        "a library function name": r"scaled_dot_product_attention|MultiheadAttention|mudnn_\w+",
+        "a version string": r"\b\d+\.\d+\.\d+\b",
+    }
+
+    def prompts(self):
+        for path in sorted(TASKS_DIR.glob("*/PROMPT.md")):
+            yield path, json.loads((path.parent / "task.json").read_text(encoding="utf-8"))
+
+    @staticmethod
+    def sections(text: str) -> dict:
+        parts = re.split(r"^##\s+", text, flags=re.M)
+        return {part.splitlines()[0].strip(): part for part in parts[1:]}
+
+    def test_every_package_ships_a_prompt(self):
+        packaged = {directory.name for directory, _ in all_packages()}
+        prompted = {path.parent.name for path, _ in self.prompts()}
+        self.assertEqual(packaged, prompted, "a package has no PROMPT.md")
+
+    def test_every_prompt_carries_the_seven_sections(self):
+        for path, _ in self.prompts():
+            headings = list(self.sections(path.read_text(encoding="utf-8")))
+            with self.subTest(prompt=path.parent.name):
+                for required in self.REQUIRED_SECTIONS:
+                    self.assertTrue(
+                        any(required in heading for heading in headings),
+                        f"{path.parent.name} has no {required} section; it has {headings}",
+                    )
+
+    def test_the_tier_direction_is_not_reversed(self):
+        for path, task in self.prompts():
+            body = self.sections(path.read_text(encoding="utf-8"))
+            required = next((v for k, v in body.items() if "必须做" in k), "")
+            forbidden = next((v for k, v in body.items() if "禁止做" in k), "")
+            with self.subTest(prompt=path.parent.name):
+                if task["tier"] == "A_kernel":
+                    # The A tier may not reach for the library at all.
+                    self.assertRegex(forbidden, r"muDNN|muBLAS|SDPA|ATen")
+                else:
+                    # The B tier may not solve it without the library.
+                    self.assertRegex(required, r"库|fused_library")
+                    self.assertRegex(
+                        forbidden, r"降级|朴素实现",
+                        "§4.5 lists '全局降级成朴素实现' under the B tier's prohibitions, because "
+                        "a submission that never calls the library can still match a "
+                        "custom_fallback trace while scoring nothing",
+                    )
+
+    def test_the_stated_budget_is_the_contract_budget(self):
+        for path, task in self.prompts():
+            text = path.read_text(encoding="utf-8")
+            stated = re.search(r"最多\s*(\d+)\s*次.*?最长\s*(\d+)\s*秒", text, re.S)
+            with self.subTest(prompt=path.parent.name):
+                self.assertIsNotNone(stated, f"{path.parent.name} states no budget")
+                budget = task["attempt_budget"]
+                self.assertEqual(
+                    (int(stated.group(1)), int(stated.group(2))),
+                    (budget["max_attempts"], budget["wall_time_seconds"]),
+                )
+
+    def test_the_engineering_hints_disclose_nothing(self):
+        for path, _ in self.prompts():
+            body = self.sections(path.read_text(encoding="utf-8"))
+            hints = next((v for k, v in body.items() if "工程提示" in k), "")
+            for label, pattern in self.DISCLOSURES.items():
+                with self.subTest(prompt=path.parent.name, disclosure=label):
+                    self.assertEqual(re.findall(pattern, hints), [], f"{path.parent.name} names {label}")
+
+    def test_no_prompt_names_the_upstream_project(self):
+        """`kernelbench.musa_extension` is the ABI and has to be named; the project does not.
+
+        The capability references list `repository_name` as a prohibited disclosure,
+        and a prompt that says which project a problem came from invites looking the
+        reference implementation up instead of reading the contract.
+        """
+        for path, _ in self.prompts():
+            text = path.read_text(encoding="utf-8")
+            bare = re.findall(r"KernelBench(?!\.musa_extension)", text)
+            with self.subTest(prompt=path.parent.name):
+                self.assertEqual(bare, [])
 
 
 class CapabilityReferenceTests(unittest.TestCase):
