@@ -23,6 +23,7 @@
   "case_parameters": {
     "shape.B": "batch_size",
     "shape.C": "embed_dim",
+    "shape.channels": "num_channels",
     "shape.H": "image_height",
     "shape.W": "image_width"
   },
