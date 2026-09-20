@@ -17,7 +17,7 @@
       "dtype": "float32",
       "shape": {
         "B": 1,
-        "image": 32
+        "image": 224
       }
     },
     {
@@ -27,7 +27,7 @@
       "dtype": "float32",
       "shape": {
         "B": 2,
-        "image": 32
+        "image": 224
       }
     },
     {
@@ -36,8 +36,8 @@
       "seed": 1103,
       "dtype": "float32",
       "shape": {
-        "B": 1,
-        "image": 64
+        "B": 4,
+        "image": 224
       }
     }
   ]

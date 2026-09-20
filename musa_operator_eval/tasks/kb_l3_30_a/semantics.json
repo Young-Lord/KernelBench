@@ -11,5 +11,5 @@
   "attention": "cosine similarity between L2-normalised q and k, scaled by a clamped learnable logit scale",
   "bias": "a continuous relative position bias produced by a small MLP over the relative coordinate table, then 16*sigmoid",
   "determinism": "dropout and stochastic depth are at 0 in the problem defaults",
-  "image_size": "must be divisible by patch 4 and by 2^3 for the three patch-merging stages, so multiples of 32"
+  "image_size": "pinned at 224. The reference builds its inputs from the module-level image_size but constructs Model() with no arguments, so the constructor's own default of 224 is what the model is built at; the two agree at 224 and at nothing else. Only window_size 7 divides every stage resolution anyway, since they are 56, 28, 14 and 7, so 224 is the usable image for this reference and a case cannot move it."
 }

@@ -20,8 +20,7 @@
   "problem_file": "problem.py",
   "reference": "problem.py:Model",
   "case_parameters": {
-    "shape.B": "batch_size",
-    "shape.image": "image_size"
+    "shape.B": "batch_size"
   },
   "tolerances": {
     "atol": 0.02,

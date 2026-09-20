@@ -27,7 +27,7 @@ The attention family of the MUSA operator evaluation: every KernelBench attentio
 | `kb_l3_44` | L3/44 MiniGPTBlock | B=128, H=8, S=512, C=768, D=96 | `causal_mha` | 有答案 | 可判分 | 0.5317x |
 | `kb_l3_50` | L3/50 ReLUSelfAttention | B=16, H=12, S=1024, C=768, D=64 | `causal_relu_attention` | 有答案 | 不计分 | 0.3367x |
 | `kb_l3_31` | L3/31 VisionAttention | B=2, H=4, S=16384, D=32 | `dense_mha` | 有答案 | 可判分 | 0.2611x |
-| `kb_l3_30` | L3/30 SwinTransformerV2 | B=10, S_window=49, D=32 | `windowed_mha` | 有答案 | 可判分 | 0.8076x |
+| `kb_l3_30` | L3/30 SwinTransformerV2 | B=10, S_window=49, D=32 | `windowed_mha` | 有答案 | 不计分 | 0.8076x |
 | `kb_l3_28` | L3/28 VisionTransformer | B=10, layers=6, S=197, H=8, D=64 | `dense_mha_degenerate` | 不计分 | 不计分 | 1.0841x |
 | `kb_l3_32` | L3/32 ConvolutionalVisionTransformer | B=10, image=32, C=128, H=4 | `dense_mha_degenerate` | 不计分 | 不计分 | 1.1879x |
 
@@ -225,6 +225,33 @@ The attention family of the MUSA operator evaluation: every KernelBench attentio
 
 - The per-row kernel recomputed the whole window of K/V for every query row; one CTA per (window, head) that stages the entire window once cut the attention portion from 52ms to 18.5ms.
 - This is the closest entry to parity in the set at 0.81x, and the remaining gap is attributed to the serial per-row softmax inside the window kernel.
+
+#### kb_l3_30 的 B 轨不成立（实测结论）
+
+这道题只保留 A 轨。原计划把 A 类手写窗注意力换成库的融合路径，实测把这个计划否掉了，
+否掉的理由和最初预期的**相反**：不是融合内核吃不下这个核心，而是它吃得下。
+
+设备实测（`snapshot_id` 见 `environments/musa-5f9d7b9dd1233a68.public.json` 的
+`library_contracts.scaled_dot_product_attention`）：
+
+| 交给 `scaled_dot_product_attention` 的加法 mask | 结果 |
+|---|---|
+| 无 mask | 走融合，偏置丢失 |
+| 加法 `(S, S)` | **被接受，然后静默忽略** |
+| 加法 `(H, S, S)` | 报错，muDNN 原因为 `Internal error 3d mask shape` |
+| 加法 `(B, H, S, S)` | 被接受并**正确应用**，对 fp32 参考误差 0.00186 |
+
+也就是说，余弦注意力和相对位置偏置都能进一次调用，把 `logit_scale` 折进 `q`、把偏置当
+`attn_mask` 传进去即可；只要把偏置展开到四维。**这是一个陷阱，不是一个缺口** —— 传错秩会
+静默算错，但参考实现自己把偏置加到分数上时已经是四维的，所以用例没法要求专家绕开它。
+
+唯一还能造缺口的是 head 维度（`embed_dim/3`），而它够不着：`get_init_inputs()` 返回空，
+用例移动不了架构；要让 B 层够得着就得改 `problem.py`，而 A 层被要求与上游逐字相同，且
+`tests/test_task_packages.py` 要求同一 entry 的两层共享一份 case 参数化与语义契约。只拓宽
+B 层会让两层描述成两个不同的问题，两层都拓宽会破坏 A 层的同一性。所以这题是 A 轨有答案、
+B 轨无路，`kb_l3_30_b` 包因此不存在。
+
+保留一处风险提示：融合路径只在 `head_dim <= 128` 时可达，而本条的 head 维度恒为 32。
 
 ### kb_l3_28 — L3/28 VisionTransformer
 
