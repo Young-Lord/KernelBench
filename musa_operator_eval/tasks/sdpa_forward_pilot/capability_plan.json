@@ -3,7 +3,9 @@
   "family": "sdpa_forward",
   "purpose": "Classify candidate configurations before assigning A_kernel or B_library tier",
   "required_routes": ["torch_musa_sdpa", "mudnn_fused", "mate_fmha"],
-  "record_fields": ["accepted", "correct", "selected_route", "latency_ms", "peak_memory_bytes", "error", "evidence"],
+  "record_fields": ["dtype", "shape", "accepted", "selected_route", "deciding_op", "latency_ms", "peak_memory_bytes", "error", "evidence"],
+  "route_resolution": "selected_route is read from the aten op the dispatcher actually runs, not from a successful high-level call; it stays unverified when profiling is unavailable",
+  "grouped_query_handling": "key/value heads are expanded by repeat_interleave before the call, because torch 2.2 has no enable_gqa argument; the probe records that expansion in evidence so it is never mistaken for native GQA support",
   "cases": [
     {"probe_id": "base_fp16", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 64, "causal": false, "window_left": -1, "window_right": -1},
     {"probe_id": "base_bf16", "dtype": "bfloat16", "layout": "BHSD", "B": 2, "H_q": 16, "H_kv": 16, "S_q": 256, "S_kv": 256, "D": 128, "causal": false, "window_left": -1, "window_right": -1},

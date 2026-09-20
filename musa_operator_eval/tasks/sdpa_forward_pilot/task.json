@@ -58,6 +58,6 @@
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
     "minimum_gap_cases": 3,
-    "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"]
+    "required_gap_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch"]
   }
 }

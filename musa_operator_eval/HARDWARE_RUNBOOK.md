@@ -12,9 +12,16 @@ every later measurement is tied to.
 
 ## 2. Probe capabilities
 
-Run `tools/probe_sdpa.py`, then add native muDNN and MATE probes. A high-level
-torch_musa success stays `selected_route=unverified` until profiler or direct
-adapter evidence identifies the route.
+Run `tools/probe_sdpa.py`, then add native muDNN and MATE probes. The probe
+resolves `selected_route` from the aten op the dispatcher actually runs, so a
+successful high-level call is never mistaken for a fused-library success. It
+still reports `unverified` when profiling is unavailable, and `mudnn_fused` and
+`mate_fmha` stay `not_probed` until their native adapters exist.
+
+Two constraints this probe already encodes, both measured on `mp_22` with
+torch_musa 1.3.0: `enable_gqa` does not exist before torch 2.5, so grouped-query
+cases are served by expanding the key/value heads; and the library rejects any
+`scale` other than `1/sqrt(head_dim)`.
 
 Record at least three real library gaps covering at least two reason
 categories. Use those records to fill

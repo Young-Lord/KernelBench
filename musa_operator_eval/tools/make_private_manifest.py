@@ -7,11 +7,16 @@ import json
 from pathlib import Path
 
 
+# Every gap case here was measured on mp_22 (MTT S4000, MUSA Toolkit 3.1.0,
+# torch_musa 1.3.0) before being listed. An earlier draft guessed that
+# non-aligned shapes, grouped-query heads and windowed attention would be gaps;
+# measurement showed all three are served by the fused path, so they were
+# replaced. Do not add a case to this list without a recorded measurement.
 PRIVATE_CASES = [
-    {"case_id": "hidden_gap_001", "tag": "boundary", "seed": 91001, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 127, "S_kv": 193, "D": 64}, "attributes": {"scale": 0.125, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}},
-    {"case_id": "hidden_gap_002", "tag": "non_aligned", "seed": 91002, "dtype": "float16", "shape": {"B": 1, "H_q": 7, "H_kv": 7, "S_q": 131, "S_kv": 197, "D": 72}, "attributes": {"scale": 0.11785113019775793, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "uniform", "tolerance": {"atol": 0.015, "rtol": 0.015}},
-    {"case_id": "hidden_gap_003", "tag": "boundary", "seed": 91003, "dtype": "bfloat16", "shape": {"B": 2, "H_q": 16, "H_kv": 4, "S_q": 257, "S_kv": 257, "D": 128}, "attributes": {"scale": 0.08838834764831845, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.02, "rtol": 0.02}},
-    {"case_id": "hidden_gap_004", "tag": "boundary", "seed": 91004, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 257, "S_kv": 257, "D": 64}, "attributes": {"scale": 0.125, "causal": False, "window_left": 64, "window_right": 0}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}},
+    {"case_id": "hidden_gap_001", "tag": "head_dim_beyond_fused_bound", "seed": 91001, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 192}, "attributes": {"scale": 0.07216878364870322, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}},
+    {"case_id": "hidden_gap_002", "tag": "head_dim_beyond_fused_bound", "seed": 91002, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 256}, "attributes": {"scale": 0.0625, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "uniform", "tolerance": {"atol": 0.01, "rtol": 0.01}},
+    {"case_id": "hidden_gap_003", "tag": "scale_outside_library_contract", "seed": 91003, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 64}, "attributes": {"scale": 0.05, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}},
+    {"case_id": "hidden_gap_004", "tag": "empty_attention_row", "seed": 91004, "dtype": "float16", "shape": {"B": 1, "H_q": 8, "H_kv": 8, "S_q": 257, "S_kv": 64, "D": 64}, "attributes": {"scale": 0.125, "causal": False, "window_left": 0, "window_right": 0}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}},
     {"case_id": "hidden_perf_001", "tag": "perf", "seed": 92001, "dtype": "float16", "shape": {"B": 4, "H_q": 16, "H_kv": 16, "S_q": 512, "S_kv": 512, "D": 64}, "attributes": {"scale": 0.125, "causal": False, "window_left": -1, "window_right": -1}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}, "performance": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median"}, "expected_path": "fused_library"}
 ]
 
