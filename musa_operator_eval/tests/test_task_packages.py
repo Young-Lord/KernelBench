@@ -17,6 +17,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -479,15 +480,24 @@ class TensorContractTests(unittest.TestCase):
                 self.assertEqual(exercised, permitted)
 
     def test_the_driver_refuses_a_precision_the_contract_does_not_permit(self):
-        """The pilot is a B-tier task; running it at float32 must not start."""
+        """The pilot is a B-tier task; running it at float32 must not start.
+
+        The submission is a scratch file rather than the pilot's own expert, which
+        lives in the evaluator-only tree. The refusal is decided before the
+        submission is evaluated, or the run would have started, so its contents
+        cannot affect what is being checked here. Reaching into that tree made this
+        test fail on a checkout documented not to carry one, which is exactly the
+        checkout an agent gets.
+        """
         pilot = TASKS_DIR / "sdpa_forward_pilot"
-        submission = ROOT / "private" / "sdpa_forward_b_v0" / "expert" / "model_new.py"
-        self.assertTrue(submission.is_file(), "the pilot's expert submission is missing")
-        completed = subprocess.run(
-            [sys.executable, str(ROOT / "tools" / "run_task.py"),
-             "--task-dir", str(pilot), "--submission", str(submission), "--precision", "fp32"],
-            capture_output=True, text=True,
-        )
+        with tempfile.TemporaryDirectory() as scratch:
+            submission = Path(scratch) / "model_new.py"
+            submission.write_text("class ModelNew:\n    pass\n", encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, str(ROOT / "tools" / "run_task.py"),
+                 "--task-dir", str(pilot), "--submission", str(submission), "--precision", "fp32"],
+                capture_output=True, text=True,
+            )
         with self.subTest(exit_code=completed.returncode):
             self.assertEqual(completed.returncode, 2)
             self.assertIn("tensor", completed.stderr)
