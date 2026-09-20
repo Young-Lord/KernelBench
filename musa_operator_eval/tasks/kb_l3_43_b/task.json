@@ -98,48 +98,34 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
-    "gate": "geometric mean of naive_library_composition / expert_dispatch over the hidden cases where both pass",
+    "measured_geometric_mean": 3.468812510296503,
     "threshold": 1.3,
-    "measured_geometric_mean": 3.4703,
-    "evidence": "private/mingpt_causal_attention_b_v0/baseline.hidden.json",
-    "measured_on": "the hidden set, not the public one. The gate is defined over the cases a submission cannot read, so a ratio measured on the public smoke cases would be a real number about a different question.",
-    "per_case_ratios": {
-      "hidden_gap_001": 1.6897,
-      "hidden_gap_002": 2.0118,
-      "hidden_gap_003": 2.0555,
-      "hidden_gap_004": 1.9815,
-      "hidden_perf_001": 5.8098,
-      "hidden_perf_002": 7.9888,
-      "hidden_probe_001": 5.7071,
-      "hidden_probe_002": 5.7355
+    "ratios": {
+      "hidden_gap_001": 1.69263226660826,
+      "hidden_gap_002": 2.0109558641380056,
+      "hidden_gap_003": 2.0533362190864284,
+      "hidden_gap_004": 1.9869819245724816,
+      "hidden_perf_001": 5.81053415393277,
+      "hidden_perf_002": 7.99133908014833,
+      "hidden_probe_001": 5.693093612862642,
+      "hidden_probe_002": 5.7100976310352465
     },
-    "why_the_gaps_are_worth_less_than_the_perf_cases": "a gap case is worth about 2x and a performance case about 6-8x, and that is the shape the task is meant to have. When the fused kernel declines a configuration, both the naive baseline and the expert fall back to the library, so the gap cases measure whether the submission noticed the decline at all rather than how fast it ran. What the fused path is worth when it applies is what the performance cases measure.",
+    "measured_over": "the private case manifest, which is the set the gate is defined over",
+    "measured_in": "musa-5f9d7b9dd1233a68",
+    "baseline": "musa_operator_eval/private/mingpt_causal_attention_b_v0/baseline.hidden.json",
+    "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
     "dispatch_note": "the attention core is a single causal SDPA over (B, H, S, D), which is the shape a fused library answers",
     "gap_reason_coverage": {
       "state": "open",
-      "reachable": ["unsupported_shape"],
-      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "reachable": [
+        "unsupported_shape"
+      ],
+      "unreachable": [
+        "semantic_mismatch",
+        "layout_mismatch",
+        "multi_operator_required"
+      ],
       "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is n_embd / n_head rather than a free parameter, and the fused path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path. semantic_mismatch is unreachable because the scale is hard-coded to 1/sqrt(D) (the only value the fused path accepts) and there is no window, so every query row sees j <= i and no row can be fully masked. layout_mismatch is unreachable because the contract layout is contiguous BHSD, which the measurement showed still dispatches fused. multi_operator_required is unreachable because the attention core is one SDPA call. Either a second measured category has to be found on the device or this entry needs a wider contract before it can meet the floor."
-    },
-    "route_probe": {
-      "state": "measured",
-      "evidence": "private/mingpt_causal_attention_b_v0/route_probe.json",
-      "finding": "all five half-precision configurations resolve to the fused path and the float32 control resolves to the composition path, so the public cases' expected_path holds and the precision this task declares is load-bearing rather than defensive",
-      "routes_probed": ["torch_musa_sdpa"],
-      "routes_not_probed": ["mudnn_fused"]
-    },
-    "public_case_baseline": {
-      "state": "measured",
-      "evidence": "private/mingpt_causal_attention_b_v0/baseline.json",
-      "covers": "the three public smoke cases only",
-      "not_the_gate": "the gate is the measurement over the hidden set, recorded above. This block is kept because it is the only measurement that is reproducible from a clean clone: the hidden set and its plan are maintainer assets, so a reader outside this repository can rerun the public measurement and not the hidden one.",
-      "latency_ms": {
-        "smoke_001": {"naive_library_composition": 0.5464, "expert_dispatch": 0.1360, "ratio": 4.02},
-        "smoke_002": {"naive_library_composition": 0.7618, "expert_dispatch": 0.1371, "ratio": 5.56},
-        "smoke_003": {"naive_library_composition": 0.8596, "expert_dispatch": 0.1329, "ratio": 6.47}
-      },
-      "paths_taken": "fused_library on all three, confirmed by the dispatch trace rather than by the call returning a tensor"
     }
   }
 }

@@ -173,9 +173,18 @@ def main() -> int:
     }
 
     previously = task.get("admission") or {}
+    was_pending = previously.get("status") == "pending_device_measurement"
     for key in ("reason", "dispatch_note", "gap_reason_coverage", "notes", "also_answered"):
-        if key in previously:
-            block[key] = previously[key]
+        if key not in previously:
+            continue
+        # `reason` on a pending block explains why nothing could be asserted yet.
+        # Carrying it onto a measured block leaves the contract saying both that the
+        # gate was never measured and that it was, and a reader has no way to tell
+        # which sentence is current. The other keys describe the task rather than
+        # the state of the measurement, so they survive the transition.
+        if key == "reason" and was_pending:
+            continue
+        block[key] = previously[key]
 
     print(json.dumps(block, indent=2, ensure_ascii=False))
 

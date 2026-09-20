@@ -96,13 +96,34 @@
     "ranking": "B-library track only; never merged or averaged with the A-kernel track"
   },
   "admission": {
-    "status": "pending_device_measurement",
-    "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
+    "status": "measured",
+    "decision": "admit",
+    "measured_geometric_mean": 1.5127721822466733,
+    "threshold": 1.3,
+    "ratios": {
+      "hidden_gap_001": 0.894982055250074,
+      "hidden_gap_002": 1.0101877217958044,
+      "hidden_gap_003": 1.0020995806831428,
+      "hidden_gap_004": 1.2317804372006815,
+      "hidden_perf_001": 3.2906572256873314,
+      "hidden_perf_002": 3.9790799041766562,
+      "hidden_probe_001": 1.8750938002212765,
+      "hidden_probe_002": 1.0010121260544296
+    },
+    "measured_over": "the private case manifest, which is the set the gate is defined over",
+    "measured_in": "musa-5f9d7b9dd1233a68",
+    "baseline": "musa_operator_eval/private/vision_attention_b_v0/baseline.hidden.json",
     "dispatch_note": "the problem is already written against a framework attention module, so the library path is the reference's own route",
     "gap_reason_coverage": {
       "state": "open",
-      "reachable": ["unsupported_shape"],
-      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "reachable": [
+        "unsupported_shape"
+      ],
+      "unreachable": [
+        "semantic_mismatch",
+        "layout_mismatch",
+        "multi_operator_required"
+      ],
       "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is embed_dim / num_heads, both now case parameters, and the fused path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path. This was measured: head_dim 32 dispatches fused at every sequence length tried from 49 to 1000, and 192 and 256 do not. layout_mismatch was the reason declared here before that measurement, and it is not a gap: the fused path accepted the contiguous, the transposed and the strided views this task produces, and refused only a three-dimensional input, which is a rank error rather than a layout the library declines, since nn.MultiheadAttention always hands it four dimensions. semantic_mismatch is unreachable: the scale is the framework default 1/sqrt(D) and there is no mask, so no row can be fully masked. multi_operator_required is unreachable: one attention op. This entry needs a second measurable category before it can meet the floor."
     }
   }
