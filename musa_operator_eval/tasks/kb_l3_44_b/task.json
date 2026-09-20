@@ -96,8 +96,26 @@
     "ranking": "B-library track only; never merged or averaged with the A-kernel track"
   },
   "admission": {
-    "status": "pending_device_measurement",
-    "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
+    "status": "measured",
+    "decision": "admit",
+    "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
+    "gate": "geometric mean of naive_library_composition / expert_dispatch over the hidden cases where both pass",
+    "threshold": 1.3,
+    "measured_geometric_mean": 2.2687,
+    "evidence": "private/mingpt_block_b_v0/baseline.hidden.json",
+    "measured_on": "the hidden set, not the public one. The gate is defined over the cases a submission cannot read, so a ratio measured on the public smoke cases would be a real number about a different question.",
+    "per_case_ratios": {
+      "hidden_gap_001": 1.2916,
+      "hidden_gap_002": 1.5186,
+      "hidden_gap_003": 1.5635,
+      "hidden_gap_004": 1.5065,
+      "hidden_perf_001": 5.3628,
+      "hidden_perf_002": 6.4792,
+      "hidden_probe_001": 2.1559,
+      "hidden_probe_002": 2.0280
+    },
+    "why_the_margin_is_narrow": "2.27 against a threshold of 1.3 is the tightest of the packaged B-tier tasks, and the reason is structural rather than a weakness in the measurement: the MLP, the two LayerNorms, the GELU and the residual are the same code on both sides of the ratio, so they dilute it whatever the attention core costs. Sizing the performance cases at long sequences is what keeps the attention share large enough to clear the floor -- at S=2048 and S=4096 the ratio is 5-6x, where the same task's public cases at S=64..129 measured about 2x.",
+    "also_answered": "the two performance cases run to sequence lengths of 2048 and 4096, far past the 512 the head-dimension probe covered, and both dispatch fused. That closes the open question of whether sequence length eventually moves the route; on this build it does not.",
     "dispatch_note": "two dispatchable segments rather than one: the causal attention core, and the 4C-expansion MLP projections",
     "gap_reason_coverage": {
       "state": "open",
