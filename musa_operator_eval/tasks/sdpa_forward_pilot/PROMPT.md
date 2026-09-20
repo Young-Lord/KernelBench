@@ -16,6 +16,27 @@
 
 reference 实现在 `problem.py` 的 `Model` 类里，用普通 PyTorch 算子写成。`TIER` 与 `LIBRARY_POLICY` 也定义在同一个文件里，评测端直接用 `LIBRARY_POLICY` 驱动 `validate_library_kernel_static`。
 
+## 分派轨迹
+
+评测端会设置环境变量 `KB_DISPATCH_TRACE`，其值是一个文件路径。你的 `ModelNew` 每处理一个 Case，就要往该文件**追加一行 JSON**（UTF-8，一行一个对象）：
+
+```json
+{"case_id": "<该 Case 的 id>", "selected_path": "<fused_library|library_composition|custom_fallback>", "probe_status": "<你的运行时探测返回的状态>"}
+```
+
+```python
+import json, os
+
+with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
+    handle.write(json.dumps(record) + "\n")
+```
+
+规则：
+
+- 三个字段都要有，且非空；`selected_path` 只能是上面三个值之一。
+- 同一个 Case 的多次 forward 必须报**同一条路径**。同一配置报出两条不同路径会被判定为分派不稳定。
+- 每个 Case 至少一条记录。没有轨迹就无法判分——它正是 B 类的判分点。
+
 ## 必须做
 
 - 按 `fused_library → library_composition → custom_fallback` 的优先级选择路径。

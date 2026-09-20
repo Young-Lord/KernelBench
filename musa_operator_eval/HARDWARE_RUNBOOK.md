@@ -72,22 +72,32 @@ is at least 1.3.
 
 ## 5. Run the evaluation
 
-Mount the private directory only into the evaluator. Correctness, timing and
-speedup run through the KernelBench framework:
+Mount the private directory only into the evaluator. `tools/run_task.py` drives
+the whole task: it specializes the reference per case, evaluates the submission,
+and checks the dispatch trace.
 
-- `src/kernelbench/eval.py` (`eval_kernel_against_ref`) with `backend="musa"`;
+```bash
+python musa_operator_eval/tools/run_task.py \
+  --submission <model_new.py> --backend musa --precision fp16 \
+  --output runs/sdpa_forward_b_v0/report.json
+```
+
+Underneath, correctness, timing and speedup run through the KernelBench
+framework:
+
+- `src/kernelbench/eval.py` (`eval_library_dispatch_against_ref`) with `backend="musa"`;
 - `num_correct_trials` drives randomized correctness inputs, so evaluation
   inputs are never a fixed public file;
+- `src/kernelbench/dispatch_trace.py` supplies the trace transport and check;
 - `src/kernelbench/timing.py` supplies the timer;
-- `src/kernelbench/kernel_static_checker.py` supplies the source audit;
+- `src/kernelbench/kernel_static_checker.py` supplies the tier-aware source audit;
 - `scripts/generate_baseline_time.py` supplies the baseline measurement path.
 
-Pass `static_check=True` to `eval_kernel_against_ref` to run the source audit
-before compiling. The audit is tier-aware: the tier and policy are read from the
-`TIER` / `LIBRARY_POLICY` names in the problem source, and a B-tier task is
-audited with the inverted rule set. A failed audit short-circuits the run and
-lands in `metadata["static_audit_errors"]`, so a rejected submission never
-reaches the device. Every result also carries `metadata["tier"]`.
+The audit runs before anything is compiled, and the tier is read from the
+`TIER` / `LIBRARY_POLICY` names in the problem source, so a B-tier task is
+audited with the inverted rule set. A rejected submission never reaches the
+device. Every result carries `metadata["tier"]`, `dispatch_trace_passed`, and the
+trace summary, errors and path under metadata.
 
 The release gate is:
 

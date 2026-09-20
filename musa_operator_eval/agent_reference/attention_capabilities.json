@@ -35,6 +35,7 @@
     "decision_basis": "runtime_capability_result",
     "forbidden_basis": "version_string",
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+    "trace_env_var": "KB_DISPATCH_TRACE",
     "failure_reasons": ["unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
   },
   "semantic_summary": {

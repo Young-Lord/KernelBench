@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from . import timing, dataset
 from . import gpu as kb_gpu
+from .dispatch_trace import DispatchTraceError, dispatch_trace, read_trace, check_trace, summarize_trace
 from .kernel_static_checker import resolve_tier_and_library_policy, static_audit_kernel
 
 REPO_TOP_PATH = os.path.abspath(
@@ -132,6 +133,10 @@ class KernelExecResult(BaseModel):
     # could do eager for level 1 and compile for level 2 and 3
     ref_runtime: float = -1.0  # in us, only recorded if we decide to measure performance
     ref_runtime_stats: dict = {} # only recorded if we decide to measure performance
+
+    # B_library tier only: whether the submission's dispatch trace matched the
+    # task contract. None means the tier has no trace requirement.
+    dispatch_trace_passed: Optional[bool] = None
 
 
 def load_original_model_and_inputs(
@@ -758,6 +763,76 @@ def eval_kernel_against_ref(
 
     graceful_eval_cleanup(context, device, tempfile)
     return kernel_exec_result
+
+
+def eval_library_dispatch_against_ref(
+    original_model_src: str,
+    custom_model_src: str,
+    expected_dispatch_path: Optional[str] = None,
+    dispatch_case_id: Optional[str] = None,
+    required_trace_fields: Optional[list] = None,
+    static_check: bool = True,
+    **kwargs,
+) -> KernelExecResult:
+    """Evaluate a B-tier (library dispatch) submission, dispatch trace included.
+
+    Thin wrapper around eval_kernel_against_ref that additionally points the
+    dispatch trace environment variable at a scratch file for the duration of
+    the run, then checks what the submission recorded. The A tier needs none of
+    this: it only asks whether the answer is right, while this tier also asks how
+    the answer was reached, and a speedup is meaningless without knowing which
+    path earned it.
+
+    Args:
+        original_model_src: the problem's reference source
+        custom_model_src: the submission source
+        expected_dispatch_path: the path the maintainer expects for this case,
+            one of dispatch_trace.DISPATCH_PATHS. When omitted the trace is still
+            validated structurally, just not against an expectation.
+        dispatch_case_id: when given, only records for this case are checked
+        required_trace_fields: field names the trace must carry; defaults to
+            dispatch_trace.REQUIRED_TRACE_FIELDS
+        static_check: run the tier-aware source audit before compiling. Defaults
+            to True, because the B tier cannot be graded without it.
+        **kwargs: forwarded to eval_kernel_against_ref
+
+    Returns:
+        The KernelExecResult, with `dispatch_trace_passed` set and the trace
+        path, errors and summary recorded in metadata.
+    """
+    with dispatch_trace() as trace_path:
+        result = eval_kernel_against_ref(
+            original_model_src,
+            custom_model_src,
+            static_check=static_check,
+            **kwargs,
+        )
+
+    if result is None:
+        # eval_kernel_against_ref returns None for a transient lock-file failure.
+        # The caller retries, so there is nothing here to attach a trace to.
+        return None
+
+    records: list = []
+    try:
+        records = read_trace(trace_path)
+        errors = check_trace(
+            records,
+            expected_path=expected_dispatch_path,
+            required_fields=required_trace_fields,
+            case_id=dispatch_case_id,
+        )
+    except DispatchTraceError as error:
+        errors = [str(error)]
+
+    result.metadata["dispatch_trace_path"] = str(trace_path)
+    result.metadata["dispatch_trace_errors"] = errors
+    result.metadata["dispatch_trace_summary"] = summarize_trace(records)
+    result.dispatch_trace_passed = not errors
+    if errors:
+        print(f"[Eval] Dispatch trace check failed: {errors}")
+
+    return result
 
 
 def register_and_format_exception(

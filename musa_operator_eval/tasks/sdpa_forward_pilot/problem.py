@@ -119,6 +119,12 @@ def get_inputs():
 # KernelBench has no place for the A/B tier distinction, so the tier and the
 # library policy travel with the problem file. `kernel_static_checker`'s
 # `validate_library_kernel_static` consumes LIBRARY_POLICY directly.
+#
+# The module-level defaults above are the case-parameterization surface: the case
+# driver appends overrides for them to instantiate each entry of
+# public_cases.json. The mapping from case field to variable name lives in
+# task.json under `case_parameters`, so the driver can read it without executing
+# this file.
 # ============================================================================
 
 TIER = "B_library"
@@ -127,6 +133,7 @@ LIBRARY_POLICY = {
     "allowed_libraries": ["libmusa", "libmudnn"],
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+    "trace_env_var": "KB_DISPATCH_TRACE",
     "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
     "minimum_gap_cases": 3,
     "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"],

@@ -46,7 +46,18 @@ python musa_operator_eval/tools/make_private_manifest.py \
 
 # Apply the B-tier naive/expert admission gate
 python musa_operator_eval/tools/candidate_gate.py <baseline.json>
+
+# Drive a task across all of its cases
+python musa_operator_eval/tools/run_task.py --submission <model_new.py> --static-only
+python musa_operator_eval/tools/run_task.py --submission <model_new.py> \
+  --backend musa --precision fp16 --output runs/<task>/report.json
 ```
+
+`run_task.py` is the entry point for a whole task. It specializes `problem.py`
+per case using the `case_parameters` mapping in `task.json`, evaluates the
+submission against the reference, and checks the dispatch trace. `--static-only`
+stops after the source audit and the case-override check, so it runs on a
+machine with no device.
 
 Public inputs and goldens are regenerated on demand and are not committed.
 All tools are standard-library-plus-NumPy and are hardware-independent; the
@@ -59,9 +70,13 @@ probes and baselines are not, and must run on the target device.
 python musa_operator_eval/tests/test_environment_tools.py -v
 python musa_operator_eval/tests/test_reference_and_cases.py -v
 
+# Task driver: case specialization, static report, CLI (stdlib only)
+python musa_operator_eval/tests/test_run_task.py -v
+
 # Cross-checks the task's PyTorch reference against the NumPy one (needs torch)
 python musa_operator_eval/tests/test_problem_reference.py -v
 
-# B-tier library-dispatch static checker (stdlib only)
+# Framework-level B-tier support (stdlib only)
 python src/kernelbench/unit_tests/test_library_static_checker.py -v
+python src/kernelbench/unit_tests/test_dispatch_trace.py -v
 ```

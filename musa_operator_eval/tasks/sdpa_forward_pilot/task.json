@@ -38,12 +38,25 @@
   },
   "problem_file": "problem.py",
   "reference": "problem.py:Model",
+  "case_parameters": {
+    "attributes.scale": "default_scale",
+    "attributes.causal": "default_causal",
+    "attributes.window_left": "default_window_left",
+    "attributes.window_right": "default_window_right",
+    "shape.B": "batch_size",
+    "shape.H_q": "num_query_heads",
+    "shape.H_kv": "num_kv_heads",
+    "shape.S_q": "sequence_length_query",
+    "shape.S_kv": "sequence_length_key",
+    "shape.D": "head_dimension"
+  },
   "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
   "outputs": {"required": ["output", "dispatch_trace"], "optional": ["lse"]},
   "library_policy": {
     "allowed_libraries": ["libmusa", "libmudnn"],
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+    "trace_env_var": "KB_DISPATCH_TRACE",
     "minimum_gap_cases": 3,
     "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"]
   }

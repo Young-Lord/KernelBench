@@ -38,11 +38,16 @@ POLICY = {
     "allowed_libraries": ["libmusa", "libmudnn"],
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+    "trace_env_var": "KB_DISPATCH_TRACE",
 }
 
 # A submission that probes at runtime, dispatches to a whitelisted library, and
-# emits the trace. This is what the B tier is asking for.
+# appends the trace where the evaluator told it to. This is what the B tier asks
+# for; anything less cannot be graded.
 GOOD_SUBMISSION = """
+import json
+import os
+
 import torch
 import torch_musa
 import mudnn
@@ -51,13 +56,27 @@ class ModelNew(torch.nn.Module):
     def forward(self, q, k, v):
         probe = mudnn.sdpa_supported(q.dtype, q.shape[-1])
         record = {"case_id": case_id, "selected_path": "fused_library", "probe_status": "accepted"}
-        self.trace.append(record)
+        with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\\n")
         return torch_musa.sdpa(q, k, v)
 """
 
 COMPUTE_USING_SUBMISSION = GOOD_SUBMISSION + """
     def extra(self, x):
         return torch.softmax(x, dim=-1)
+"""
+
+# Names the trace fields as real string literals but never locates the file, so
+# it cannot actually emit a trace: field names alone are one string away from
+# meaningless, the env var lookup is the part that has to be there.
+FIELDS_ONLY_SUBMISSION = """
+import torch_musa
+
+TRACE_FIELDS = ("case_id", "selected_path", "probe_status")
+
+class ModelNew(torch.nn.Module):
+    def forward(self, q, k, v):
+        return torch_musa.sdpa(q, k, v)
 """
 
 
@@ -147,13 +166,28 @@ class DispatchTraceTests(unittest.TestCase):
         self.assertIn("selected_path", message)
 
     def test_complete_trace_fields_pass(self):
-        self.assertEqual(check_dispatch_trace_emission(GOOD_SUBMISSION, ["case_id", "probe_status"]), (False, ""))
+        self.assertEqual(
+            check_dispatch_trace_emission(GOOD_SUBMISSION, ["case_id", "probe_status"], "KB_DISPATCH_TRACE"),
+            (False, ""),
+        )
 
     def test_submission_without_trace_is_rejected(self):
         code = "import torch_musa\ndef f(q, k, v):\n    return torch_musa.sdpa(q, k, v)\n"
         valid, errors, _ = validate_library_kernel_static(code, POLICY)
         self.assertFalse(valid)
         self.assertTrue(any("dispatch trace" in message for message in errors), errors)
+
+    def test_naming_the_fields_without_reading_the_env_var_is_rejected(self):
+        """Field names are one string away from meaningless; the env var is not."""
+        has_issue, message = check_dispatch_trace_emission(
+            FIELDS_ONLY_SUBMISSION, ["case_id", "selected_path", "probe_status"], "KB_DISPATCH_TRACE"
+        )
+        self.assertTrue(has_issue, "naming the fields alone must not satisfy the trace rule")
+        self.assertIn("KB_DISPATCH_TRACE", message)
+
+        valid, errors, _ = validate_library_kernel_static(FIELDS_ONLY_SUBMISSION, POLICY)
+        self.assertFalse(valid)
+        self.assertTrue(any("KB_DISPATCH_TRACE" in message for message in errors), errors)
 
 
 class OptionalDeviceKernelTests(unittest.TestCase):
