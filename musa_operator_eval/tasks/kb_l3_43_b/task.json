@@ -96,8 +96,25 @@
     "ranking": "B-library track only; never merged or averaged with the A-kernel track"
   },
   "admission": {
-    "status": "pending_device_measurement",
-    "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
+    "status": "measured",
+    "decision": "admit",
+    "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
+    "gate": "geometric mean of naive_library_composition / expert_dispatch over the hidden cases where both pass",
+    "threshold": 1.3,
+    "measured_geometric_mean": 3.4703,
+    "evidence": "private/mingpt_causal_attention_b_v0/baseline.hidden.json",
+    "measured_on": "the hidden set, not the public one. The gate is defined over the cases a submission cannot read, so a ratio measured on the public smoke cases would be a real number about a different question.",
+    "per_case_ratios": {
+      "hidden_gap_001": 1.6897,
+      "hidden_gap_002": 2.0118,
+      "hidden_gap_003": 2.0555,
+      "hidden_gap_004": 1.9815,
+      "hidden_perf_001": 5.8098,
+      "hidden_perf_002": 7.9888,
+      "hidden_probe_001": 5.7071,
+      "hidden_probe_002": 5.7355
+    },
+    "why_the_gaps_are_worth_less_than_the_perf_cases": "a gap case is worth about 2x and a performance case about 6-8x, and that is the shape the task is meant to have. When the fused kernel declines a configuration, both the naive baseline and the expert fall back to the library, so the gap cases measure whether the submission noticed the decline at all rather than how fast it ran. What the fused path is worth when it applies is what the performance cases measure.",
     "dispatch_note": "the attention core is a single causal SDPA over (B, H, S, D), which is the shape a fused library answers",
     "gap_reason_coverage": {
       "state": "open",
@@ -116,7 +133,7 @@
       "state": "measured",
       "evidence": "private/mingpt_causal_attention_b_v0/baseline.json",
       "covers": "the three public smoke cases only",
-      "not_the_gate": "the gate this task is admitted by is defined over the hidden set, which does not exist yet, so the status above stays pending. What this records is that the measurement pipeline drives this task end to end and that a real expert dispatch passes correctness under the same weight alignment the harness uses.",
+      "not_the_gate": "the gate is the measurement over the hidden set, recorded above. This block is kept because it is the only measurement that is reproducible from a clean clone: the hidden set and its plan are maintainer assets, so a reader outside this repository can rerun the public measurement and not the hidden one.",
       "latency_ms": {
         "smoke_001": {"naive_library_composition": 0.5464, "expert_dispatch": 0.1360, "ratio": 4.02},
         "smoke_002": {"naive_library_composition": 0.7618, "expert_dispatch": 0.1371, "ratio": 5.56},
