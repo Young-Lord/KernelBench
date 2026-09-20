@@ -133,15 +133,37 @@ class VerificationTests(unittest.TestCase):
         _, problems = collector.verify_entry(entry)
         self.assertTrue(any("unknown reader" in problem for problem in problems), problems)
 
-    def test_dangling_references_are_still_missing(self):
-        """These are recorded as missing; if one appears, the record is stale."""
+    def test_source_paths_are_either_on_the_archive_branch_or_absent(self):
+        """A path is either expected on the archive branch or expected nowhere."""
         dangling = collector.verify_dangling(_manifest()["dangling_references"])
         self.assertTrue(dangling)
         for reference in dangling:
             with self.subTest(path=reference["path"]):
+                self.assertFalse(
+                    reference["exists_locally"],
+                    f"{reference['path']} is in the working tree; the archive is not vendored here",
+                )
+                if reference.get("resolves_on"):
+                    self.assertIsNot(
+                        reference.get("branch_reachable"), False,
+                        f"{reference['path']} is gone from {reference['resolves_on']}",
+                    )
+
+    def test_the_archive_branch_really_has_the_paths_that_claim_it(self):
+        """Skip-with-a-loud-reason rather than silently pass when the branch is unfetched."""
+        dangling = collector.verify_dangling(_manifest()["dangling_references"])
+        claimed = [reference for reference in dangling if reference.get("resolves_on")]
+        self.assertTrue(claimed)
+        if all(reference.get("branch_reachable") is None for reference in claimed):
+            self.skipTest(
+                "archive branch not fetched; run: git fetch origin "
+                "feat/import-musa-attention-set:refs/remotes/origin/feat/import-musa-attention-set"
+            )
+        for reference in claimed:
+            with self.subTest(path=reference["path"]):
                 self.assertTrue(
-                    reference["still_missing"],
-                    f"{reference['path']} now exists; update {reference['referenced_by']}",
+                    reference["branch_reachable"],
+                    f"the archive branch is fetched but lacks {reference['path']}",
                 )
 
 
@@ -240,7 +262,10 @@ class KernelCandidateTests(unittest.TestCase):
     def test_every_candidate_of_a_maintainer_record_carries_evidence(self):
         for candidate in self.candidates:
             with self.subTest(candidate=candidate["candidate_id"]):
-                self.assertTrue(candidate["evidence"])
+                self.assertTrue(
+                    collector._has_evidence(candidate),
+                    f"{candidate['candidate_id']} points at nothing checkable",
+                )
 
     def test_an_entry_pointing_at_an_unknown_candidate_is_caught(self):
         manifest = _manifest()
@@ -262,7 +287,7 @@ class KernelCandidateTests(unittest.TestCase):
 
     def test_a_claim_without_evidence_is_caught(self):
         record = json.loads(json.dumps(self.record))
-        record["candidates"][0].pop("evidence")
+        record["candidates"][0].pop("archive_path")
         _, problems = collector.verify_candidates(self.manifest, record)
         self.assertTrue(any("evidence" in problem for problem in problems), problems)
 
@@ -272,47 +297,100 @@ class KernelCandidateTests(unittest.TestCase):
 
 
 class CandidateFindingTests(unittest.TestCase):
-    """The load-bearing claim: the fused attention path is an S5000 story."""
+    """The load-bearing facts, including the one that corrected an earlier claim."""
 
     def setUp(self):
         self.manifest = _manifest()
-        self.by_id = {
-            candidate["candidate_id"]: candidate
-            for candidate in collector.load_candidate_record(self.manifest)["candidates"]
-        }
+        self.record = collector.load_candidate_record(self.manifest)
+        self.by_id = {candidate["candidate_id"]: candidate for candidate in self.record["candidates"]}
 
-    def test_mate_is_s5000_only(self):
-        mate = self.by_id["mate_fmha"]
-        self.assertEqual(mate["requirements"]["gpu"], "S5000")
+    def test_the_record_carries_the_correction(self):
+        """The S5000-only claim was wrong; the correction must stay recorded."""
+        self.assertIn("correction_note", self.record)
+        self.assertIn("wrong", self.record["correction_note"])
+
+    def test_mate_is_pinned_to_s5000(self):
+        mate = self.by_id["mate"]
+        self.assertIn("S5000", mate["requirements"]["hardware"])
         self.assertFalse(any(target.startswith("s4000") for target in mate["targets"]))
 
-    def test_mt_flashmla_targets_compute_capability_3_1(self):
-        self.assertIn("3.1", self.by_id["mt_flashmla"]["requirements"]["gpu"])
+    def test_mt_flashmla_targets_mp31(self):
+        self.assertIn("MP31", self.by_id["mt_flashmla"]["requirements"]["hardware"])
 
-    def test_no_fused_library_candidate_serves_an_mp22_target(self):
-        """If this ever fails, the B-tier task's fused_library path became reachable on S4000."""
-        fused = [
+    def test_llama_cpp_is_the_mp22_counterexample(self):
+        """The one candidate whose build files name mp_22, and why the old claim died."""
+        llama = self.by_id["llama_cpp_fattn"]
+        self.assertIn("mp_22", llama["requirements"]["hardware"])
+        self.assertIn("s4000_fp32", llama["targets"])
+        self.assertEqual(llama["kind"], "fused_library")
+        self.assertIn("portable", llama["limits"]["provenance"])
+
+    def test_no_candidate_is_a_handwritten_native_s4000_attention_kernel(self):
+        """The part of the corrected claim that survives, and the reason it matters."""
+        s4000_capable = [
             candidate for candidate in self.by_id.values()
-            if candidate["kind"] == "fused_library"
+            if any(target.startswith("s4000") for target in candidate["targets"])
         ]
-        for candidate in fused:
+        self.assertTrue(s4000_capable)
+        for candidate in s4000_capable:
             with self.subTest(candidate=candidate["candidate_id"]):
-                mp22_targets = [target for target in candidate["targets"] if target.startswith("s4000")]
-                if candidate["candidate_id"] != "torch_musa_sdpa":
-                    self.assertEqual(mp22_targets, [])
+                if candidate["kind"] == "handwritten_kernel":
+                    self.assertIn("in-repo", candidate["archive_revision_label"])
+                else:
+                    self.assertNotEqual(candidate["role"], "native-kernel-library")
 
-    def test_the_open_question_about_torch_musa_on_mp22_is_recorded(self):
-        """torch_musa_sdpa is the one candidate whose mp_22 coverage is unproven."""
+    def test_the_head_dim_boundary_on_torch_musa_is_recorded(self):
+        """The archive answers half of what used to be an open question here."""
         limits = self.by_id["torch_musa_sdpa"]["limits"]
-        self.assertIn("open_question", limits)
+        self.assertIn("head_dim", limits)
+        self.assertIn("only some head dimensions", limits["head_dim"])
 
     def test_mate_layout_differs_from_the_b_tier_task(self):
         """The B-tier task is BHSD; MATE is BSHD. A dispatch has to transpose."""
-        self.assertIn("BSHD", self.by_id["mate_fmha"]["limits"]["layout"])
+        self.assertIn("BSHD", self.by_id["mate"]["limits"]["layout"])
 
     def test_handwritten_kernels_are_marked_warp_size_sensitive(self):
         limits = self.by_id["kb_level3_musa_handwritten"]["limits"]
         self.assertIn("warp_size_sensitivity", limits)
+
+    def test_the_few_shot_example_is_recorded_as_a_candidate(self):
+        """The model under test has already been shown this kernel."""
+        example = self.by_id["kb_few_shot_flash_attn"]
+        self.assertIn("already been shown this kernel", example["why_it_matters"])
+        self.assertEqual(example["serves"], [])
+
+    def test_every_archive_candidate_names_a_revision_or_says_why_not(self):
+        for candidate in self.record["candidates"]:
+            with self.subTest(candidate=candidate["candidate_id"]):
+                if candidate["archive_revision_label"] == "in-repo":
+                    self.assertIsNone(candidate["archive_revision"])
+                else:
+                    self.assertTrue(candidate["archive_revision"])
+
+    def test_the_source_archive_block_points_at_a_branch(self):
+        archive = self.record["source_archive"]
+        self.assertEqual(archive["branch"], "feat/import-musa-attention-set")
+        self.assertTrue(archive["why_not_merged"])
+
+
+class ServesAgreementTests(unittest.TestCase):
+    """Entries and candidates declare the same relationship; both must agree."""
+
+    def setUp(self):
+        self.manifest = _manifest()
+        self.record = collector.load_candidate_record(self.manifest)
+
+    def test_one_sided_edit_is_caught(self):
+        manifest = _manifest()
+        manifest["entries"][0]["candidate_kernels"] = ["mate"]  # drop the rest
+        _, problems = collector.verify_candidates(manifest, self.record)
+        self.assertTrue(any("disagree" in problem for problem in problems), problems)
+
+    def test_a_candidate_serving_an_unknown_entry_is_caught(self):
+        record = json.loads(json.dumps(self.record))
+        record["candidates"][0]["serves"] = ["kb_does_not_exist"]
+        _, problems = collector.verify_candidates(self.manifest, record)
+        self.assertTrue(any("kb_does_not_exist" in problem for problem in problems), problems)
 
 
 class GeneratedIndexTests(unittest.TestCase):

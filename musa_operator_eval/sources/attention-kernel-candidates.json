@@ -1,215 +1,244 @@
 {
-  "schema_version": "1.0.0",
-  "record_id": "attention-kernel-candidates-001",
+  "schema_version": "2.0.0",
+  "record_id": "attention-kernel-candidates-002",
   "visibility": "maintainer_only",
-  "purpose": "Candidate attention kernel implementations, collected to serve as A-tier answers, B-tier expert dispatch bases, or expert references. These are implementations, not primitive operators.",
+  "purpose": "Which attention kernel implementations could serve the attention set, as A-tier answers, B-tier expert dispatch, or expert references. This record annotates the upstream source archive; it does not duplicate it.",
   "collected_on": "2026-09-20",
-  "collection_method": "upstream documentation and repository metadata read directly; every claim below carries the page it came from so it can be re-checked without trusting this file",
 
-  "headline": "The fused attention path is an S5000 story. MATE requires S5000, MT-flashMLA targets compute capability 3.1, and MUTLASS's MP31 work is mp_31 too. mp_31 is S5000; the machine available here is S4000 at mp_22. So the fused-library route the B tier is built around does not exist on the target currently in hand, and the S4000 profile of torch SDPA (five kernels, two assembly SGEMMs plus a softmax) is consistent with a decomposition rather than a fused kernel.",
+  "source_archive": {
+    "branch": "feat/import-musa-attention-set",
+    "tip_commit": "f249b2f",
+    "path": "musa_attention_set",
+    "files": 2126,
+    "manifest": "musa_attention_set/manifest.csv",
+    "research_notes": "musa_attention_set/research_notes.md",
+    "integrations": "musa_attention_set/integrations.md",
+    "verifier": "musa_attention_set/scripts/verify_snapshots.py",
+    "why_not_merged": "The archive is 2126 files and about 676k lines of vendored upstream source. .gitignore already establishes that vendored upstream MUSA sources are not committed and are fetched on demand into third_party/musa-sources/, so merging it here would contradict the convention this repository already set. It stays on its own branch and this record points at it.",
+    "consequence": "Every upstream fact below is transcribed from that archive's manifest.csv and research_notes.md at the commit above, not researched independently. Re-check against the archive before relying on it; the archive's own verifier covers hash and layout integrity, this record only covers which entry can serve which task."
+  },
+
+  "correction_note": "An earlier version of this record claimed the fused attention path was an S5000-only story, on the strength of MATE, MT-flashMLA and MUTLASS each targeting mp_31. That was wrong, and the archive is what shows it: llama.cpp compiles the generic ggml fattn templates for mp_21, mp_22 and mp_31, TileLang-MUSA's deprecated snapshot claims S4000 alongside S5000 and M1000, and torch_musa ships a flash SDP path whose limits are documented. What survives is narrower and more useful: no candidate is a MooreThreads hand-written S4000 attention kernel, and MATE — the library the B-tier contract's argument list matches field for field — requires S5000.",
 
   "candidates": [
     {
-      "candidate_id": "mate_fmha",
-      "name": "MATE FMHA forward (mate.mha_interface, and the flash_attn_3 compatibility wrapper)",
+      "candidate_id": "mate",
+      "name": "MATE (MUSA AI Tensor Engine)",
       "kind": "fused_library",
-      "upstream": {
-        "project": "MATE",
-        "repo": "https://github.com/MooreThreads/mate",
-        "docs": "https://mate-docs.mthreads.com/latest/",
-        "license": "Apache-2.0",
-        "note": "MATE keeps its own version; installing a wrapper (flash_attn_3, flash_mla, sageattention, fmha_sm100, flashinfer-python, flash_kda, deep-gemm) pulls the matching mate package in automatically. Wrapper releases carry the PEP 440 local suffix +musa."
-      },
-      "requirements": {
-        "gpu": "S5000",
-        "driver": ">=3.3.5",
-        "musa_sdk": ">=5.2.0 recommended",
-        "torch_musa": ">=2.7",
-        "python": "3.10 recommended"
-      },
+      "archive_revision": "bbcd8b8c715eabddf663a30e000e0f2ebcb39bc3",
+      "archive_revision_label": "v0.2.6",
+      "archive_path": "musa_attention_set/implementations/mate/v0.2.6",
+      "role": "native-kernel-library",
       "targets": ["s5000_fp16", "s5000_bf16"],
       "dtypes": ["float16", "bfloat16", "float8_e4m3fn", "float8_e5m2"],
-      "entry_points": [
-        "mate.mha_interface.flash_attn_with_kvcache",
-        "mate.mha_interface.flash_attn_combine",
-        "mate.mha_interface.get_scheduler_metadata",
-        "flash_attn_interface.flash_attn_varlen_func"
-      ],
-      "features": {
-        "q_modes": ["normal", "ragged", "padded"],
-        "kv_modes": ["normal", "ragged", "padded", "paged"],
-        "mask_modes": ["none", "causal", "local", "local + attention_chunk"],
-        "score_modes": ["softmax", "softcap"],
-        "outputs": ["out", "softmax_lse"],
-        "optimizations": ["split_kv", "pack_gqa", "scheduler_metadata"],
-        "extensions": ["context_parallel", "learnable_sink"],
-        "rope": ["interleaved", "non_interleaved"],
-        "page_sizes": ["1", "16", "64", "arbitrary"]
-      },
+      "coverage": ["FA3", "FMHA", "paged KV", "FlashMLA", "sparse MLA", "FlashKDA", "SageAttention", "MSA", "FlashInfer wrapper"],
+      "requirements": {"hardware": "S5000; MP31", "driver": ">=3.3.5", "musa_sdk": ">=5.2.0 recommended", "torch_musa": ">=2.7"},
       "limits": {
         "head_dim_max": 512,
-        "alignment_fp16_bf16_without_qv": "Q/K and V head dim must be divisible by 2",
-        "alignment_fp8_without_qv": "divisible by 4",
-        "alignment_with_qv": "divisible by 8, and V head dim <= 512",
-        "layout": "BSHD; the documented tensor shapes are (batch, seqlen, nheads, headdim)"
+        "alignment": "fp16/bf16 head dim divisible by 2 without qv, by 8 with qv",
+        "layout": "BSHD, while this set's B-tier task is BHSD"
       },
-      "why_it_matters": "This is the only candidate that provides a genuine fused forward attention path, and its argument list maps onto the B-tier SDPA task contract almost field for field: window_size (-1, -1) for unbounded, causal, softmax_scale, return_softmax_lse, pack_gqa. It is also BSHD-native while the B-tier task is BHSD, so a MATE-based dispatch has to transpose, which is itself a dispatch-cost question worth grading.",
-      "evidence": [
-        "https://github.com/MooreThreads/mate (Requirements table: GPU S5000)",
-        "https://mate-docs.mthreads.com/latest/api/attention.html",
-        "https://mate-docs.mthreads.com/latest/wrappers/flash_attention_forward_compatibility.html"
-      ]
+      "serves": ["kb_l1_97", "kb_l3_43", "kb_l3_44", "kb_l3_31", "kb_l3_30"],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "The only candidate that is a maintained, centralized fused attention library, and its argument list maps onto this set's B-tier task contract almost field for field: window_size with -1 for unbounded, causal, softmax_scale, return_softmax_lse, pack_gqa. It also requires S5000, which is the fact that constrains the B-tier task. v0.2.5 is archived alongside it for version comparison."
     },
     {
       "candidate_id": "mt_flashmla",
       "name": "MT-flashMLA",
       "kind": "fused_library",
-      "upstream": {
-        "project": "MT-flashMLA",
-        "repo": "https://github.com/MooreThreads/MT-flashMLA",
-        "license": "MIT",
-        "note": "Fork of deepseek-ai/FlashMLA."
-      },
-      "requirements": {
-        "gpu": "MooreThreads GPU, compute capability 3.1",
-        "musa": ">=4.0.0",
-        "torch_musa": ">=2.5.0"
-      },
+      "archive_revision": "c564db4a1b4a447c78973a2978a07b0fa6385843",
+      "archive_revision_label": "main-snapshot",
+      "archive_path": "musa_attention_set/implementations/mt_flashmla/commit-c564db4a1b4a",
+      "role": "native-kernel",
       "targets": ["s5000_fp16", "s5000_bf16"],
       "dtypes": ["bfloat16", "float16"],
-      "entry_points": ["flash_mla.get_mla_metadata", "flash_mla.flash_mla_with_kvcache"],
-      "features": {
-        "mode": "MLA decode",
-        "kvcache": "paged, block size 64",
-        "sequences": "variable length serving",
-        "outputs": ["out", "lse"]
-      },
-      "limits": {
-        "scope": "decoding only, not a general forward attention kernel"
-      },
-      "why_it_matters": "Narrower than MATE and superseded by it for general forward attention, but it is a second, independent mp_31 attention implementation. Useful as a cross-check that a MATE result is not an artifact of one kernel family. Not usable for any entry in the attention set, all of which are forward.",
-      "evidence": ["https://github.com/MooreThreads/MT-flashMLA"]
+      "coverage": ["MLA decode", "paged KV"],
+      "requirements": {"hardware": "MP31", "musa": ">=4.0.0", "torch_musa": ">=2.5.0"},
+      "limits": {"scope": "decoding only, not a general forward attention kernel", "excluded_from_archive": "submodule"},
+      "serves": [],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "Moore Threads' counterpart to DeepSeek's FlashMLA, and independent of MATE, so it is a second opinion on any mp_31 attention result. It serves no entry in this set: every entry is forward attention and this is decode."
     },
     {
-      "candidate_id": "mutlass_fmha",
-      "name": "MUTLASS experimental/fmha (source-level)",
+      "candidate_id": "mutlass",
+      "name": "MUTLASS",
       "kind": "expert_dispatch_source",
-      "upstream": {
-        "project": "MUTLASS",
-        "repo": "https://github.com/MooreThreads/mutlass",
-        "path": "experimental/fmha",
-        "license": "BSD-3-Clause",
-        "note": "Fork of NVIDIA/cutlass. MUTLASS 0.3.0 added a warp-specialized GEMM mainloop targeting the MP31 architecture."
-      },
-      "requirements": {
-        "gpu": "MP31-oriented",
-        "note": "source only; no documented wheel-level entry point"
-      },
+      "archive_revision": "78b349514831ed54a797b717f2fc0534646acff2",
+      "archive_revision_label": "MATE-v0.2.6-dependency",
+      "archive_path": "musa_attention_set/implementations/mutlass/commit-78b349514831",
+      "role": "kernel-template-library",
       "targets": ["s5000_fp16", "s5000_bf16"],
-      "dtypes": ["undocumented_in_repo_metadata"],
-      "entry_points": ["experimental/fmha/fmha_fwd.mu", "experimental/fmha/mla.mu", "experimental/fmha/paged_fmha_fwd.mu"],
-      "features": {
-        "kernels": ["fmha_fwd", "mla", "paged_fmha_fwd"],
-        "layout": "defined by fmha_options.hpp"
-      },
-      "limits": {
-        "usability": "individual .mu files do not compile standalone; they depend on sibling headers, build configuration and a matching MUSA SDK"
-      },
-      "why_it_matters": "This is the kind of source a maintainer reads when writing the expert dispatch or an A-tier kernel, not something to call at runtime. It is the honest answer to 'where does the expert knowledge come from' for mp_31.",
-      "evidence": ["https://github.com/MooreThreads/mutlass/tree/main/experimental/fmha"]
+      "dtypes": ["undocumented_in_archive_manifest"],
+      "coverage": ["FMHA", "paged FMHA", "MLA"],
+      "requirements": {"hardware": "MP31", "musa_toolkit": ">=4.3.4", "note": "README marks these paths as WarpSpecialized"},
+      "limits": {"usability": "source only; individual .mu files depend on sibling headers, build configuration and a matching MUSA SDK", "v0.2.0_note": "the earlier revision carries the early MP31 FA forward"},
+      "serves": ["kb_l1_97"],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "This is the source a maintainer reads when writing an mp_31 expert dispatch or A-tier kernel, not something to call at runtime. It is also the pinned dependency of MATE and MT-flashMLA, so it explains where their kernels come from."
     },
     {
       "candidate_id": "torch_musa_sdpa",
-      "name": "torch_musa SDPA and the muDNN SDP integration",
+      "name": "torch_musa SDPA and the muDNN FlashAttention integration",
       "kind": "fused_library",
-      "upstream": {
-        "project": "torch_musa",
-        "repo": "https://github.com/MooreThreads/torch_musa",
-        "path": "torch_musa/csrc/aten/ops/attention/mudnn/SDP.cpp",
-        "license": "BSD-3-Clause"
-      },
-      "requirements": {
-        "gpu": "not documented as arch-limited in the sources consulted",
-        "note": "the only candidate that plausibly covers mp_22 as well as mp_31"
-      },
+      "archive_revision": "246d43e3525a9102162cbebfb25c067d634d95a2",
+      "archive_revision_label": "2.11.0.post1",
+      "archive_path": "musa_attention_set/implementations/torch_musa/2.11.0.post1",
+      "role": "framework-backend",
       "targets": ["s4000_fp32", "s4000_fp16", "s4000_bf16", "s5000_fp16", "s5000_bf16"],
-      "dtypes": ["undocumented_in_repo_metadata"],
-      "entry_points": ["torch.nn.functional.scaled_dot_product_attention"],
-      "features": {
-        "reached_via": "the framework op, so the submission cannot tell which kernel answered"
-      },
+      "dtypes": ["half", "and others per the release"],
+      "coverage": ["SDPA", "muDNN FlashAttention"],
+      "requirements": {"hardware": "release-dependent", "note": "the only archived candidate that is not pinned to MP31"},
       "limits": {
-        "open_question": "whether the fused muDNN SDP path is selected on mp_22 at all, and for which shapes"
+        "head_dim": "the archive's research notes record that the public SDPA code separates math and flash modes and that the flash path covers only some head dimensions and half precision",
+        "backward": "not supported in the archived version, so this is not a training path",
+        "selection": "the submission reaches this through the framework op, so it cannot tell which kernel answered"
       },
-      "why_it_matters": "This is the route the existing B-tier SDPA task assumes for its fused_library path. The S4000 profile of problem 97 shows five device kernels, two assembly SGEMMs plus a softmax, which is a decomposition rather than a fused kernel. That is one shape at one dtype and does not settle whether the fused path exists on mp_22; it does mean the fused route must be probed per configuration rather than assumed. Resolving this is the first thing probe_sdpa.py should do on the real machine.",
-      "evidence": [
-        "docs/musa/source_inventory.md (problem 97 row, and the attention source paths)",
-        "analysis/pytorch_vs_deepseek_musa/profile_summary.csv (pytorch_kernel_count 5 for problem 97)",
-        "analysis/pytorch_vs_deepseek_musa/README.md section 6 (problem 97 attribution)"
-      ]
+      "serves": ["kb_l1_97", "kb_l3_43", "kb_l3_44", "kb_l3_31", "kb_l3_30"],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "This is the route the B-tier SDPA task assumes for its fused_library path, and the reason the earlier S5000-only claim was wrong. The archive answers part of what was an open question here: a flash path exists but is bounded by head dimension and dtype, which is exactly the kind of boundary a dispatch decision is supposed to discover. Whether any given shape in this set falls inside that boundary is still a measurement, and it is the first thing probe_sdpa.py should settle on the real machine."
+    },
+    {
+      "candidate_id": "llama_cpp_fattn",
+      "name": "llama.cpp ggml FlashAttention templates",
+      "kind": "fused_library",
+      "archive_revision": "d08c7872d6ffe3f059f8647840a29aa390413e27",
+      "archive_revision_label": "master-snapshot",
+      "archive_path": "musa_attention_set/implementations/llama_cpp/commit-d08c7872d6ff",
+      "role": "portable-framework-backend",
+      "targets": ["s4000_fp32", "s4000_fp16", "s4000_bf16", "s5000_fp16", "s5000_bf16"],
+      "dtypes": ["float16", "quantized KV"],
+      "coverage": ["ggml FlashAttention", "quantized KV"],
+      "requirements": {"hardware": "mp_21; mp_22; mp_31", "note": "ggml-musa/CMakeLists.txt compiles the generic ggml-cuda fattn templates for these targets"},
+      "limits": {
+        "provenance": "a portable backend path, not a Moore Threads hand-written kernel, so its performance is not evidence about native MUSA attention quality",
+        "scope": "F16 KV templates with a matrix of ncols1/ncols2 instantiations"
+      },
+      "serves": [],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "This is the candidate that breaks the S5000-only claim: it is the one archived implementation whose build files name mp_22 explicitly. It is also the least integrated with this repository's framework, so serving a KernelBench entry from it would take real work. Recorded as the counterexample that keeps the correction honest."
+    },
+    {
+      "candidate_id": "tilelang_musa_legacy",
+      "name": "TileLang-MUSA, deprecated final snapshot",
+      "kind": "expert_dispatch_source",
+      "archive_revision": "4b59fea16afce49d39d7bca0eb936a14bf472dd1",
+      "archive_revision_label": "deprecated-final-snapshot",
+      "archive_path": "musa_attention_set/implementations/tilelang_musa_legacy/commit-4b59fea16afc",
+      "role": "attention-dsl-examples",
+      "targets": ["s4000_fp32", "s5000_fp16", "s5000_bf16"],
+      "dtypes": ["undocumented_in_archive_manifest"],
+      "coverage": ["FlashAttention", "backward", "linear attention", "MLA decode", "DSA", "NSA"],
+      "requirements": {"hardware": "S5000; S4000; M1000", "note": "upstream lists the tested devices; this repository has not repeated the experiment"},
+      "limits": {
+        "status": "the upstream repository declared end of maintenance and moved to tile-ai/tilelang-musa, archived separately",
+        "type": "DSL examples, so the kernels are generated rather than hand-written .mu"
+      },
+      "serves": [],
+      "validation_status": "upstream-claimed-tested-devices-not-locally-built",
+      "why_it_matters": "The second counterexample to the S5000-only claim, and the only archived source that names S4000 and covers backward. Its status word is the honest one: upstream claims tested devices, nobody here repeated it."
+    },
+    {
+      "candidate_id": "tilelang_musa",
+      "name": "TileLang-MUSA, maintained successor",
+      "kind": "expert_dispatch_source",
+      "archive_revision": "489df49a671356af0d9eb2d7c37e933b226a9063",
+      "archive_revision_label": "maintained-successor-snapshot",
+      "archive_path": "musa_attention_set/implementations/tilelang_musa/commit-489df49a6713",
+      "role": "attention-dsl-backend",
+      "targets": ["s5000_fp16", "s5000_bf16"],
+      "dtypes": ["undocumented_in_archive_manifest"],
+      "coverage": ["FlashAttention", "backward", "block sparse", "sink", "linear", "MLA", "NSA", "SeerAttention"],
+      "requirements": {"hardware": "MUSA common; MP31 fast paths"},
+      "limits": {"broadest_coverage": "the widest attention variant list of any archived candidate"},
+      "serves": [],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "Archived separately from the deprecated snapshot rather than overwriting it, because the two have different hardware claims and coverage. If an A-tier kernel is going to be written from a DSL rather than by hand, this is the starting point."
+    },
+    {
+      "candidate_id": "vllm_musa",
+      "name": "vLLM-MUSA serving kernels",
+      "kind": "expert_dispatch_source",
+      "archive_revision": "235fa5b2938a2ee69173498a87cf223f1751fbbe",
+      "archive_revision_label": "v0.28.0-dev",
+      "archive_path": "musa_attention_set/implementations/vllm_musa/v0.28.0-dev-235fa5b2938a",
+      "role": "serving-kernels-and-backends",
+      "targets": ["s5000_fp16", "s5000_bf16"],
+      "dtypes": ["undocumented_in_archive_manifest"],
+      "coverage": ["DeepSeek-V4 sparse FlashMLA", "indexer", "cache store", "fused QKV RMSNorm", "GLM-5.2 indexer", "tree attention"],
+      "requirements": {"hardware": "release-dependent"},
+      "limits": {"not_all_independent": "the archive records that the ordinary FA and MLA calls here are MATE integrations; only the csrc/musa/attention kernels are archived as independent work"},
+      "serves": [],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "The largest concentration of real .mu attention source in the archive, including a 1356-line indexer_topk. None of it is forward SDPA, so it serves no entry here, but it is the best available evidence of what Moore Threads' own engineers write when the target is a production serving kernel."
+    },
+    {
+      "candidate_id": "paddle_musa",
+      "name": "Paddle-MUSA FlashAttention backend",
+      "kind": "expert_dispatch_source",
+      "archive_revision": "607ef3c045a88d0cda868771c91e862c052be0da",
+      "archive_revision_label": "v3.5.0.r1",
+      "archive_path": "musa_attention_set/implementations/paddle_musa/v3.5.0.r1",
+      "role": "framework-backend",
+      "targets": ["s5000_fp16", "s5000_bf16"],
+      "dtypes": ["undocumented_in_archive_manifest"],
+      "coverage": ["FlashAttention forward and backward", "KV-cache MATE bridge"],
+      "requirements": {"hardware": "S5000"},
+      "limits": {"role": "a framework registration layer over muDNN and MATE rather than an independent kernel"},
+      "serves": [],
+      "validation_status": "provenance-verified-not-built",
+      "why_it_matters": "Third independent framework that landed MUSA attention, and the only one besides MATE that covers backward. It confirms the S5000 concentration without adding a new kernel family."
     },
     {
       "candidate_id": "kb_level3_musa_handwritten",
       "name": "The hand-written MUSA attention kernels already in this repository",
       "kind": "handwritten_kernel",
-      "upstream": {
-        "project": "in-repo",
-        "path": "KernelBench/level3_musa/problem_{28,30,31,32,43,44,50}/model_new.py",
-        "license": "same as this repository"
-      },
-      "requirements": {
-        "gpu": "MTT S4000, tuned for mp_22",
-        "dtype": "float32"
-      },
+      "archive_revision": null,
+      "archive_revision_label": "in-repo",
+      "archive_path": "KernelBench/level3_musa/problem_{28,30,31,32,43,44,50}/model_new.py",
+      "role": "in-repo A-tier answers",
       "targets": ["s4000_fp32"],
       "dtypes": ["float32"],
-      "entry_points": ["ModelNew, per KernelBench convention"],
-      "features": {
-        "designs": [
-          "flash-tile band with shared K/V streaming (43/44/50)",
-          "two-stage register-tiled SGEMM plus global row softmax (31/97)",
-          "one CTA per (window, head) whole-window staging (30)"
-        ]
-      },
+      "coverage": ["flash-tile band with shared K/V streaming (43/44/50)", "two-stage register-tiled SGEMM plus global row softmax (31/97)", "one CTA per (window, head) whole-window staging (30)"],
+      "requirements": {"hardware": "MTT S4000, tuned on mp_22", "dtype": "float32 only"},
       "limits": {
-        "warp_size_sensitivity": "tuned on mp_22 at 128-thread warps with the optimum at 1024 threads per CTA; not transferable to mp_31 at 32-thread warps without re-measuring",
-        "dtype": "float32 only",
+        "warp_size_sensitivity": "tuned at 128-thread warps with the optimum at the 1024-thread CTA ceiling; not transferable to mp_31 at 32-thread warps without re-measuring",
         "shared_memory": "launch configurations are valid only for the head_dim they were measured on"
       },
-      "why_it_matters": "These are the only attention kernels in hand that actually run on the machine available. They are A-tier answers, and they are also the naive-side data the B-tier admission gate needs. They are not candidates for the S5000 fused path.",
-      "evidence": [
-        "docs/musa_attention_tuning_notes.md",
-        "KernelBench/level3_musa/problem_43/model_new.py (FMHA_TILE_* constants)"
-      ]
+      "serves": ["kb_l1_97", "kb_l3_43", "kb_l3_44", "kb_l3_50", "kb_l3_31", "kb_l3_30", "kb_l3_28", "kb_l3_32"],
+      "validation_status": "measured-on-s4000-fp32",
+      "why_it_matters": "The only attention kernels in hand that have actually run on the machine available. They are this set's A-tier answers and the naive-side data the B-tier admission gate needs. They are not candidates for any S5000 fused path."
     },
     {
-      "candidate_id": "tilelang_musa_legacy",
-      "name": "TileLang MUSA legacy snapshot",
-      "kind": "deprecated_source",
-      "upstream": {
-        "project": "TileLang-MUSA",
-        "revision": "4b59fea16afce49d39d7bca0eb936a14bf472dd1",
-        "revision_label": "deprecated-final-snapshot",
-        "license": "MIT"
-      },
-      "requirements": {
-        "note": "snapshot not present locally; see the dangling references in the attention set"
-      },
-      "targets": ["s4000_fp32", "s5000_fp16", "s5000_bf16"],
-      "dtypes": ["undocumented_in_repo_metadata"],
-      "entry_points": [],
-      "features": {},
+      "candidate_id": "kb_few_shot_flash_attn",
+      "name": "The framework's own flash attention few-shot example",
+      "kind": "handwritten_kernel",
+      "archive_revision": null,
+      "archive_revision_label": "in-repo",
+      "archive_path": "src/kernelbench/prompts/few_shot/model_new_ex_flash_attn.py",
+      "role": "in-repo reference kernel shown to models",
+      "targets": ["s4000_fp32"],
+      "dtypes": ["float32"],
+      "coverage": ["tiled flash attention with shared Q/K/V staging and running max and sum"],
+      "requirements": {"note": "CUDA source compiled through torch cpp_extension, so on MUSA it depends on the CUDA-compatible header path or torchada"},
       "limits": {
-        "status": "deprecated upstream; the revision record calls it the final snapshot"
+        "role": "a prompt example, not a benchmarked kernel; it exists to show the submission format",
+        "dtype": "float32 source"
       },
-      "why_it_matters": "Recorded because the project's own source record lists it as an S4000/S5000 kernel reference candidate. Nothing can be said about its actual coverage from here: the snapshot is not in the repository and the revision is deprecated. Treat the claim in the source record as unverified until someone looks at the tree.",
-      "evidence": ["musa_operator_eval/sources/attention-source-001.json"]
+      "serves": [],
+      "validation_status": "in-repo-unmeasured",
+      "why_it_matters": "Relevant because the model under test has already been shown this kernel. Any A-tier answer for an attention entry overlaps with it, which is worth knowing when judging whether a submission is the model's own work or a remembered template. Added after the earlier version of this record missed it."
     }
   ],
 
+  "archive_entries_not_carried_over": {
+    "note": "The archive lists 13 manifest rows across 9 projects. Every one is represented above except the MATE and MUTLASS duplicate revisions, which are archived for version comparison under the same candidate ids.",
+    "registered_but_not_archived": ["SGLang (reuses MATE and torchada)", "vLLM-Omni (reuses MATE)", "InfiniCore (pins MATE v0.1.3)", "torchada (redirects to MATE and torch_musa flash_attn_interface)"],
+    "excluded_by_the_archive": ["Gitee teaching forks whose provenance chain does not close", "non-MUSA implementations of the same algorithms", "binary-only releases with no public source", "MusaCoder, which generates kernels rather than being a fixed-version attention library"]
+  },
+
   "gaps": [
-    "No candidate provides a fused forward attention path on mp_22. If the B-tier attention task is to be graded on S4000, either a fused path must be established there (probe first) or the task's library_policy must be rewritten so that fused_library is not the expected path.",
-    "Nothing here has been executed. Every dtypes, limits and alignment field above is transcribed from upstream documentation, not measured on hardware.",
-    "MT-flashMLA and MUTLASS fmha are mp_31 decode/source-level artifacts; the attention set is entirely forward attention, so neither maps onto a current entry."
+    "No candidate is a Moore Threads hand-written S4000 attention kernel. The mp_22 paths that exist are a portable ggml template build and a deprecated DSL snapshot whose tested devices are upstream's claim, not a local measurement.",
+    "Whether any shape in this set falls inside the torch_musa flash path's head-dimension and dtype window is unmeasured. That is the decisive question for the B-tier task's fused_library expectation on S4000, and probe_sdpa.py should answer it first.",
+    "Nothing in this record has been built or run. Every field is transcribed from the archive's manifest and research notes, which themselves record provenance rather than performance."
   ]
 }

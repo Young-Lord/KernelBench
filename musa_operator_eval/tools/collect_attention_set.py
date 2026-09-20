@@ -221,22 +221,62 @@ def verify_entry(entry: dict) -> Tuple[dict, List[str]]:
 
 
 def verify_dangling(entries: List[dict]) -> List[dict]:
-    """Re-check every provenance path that is recorded as missing."""
+    """Re-check every source path the set records.
+
+    Two kinds live here and they are not the same defect. A path with
+    `resolves_on` is expected to be absent from this working tree but present in
+    that branch, which is where the vendored upstream archive lives. A path
+    without it is expected to be absent everywhere, and the check is simply that
+    it stayed that way.
+    """
     results = []
     for reference in entries:
         path = REPO_TOP / reference["path"]
-        results.append({
-            **reference,
-            "still_missing": not path.exists(),
-        })
+        exists_locally = path.exists()
+        record = {**reference, "exists_locally": exists_locally}
+        if reference.get("resolves_on"):
+            record["branch_reachable"] = _path_exists_in_ref(reference["path"], reference["resolves_on"])
+        results.append(record)
     return results
+
+
+def _path_exists_in_ref(path: str, branch: str) -> Optional[bool]:
+    """Whether `path` exists in `branch`, or None when the branch is unreachable.
+
+    Three ref spellings are tried, because how the archive is reachable depends
+    on how it was fetched: a single-branch clone has no `origin/<branch>`, and a
+    fresh `git fetch origin <branch>` leaves only FETCH_HEAD. None rather than
+    False on an unreachable branch, because never having fetched the archive is a
+    different situation from the archive being gone.
+
+    The two failure messages are distinct (`invalid object name` for a ref that
+    does not resolve, `path ... does not exist` for a path inside a ref that
+    does), which is what makes the distinction reliable.
+    """
+    import subprocess
+
+    for ref in (branch, f"origin/{branch}", "FETCH_HEAD"):
+        try:
+            completed = subprocess.run(
+                ["git", "cat-file", "-e", f"{ref}:{path}"],
+                cwd=REPO_TOP, capture_output=True, timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if completed.returncode == 0:
+            return True
+        if b"invalid object name" not in completed.stderr:
+            # The ref resolved and the path inside it did not. No other spelling
+            # will do better.
+            return False
+    return None
 
 
 # ---------------------------------------------------------------------------
 # Kernel candidates
 # ---------------------------------------------------------------------------
 
-CANDIDATE_KINDS = ("fused_library", "expert_dispatch_source", "handwritten_kernel", "deprecated_source")
+CANDIDATE_KINDS = ("fused_library", "expert_dispatch_source", "handwritten_kernel")
 
 REQUIRED_CANDIDATE_FIELDS = ("candidate_id", "name", "kind", "targets", "why_it_matters")
 
@@ -246,13 +286,22 @@ def load_candidate_record(manifest: dict) -> dict:
     return json.loads((REPO_TOP / manifest["kernel_candidates_record"]).read_text(encoding="utf-8"))
 
 
+def _has_evidence(candidate: dict) -> bool:
+    """Whether a candidate points at something a reader can go and check.
+
+    Archive-derived candidates carry `archive_path` into the source archive;
+    in-repo ones carry the same field pointing at a repository path. A bare
+    `evidence` list of upstream pages is accepted for anything that is neither.
+    """
+    return bool(candidate.get("archive_path") or candidate.get("evidence"))
+
+
 def verify_candidates(manifest: dict, record: dict) -> Tuple[List[dict], List[str]]:
     """Check the candidate record and the entry-to-candidate references.
 
-    A candidate that claims a target the set does not define, or an entry that
-    points at a candidate that does not exist, both mean the set and its
-    candidates have drifted apart, which is exactly the state that makes an
-    inventory useless.
+    The two files declare the same relationship from opposite ends: an entry
+    lists `candidate_kernels`, a candidate lists `serves`. Checking only one
+    direction would let the two drift, so both are checked and they must agree.
     """
     problems: List[str] = []
     candidates = record.get("candidates") or []
@@ -261,6 +310,7 @@ def verify_candidates(manifest: dict, record: dict) -> Tuple[List[dict], List[st
 
     known_targets = {target["target_id"] for target in manifest["targets"]}
     known_ids = set()
+    declared_serves: Dict[str, List[str]] = {}
 
     for candidate in candidates:
         candidate_id = candidate.get("candidate_id", "<unnamed>")
@@ -275,13 +325,31 @@ def verify_candidates(manifest: dict, record: dict) -> Tuple[List[dict], List[st
         for target in candidate.get("targets", []):
             if target not in known_targets:
                 problems.append(f"candidate {candidate_id}: unknown target {target!r}")
-        if record.get("visibility") == "maintainer_only" and not candidate.get("evidence"):
-            problems.append(f"candidate {candidate_id}: a claim with no evidence is not checkable")
+        if not _has_evidence(candidate):
+            problems.append(
+                f"candidate {candidate_id}: a claim with no evidence is not checkable"
+            )
+        declared_serves[candidate_id] = list(candidate.get("serves") or [])
+
+    known_entry_ids = {entry["entry_id"] for entry in manifest["entries"]}
+    for candidate_id, entry_ids in declared_serves.items():
+        for entry_id in entry_ids:
+            if entry_id not in known_entry_ids:
+                problems.append(f"candidate {candidate_id}: serves unknown entry {entry_id!r}")
 
     for entry in manifest["entries"]:
-        for candidate_id in entry.get("candidate_kernels", []):
+        declared = list(entry.get("candidate_kernels") or [])
+        entry_id = entry["entry_id"]
+        for candidate_id in declared:
             if candidate_id not in known_ids:
-                problems.append(f"entry {entry['entry_id']}: unknown candidate kernel {candidate_id!r}")
+                problems.append(f"entry {entry_id}: unknown candidate kernel {candidate_id!r}")
+        # The reverse view, so a one-sided edit is caught.
+        for candidate_id, entry_ids in declared_serves.items():
+            if (entry_id in entry_ids) != (candidate_id in declared):
+                problems.append(
+                    f"{entry_id} and candidate {candidate_id} disagree: "
+                    f"entry says {candidate_id in declared}, candidate says {entry_id in entry_ids}"
+                )
 
     return candidates, problems
 
@@ -560,28 +628,49 @@ def render_index(manifest: dict, facts: List[dict], dangling: List[dict], level1
     )
     lines.append("")
 
-    lines.append("## 悬空引用")
+    lines.append("## 引用路径状态")
     lines.append("")
     lines.append(
-        "以下路径被仓库内的文件引用为上游快照，但不在本仓库、也不在本机。"
-        "本工具每次都会重新检查，确认其状态没有变化。"
+        "这些路径被仓库内的文件引用为上游快照。要分清两种情况："
+        f"标了分支的，本工作树里没有、但在 `{manifest['source_archive']['branch']}` 上存在——"
+        "上游源码归档就放在那条分支，没有合进来，因为 `.gitignore` 已经确立了"
+        "「vendored 上游 MUSA 源码按需取、不入库」的约定；"
+        "没标分支的，是本机也确实不存在。"
     )
     lines.append("")
-    lines.append("| 引用方 | 路径 | 角色 | 状态 |")
-    lines.append("|---|---|---|---|")
+    lines.append("| 引用方 | 路径 | 角色 | 本工作树 | 所在分支 |")
+    lines.append("|---|---|---|---|---|")
     for reference in dangling:
-        state = "仍缺失" if reference["still_missing"] else "已就位"
+        branch = reference.get("resolves_on") or "—"
+        if not reference["exists_locally"]:
+            state = "缺失（预期）"
+        else:
+            state = "已就位"
+        if reference.get("branch_reachable") is True:
+            state += " / 分支可达"
+        elif reference.get("branch_reachable") is False:
+            state += " / 分支上也没有"
+        elif reference.get("resolves_on"):
+            state += " / 分支未取到"
         lines.append(
-            f"| `{reference['referenced_by']}` | `{reference['path']}` | {reference['role']} | {state} |"
+            f"| `{reference['referenced_by']}` | `{reference['path']}` | {reference['role']} | {state} | `{branch}` |"
         )
     lines.append("")
-    lines.append(
-        "> 影响：`musa_operator_eval/sources/attention-source-001.json` 是 B 类题面的溯源记录，"
-        "四个快照都不在仓库里；`docs/musa/source_inventory.md` 声称的五个源码树同样缺失。"
-        "这不影响评测链路（评测不读这些快照），但影响 B 类题面里"
-        "「上游实现」这一段的可复核性。"
-    )
-    lines.append("")
+
+    families = manifest.get("related_problem_families") or []
+    if families:
+        lines.append("## 相邻但未纳入的题目族")
+        lines.append("")
+        lines.append("这些族有明显的 attention 成分，但不作为本 set 的条目，理由各自记录。")
+        lines.append("")
+        for family in families:
+            lines.append(f"### `{family['family_id']}` — {family['problems']} 题")
+            lines.append("")
+            lines.append(f"- 位置：`{family['path']}`")
+            lines.append(f"- 是什么：{family['what_it_is']}")
+            lines.append(f"- 为什么不作为条目：{family['why_not_entries_here']}")
+            lines.append(f"- 为什么仍然记录：{family['why_recorded']}")
+            lines.append("")
 
     return "\n".join(lines) + "\n"
 
@@ -610,11 +699,21 @@ def main() -> int:
         problems.extend(entry_problems)
 
     dangling = verify_dangling(manifest["dangling_references"])
-    newly_present = [reference for reference in dangling if not reference["still_missing"]]
-    if newly_present:
-        for reference in newly_present:
+    for reference in dangling:
+        if reference.get("resolves_on"):
+            if reference["exists_locally"]:
+                problems.append(
+                    f"{reference['path']} is now in the working tree; "
+                    f"the source archive is not supposed to be vendored here"
+                )
+            if reference.get("branch_reachable") is False:
+                problems.append(
+                    f"{reference['path']} is gone from {reference['resolves_on']}; "
+                    f"{reference['referenced_by']} points at nothing"
+                )
+        elif reference["exists_locally"]:
             problems.append(
-                f"provenance path {reference['path']} now exists; "
+                f"{reference['path']} now exists locally; "
                 f"{reference['referenced_by']} should be updated"
             )
 
@@ -639,11 +738,13 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
+    on_branch = sum(1 for reference in dangling if reference.get("resolves_on"))
+    absent = len(dangling) - on_branch
     print(
         f"attention set OK: {len(manifest['entries'])} entries, "
         f"{sum(len(fact.get('measurements', [])) for fact in facts)} measurements verified, "
         f"{len(candidates)} kernel candidates, "
-        f"{len(dangling)} dangling references still dangling"
+        f"{on_branch} source paths on the archive branch, {absent} absent everywhere"
     )
     if not args.check:
         print(f"wrote {INDEX.relative_to(REPO_TOP)}")

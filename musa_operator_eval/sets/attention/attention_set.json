@@ -37,7 +37,7 @@
   "entries": [
     {
       "entry_id": "kb_l1_97",
-      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "mutlass_fmha", "kb_level3_musa_handwritten"],
+      "candidate_kernels": ["mate", "torch_musa_sdpa", "mutlass", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 1, "problem_id": 97, "name": "ScaledDotProductAttention"},
       "reference": {"path": "KernelBench/level1/97_ScaledDotProductAttention.py", "entrypoint": "Model"},
       "attention_kind": "dense_mha",
@@ -63,7 +63,7 @@
     },
     {
       "entry_id": "kb_l3_43",
-      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
+      "candidate_kernels": ["mate", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 43, "name": "MinGPTCausalAttention"},
       "reference": {"path": "KernelBench/level3/43_MinGPTCausalAttention.py", "entrypoint": "Model"},
       "attention_kind": "causal_mha",
@@ -88,7 +88,7 @@
     },
     {
       "entry_id": "kb_l3_44",
-      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
+      "candidate_kernels": ["mate", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 44, "name": "MiniGPTBlock"},
       "reference": {"path": "KernelBench/level3/44_MiniGPTBlock.py", "entrypoint": "Model"},
       "attention_kind": "causal_mha",
@@ -132,6 +132,7 @@
     },
     {
       "entry_id": "kb_l3_31",
+      "candidate_kernels": ["mate", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 31, "name": "VisionAttention"},
       "reference": {"path": "KernelBench/level3/31_VisionAttention.py", "entrypoint": "Model"},
       "attention_kind": "dense_mha",
@@ -160,7 +161,7 @@
     },
     {
       "entry_id": "kb_l3_30",
-      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
+      "candidate_kernels": ["mate", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 30, "name": "SwinTransformerV2"},
       "reference": {"path": "KernelBench/level3/30_SwinTransformerV2.py", "entrypoint": "Model"},
       "attention_kind": "windowed_mha",
@@ -226,16 +227,44 @@
     }
   ],
 
+  "source_archive": {
+    "branch": "feat/import-musa-attention-set",
+    "tip_commit": "f249b2f",
+    "path": "musa_attention_set",
+    "files": 2126,
+    "note": "The upstream attention source archive. It is not present in this working tree and is not merged here, because .gitignore already establishes that vendored upstream MUSA sources are fetched on demand rather than committed. Paths below that name it resolve on that branch."
+  },
+
   "dangling_references": [
-    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/torch_musa/2.11.0.post1", "role": "framework SDPA and muDNN attention integration"},
-    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/mate/v0.2.6", "role": "MP31 fused attention library candidate"},
-    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/mutlass/commit-78b349514831", "role": "FMHA implementation dependency and expert reference"},
-    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/tilelang_musa_legacy/commit-4b59fea16afc", "role": "S4000/S5000 kernel reference candidate"},
-    {"referenced_by": "KernelBench/level3_musa/problem_43/model_new.py", "path": "musa_attention_set archive", "role": "design reference named in the kernel header comment"},
-    {"referenced_by": "docs/musa/source_inventory.md", "path": "torch_musa/", "role": "level 1 upstream source tree"},
-    {"referenced_by": "docs/musa/source_inventory.md", "path": "mutlass/", "role": "level 1 upstream source tree"},
-    {"referenced_by": "docs/musa/source_inventory.md", "path": "mate/", "role": "level 1 upstream source tree"},
-    {"referenced_by": "docs/musa/source_inventory.md", "path": "MNN/", "role": "level 1 upstream source tree"},
-    {"referenced_by": "docs/musa/source_inventory.md", "path": "MT-flashMLA/", "role": "level 1 upstream source tree"}
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/torch_musa/2.11.0.post1", "role": "framework SDPA and muDNN attention integration", "resolves_on": "feat/import-musa-attention-set"},
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/mate/v0.2.6", "role": "MP31 fused attention library candidate", "resolves_on": "feat/import-musa-attention-set"},
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/mutlass/commit-78b349514831", "role": "FMHA implementation dependency and expert reference", "resolves_on": "feat/import-musa-attention-set"},
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/tilelang_musa_legacy/commit-4b59fea16afc", "role": "S4000/S5000 kernel reference candidate", "resolves_on": "feat/import-musa-attention-set"},
+    {"referenced_by": "KernelBench/level3_musa/problem_43/model_new.py", "path": "musa_attention_set", "role": "design reference named in the kernel header comment", "resolves_on": "feat/import-musa-attention-set"},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "torch_musa/", "role": "level 1 upstream source tree", "resolves_on": null},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "mutlass/", "role": "level 1 upstream source tree", "resolves_on": null},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "mate/", "role": "level 1 upstream source tree", "resolves_on": null},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "MNN/", "role": "level 1 upstream source tree", "resolves_on": null},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "MT-flashMLA/", "role": "level 1 upstream source tree", "resolves_on": null}
+  ],
+
+  "related_problem_families": [
+    {
+      "family_id": "kernelbench_level4_transformers",
+      "path": "KernelBench/level4/",
+      "problems": 20,
+      "what_it_is": "Twenty end-to-end HuggingFace causal language models driven through AutoModelForCausalLM.from_pretrained: gpt2, gpt-neo-2.7B, opt-1.3b, bart-large, bigbird-roberta-base, electra-small, reformer-enwik8, at sequence lengths of 32 up to 4095.",
+      "why_not_entries_here": "These are whole-model forwards, not attention kernels. Scoring them would measure the whole graph, and the attention core is one contributor among many that the problem does not isolate.",
+      "why_recorded": "They are where the attention lengths and head counts that matter in production actually live: seq 4095 and 2047 shapes do not appear anywhere in this set's entries, and every one of them runs a real attention path. They are the natural A-tier targets if the question shifts from 'is the attention kernel good' to 'is the model fast', and they need transformers plus model weights, so they were out of scope for a no-hardware pass.",
+      "added_by_commit": "400074e"
+    },
+    {
+      "family_id": "kernelbench_level2_softmax_fusions",
+      "path": "KernelBench/level2/",
+      "problems": 10,
+      "what_it_is": "Ten problems whose op chain contains softmax but no attention: for example ConvTranspose3d_Mean_Add_Softmax_Tanh_Scaling, Matmul_Dropout_Softmax, Gemm_BatchNorm_Scaling_Softmax.",
+      "why_not_entries_here": "Softmax over a channel axis in a conv chain is not attention. Grouping them in would inflate the attention set with problems whose bottleneck is the convolution.",
+      "why_recorded": "A softmax-shape search over level2 is how these get mistaken for attention problems, and they were in the initial filename sweep for exactly that reason. Recording the decision here keeps the next sweep from repeating it."
+    }
   ]
 }
