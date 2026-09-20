@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -15,6 +16,14 @@ def load_tool(filename, module_name):
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def load_manifest_tool():
+    return load_tool("make_private_manifest.py", "make_private_manifest")
+
+
+def load_generator():
+    return load_tool("generate_cases.py", "generate_cases")
 
 
 def load_probe():
@@ -185,6 +194,117 @@ class ProbeStatusTests(unittest.TestCase):
         result = load_collector().run(["false"])
         self.assertEqual(result["status"], "error")
         self.assertIn("exit code", result["reason"])
+
+
+class PrivateManifestGoldenPathTests(unittest.TestCase):
+    """The private manifest must name golden files the generator actually writes.
+
+    §4.3 requires a golden path per case, and the manifest is the only place a
+    hidden case's golden is described. The field was written but the layout it
+    named (`golden/<case_id>/tensors.json`) was not the layout the generator
+    produces (`<case_id>/golden/tensors.json`), so every path pointed at nothing.
+    """
+
+    EVIDENCE = {"gaps": [
+        {"case_id": "hidden_gap_001", "reason": "unsupported_shape",
+         "expected_path": "library_composition", "evidence": "recorded on device"},
+        {"case_id": "hidden_gap_002", "reason": "unsupported_shape",
+         "expected_path": "library_composition", "evidence": "recorded on device"},
+        {"case_id": "hidden_gap_003", "reason": "semantic_mismatch",
+         "expected_path": "custom_fallback", "evidence": "recorded on device"},
+        {"case_id": "hidden_gap_004", "reason": "semantic_mismatch",
+         "expected_path": "custom_fallback", "evidence": "recorded on device"},
+    ]}
+
+    def manifest(self):
+        return load_manifest_tool().build_manifest(self.EVIDENCE)
+
+    def test_every_case_names_its_golden_under_its_own_case_directory(self):
+        manifest = self.manifest()
+        self.assertTrue(manifest["cases"])
+        for case in manifest["cases"]:
+            with self.subTest(case=case["case_id"]):
+                self.assertEqual(case["golden"], f"{case['case_id']}/golden/tensors.json")
+
+    def test_the_golden_path_is_where_the_generator_writes(self):
+        """Cross-tool: the manifest's layout and the generator's layout agree."""
+        manifest = self.manifest()
+        generator = load_generator()
+        case = {"case_id": "hidden_gap_001", "seed": 5, "dtype": "float16",
+                "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 8, "S_kv": 8, "D": 16},
+                "attributes": {"scale": 0.25, "causal": False, "window_left": -1, "window_right": -1},
+                "distribution": "normal"}
+        with tempfile.TemporaryDirectory() as temporary:
+            generator.generate_case(case, Path(temporary))
+            recorded = next(c["golden"] for c in manifest["cases"] if c["case_id"] == "hidden_gap_001")
+            self.assertTrue((Path(temporary) / recorded).is_file(), recorded)
+
+    def test_the_manifest_names_a_generator_a_consumer_can_recompute_with(self):
+        manifest = self.manifest()
+        tool = manifest["case_generation"]["tool"]
+        self.assertTrue((ROOT.parent / tool).is_file(), f"{tool} does not exist")
+        self.assertTrue(manifest["case_generation"]["deterministic"])
+
+    def test_the_visibility_is_private(self):
+        self.assertEqual(self.manifest()["visibility"], "private")
+
+    def test_too_few_gaps_is_refused(self):
+        thin = {"gaps": self.EVIDENCE["gaps"][:2]}
+        with self.assertRaises(ValueError):
+            load_manifest_tool().build_manifest(thin)
+
+    def test_one_reason_category_is_refused(self):
+        """Two categories are the minimum; a single cause is not a gap set."""
+        same_reason = {"gaps": [
+            {"case_id": "hidden_gap_001", "reason": "unsupported_shape",
+             "expected_path": "library_composition", "evidence": "x"},
+            {"case_id": "hidden_gap_002", "reason": "unsupported_shape",
+             "expected_path": "library_composition", "evidence": "x"},
+            {"case_id": "hidden_gap_003", "reason": "unsupported_shape",
+             "expected_path": "library_composition", "evidence": "x"},
+        ]}
+        with self.assertRaises(ValueError):
+            load_manifest_tool().build_manifest(same_reason)
+
+
+class PrivateManifestSchemaTests(unittest.TestCase):
+    """The private manifest has to satisfy `schemas/case_manifest.schema.json` (§4.8).
+
+    Two defects lived here at once: the manifest carried no `case_generation`
+    block, and its gap cases were labelled with free text instead of §4.3's tag
+    vocabulary. Both are visible from `tools/validate_schemas.py`.
+    """
+
+    # §4.3's tag enum, shared by the public and the hidden list.
+    CASE_TAGS = {"smoke", "correctness", "boundary", "non_aligned", "extreme", "perf", "generalization"}
+
+    EVIDENCE = PrivateManifestGoldenPathTests.EVIDENCE
+
+    def manifest(self):
+        return load_manifest_tool().build_manifest(self.EVIDENCE)
+
+    def validator(self):
+        path = ROOT / "tools" / "validate_schemas.py"
+        if not path.is_file():
+            self.skipTest("validate_schemas.py is not present")
+        return load_tool("validate_schemas.py", "validate_schemas")
+
+    def test_every_case_tag_is_in_the_fixed_vocabulary(self):
+        for case in self.manifest()["cases"]:
+            with self.subTest(case=case["case_id"]):
+                self.assertIn(case["tag"], self.CASE_TAGS)
+
+    def test_the_manifest_declares_its_case_generation(self):
+        generation = self.manifest().get("case_generation")
+        self.assertIsNotNone(generation, "§4.8 needs the block, and the schema requires it")
+        self.assertTrue(generation["deterministic"])
+
+    def test_the_manifest_validates_against_the_case_manifest_schema(self):
+        validator = self.validator()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "cases.private.json"
+            path.write_text(json.dumps(self.manifest()), encoding="utf-8")
+            self.assertEqual(validator.validate_document(path, "case_manifest", engine="stdlib"), [])
 
 
 if __name__ == "__main__":

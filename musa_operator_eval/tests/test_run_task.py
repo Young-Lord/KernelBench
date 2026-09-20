@@ -8,9 +8,12 @@ module-level defaults. These tests pin that mapping down without a device:
 - a wrong `case_parameters` mapping is caught before anything reaches hardware;
 - the appended overrides actually re-bind the reference's defaults, verified by
   executing the specialized source against a stub torch;
-- the static report says yes for a valid submission and no for a broken one.
+- the static report says yes for a valid submission and no for a broken one;
+- a failing stage short-circuits and returns the named code for that stage;
+- a case's `golden` field is actually cross-checked, and the ways it can fail
+  (absent, corrupt, contradicted by a recomputation) are told apart.
 
-Stdlib only.
+Stdlib only; the golden tests use the real generator, which needs numpy.
 
 Run with either:
     python -m unittest musa_operator_eval.tests.test_run_task -v
@@ -29,12 +32,20 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO_TOP = ROOT.parent
 
-_spec = importlib.util.spec_from_file_location("run_task", ROOT / "tools" / "run_task.py")
-assert _spec is not None and _spec.loader is not None
-run_task = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(run_task)
+
+def _load_tool(module_name, path):
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+run_task = _load_tool("run_task", ROOT / "tools" / "run_task.py")
+exit_codes = _load_tool("exit_codes", ROOT / "tools" / "exit_codes.py")
 
 TASK_DIR = ROOT / "tasks" / "sdpa_forward_pilot"
+GENERATE_CASES_PATH = ROOT / "tools" / "generate_cases.py"
 
 VALID_SUBMISSION = """
 import json
@@ -330,7 +341,8 @@ class CliTests(unittest.TestCase):
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertTrue(report["summary"]["passed_overall"])
 
-    def test_static_only_cli_returns_one_for_a_broken_submission(self):
+    def test_static_only_cli_returns_the_forbidden_api_code_for_a_broken_submission(self):
+        """A bare 1 would not say *why*; the code names the failing audit category."""
         with tempfile.TemporaryDirectory() as temporary:
             submission = Path(temporary) / "model_new.py"
             submission.write_text("import triton\n", encoding="utf-8")
@@ -348,7 +360,416 @@ class CliTests(unittest.TestCase):
             finally:
                 sys.argv = argv
 
-            self.assertEqual(exit_code, 1)
+            self.assertEqual(exit_code, exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API)
+
+    def test_missing_submission_is_an_input_failure_not_a_traceback(self):
+        argv = sys.argv
+        sys.argv = [
+            "run_task.py",
+            "--task-dir", str(TASK_DIR),
+            "--submission", "/nonexistent/model_new.py",
+            "--static-only",
+        ]
+        try:
+            exit_code = run_task.main()
+        finally:
+            sys.argv = argv
+        self.assertEqual(exit_code, exit_codes.EXIT_INPUT_UNAVAILABLE)
+
+    def test_the_report_carries_the_code_and_its_meaning(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            submission = Path(temporary) / "model_new.py"
+            submission.write_text("import triton\n", encoding="utf-8")
+            report_path = Path(temporary) / "report.json"
+
+            argv = sys.argv
+            sys.argv = [
+                "run_task.py",
+                "--task-dir", str(TASK_DIR),
+                "--submission", str(submission),
+                "--static-only",
+                "--output", str(report_path),
+            ]
+            try:
+                run_task.main()
+            finally:
+                sys.argv = argv
+
+            summary = json.loads(report_path.read_text(encoding="utf-8"))["summary"]
+            self.assertEqual(summary["exit_code"], exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API)
+            self.assertFalse(summary["passed_overall"])
+            self.assertIn("forbids", summary["exit_code_description"])
+
+
+class ExitCodeTests(unittest.TestCase):
+    def test_every_named_code_is_distinct(self):
+        """Two failure categories sharing a number would defeat the whole table."""
+        named = {
+            name: value
+            for name, value in vars(exit_codes).items()
+            if name.startswith("EXIT_") and not name.startswith("EXIT_CODE_") and isinstance(value, int)
+        }
+        self.assertEqual(len(set(named.values())), len(named), f"duplicate exit code values: {named}")
+
+    def test_codes_fit_a_process_status_and_reserve_zero_for_success(self):
+        for name, value in vars(exit_codes).items():
+            if name.startswith("EXIT_") and name != "EXIT_CODE_DESCRIPTIONS" and isinstance(value, int):
+                self.assertLess(value, 128, name)
+                self.assertGreaterEqual(value, 0, name)
+        self.assertEqual(exit_codes.EXIT_OK, 0)
+
+    def test_every_code_has_a_description(self):
+        for name, value in vars(exit_codes).items():
+            if name.startswith("EXIT_") and name != "EXIT_CODE_DESCRIPTIONS" and isinstance(value, int):
+                self.assertIn(value, exit_codes.EXIT_CODE_DESCRIPTIONS, name)
+
+    def test_describe_says_so_for_an_unknown_code(self):
+        self.assertIn("unknown", exit_codes.describe(123))
+
+    def test_static_audit_findings_map_onto_named_categories(self):
+        cases = [
+            ("Imports non-whitelisted library: triton", exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API),
+            ("Uses torch computation op: torch.matmul", exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API),
+            ("Calls a fused attention entry point: scaled_dot_product_attention",
+             exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API),
+            ("Dispatches on a version string: __version__", exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API),
+            ("Missing __global__ kernel definition", exit_codes.EXIT_STATIC_AUDIT_DEVICE_SOURCE),
+            ("Missing load_inline, cpp_extension, or MUSAExtension for compilation",
+             exit_codes.EXIT_STATIC_AUDIT_DEVICE_SOURCE),
+            ("dispatch trace is missing required fields: selected_path", exit_codes.EXIT_DISPATCH_TRACE_MISMATCH),
+            ("Computes the product in host-side numpy", exit_codes.EXIT_STATIC_AUDIT_HOST_COMPUTATION),
+            ("Answers from a lookup table of logits", exit_codes.EXIT_STATIC_AUDIT_TABLE_LOOKUP),
+            ("Edited a file the starter manifest freezes", exit_codes.EXIT_STATIC_AUDIT_OUT_OF_SCOPE_MODIFICATION),
+            ("something nobody classified", exit_codes.EXIT_STATIC_AUDIT_UNCLASSIFIED),
+        ]
+        for message, expected in cases:
+            with self.subTest(message=message):
+                self.assertEqual(run_task.classify_static_audit_errors([message]), expected)
+
+    def test_the_first_classified_finding_decides(self):
+        code = run_task.classify_static_audit_errors([
+            "a finding nobody classified",
+            "Imports non-whitelisted library: triton",
+        ])
+        self.assertEqual(code, exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API)
+
+
+class ShortCircuitTests(unittest.TestCase):
+    """A failed stage must not be followed by the next one (§4.7)."""
+
+    def setUp(self):
+        self.task, self.cases, self.problem_source = run_task.load_task(TASK_DIR)
+        self.cases_list = self.cases["cases"]
+
+    def test_a_broken_case_mapping_stops_before_the_audit(self):
+        """The audit is not run at all, rather than run and aggregated."""
+        task = dict(self.task)
+        task["case_parameters"] = {"attributes.not_a_field": "x"}
+        report = run_task.static_report(task, self.cases_list, self.problem_source, VALID_SUBMISSION)
+        self.assertFalse(report["static_audit"]["ran"])
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_CASE_GENERATION_FAILED)
+        self.assertNotIn("static_audit", report["stages"])
+
+    def test_a_failed_audit_stops_after_the_audit(self):
+        report = run_task.static_report(
+            self.task, self.cases_list, self.problem_source, "import triton\n"
+        )
+        self.assertTrue(report["static_audit"]["ran"])
+        self.assertIn("static_audit", report["stages"])
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API)
+
+    def test_a_missing_golden_stops_the_static_pass_before_the_audit(self):
+        """A declared golden that was never generated must not read as a pass.
+
+        The static pass is where this is easiest to get wrong: no device is
+        involved, so nothing forces the golden to exist, and a report that says
+        "passed" while the cross-check never happened is the illusion §4.3's
+        field exists to prevent.
+        """
+        case = dict(self.cases_list[0])
+        case["golden"] = "smoke_001/golden/tensors.json"
+        with tempfile.TemporaryDirectory() as temporary:
+            report = run_task.static_report(
+                self.task, [case], self.problem_source, VALID_SUBMISSION,
+                generated_dir=Path(temporary),
+            )
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_GOLDEN_MISSING)
+        self.assertFalse(report["summary"]["passed_overall"])
+        self.assertEqual(report["golden"]["counts"], {"missing": 1})
+        self.assertFalse(report["static_audit"]["ran"])
+        self.assertNotIn("static_audit", report["stages"])
+
+    def test_a_static_pass_without_a_generated_dir_says_so(self):
+        report = run_task.static_report(
+            self.task, self.cases_list, self.problem_source, VALID_SUBMISSION
+        )
+        self.assertFalse(report["golden"]["ran"])
+        self.assertTrue(report["golden"]["reason"])
+        self.assertNotIn("golden", report["stages"])
+
+    def _stub_rows(self, outcomes):
+        """Return a run_case stand-in driven by case id -> row overrides."""
+        def _run(task, case, *args, **kwargs):
+            row = {
+                "case_id": case["case_id"],
+                "expected_path": case.get("expected_path"),
+                "compiled": True,
+                "correctness": True,
+                "dispatch_trace_passed": True,
+                "runtime": 1.0,
+                "ref_runtime": 2.0,
+                "static_audit_errors": [],
+                "dispatch_trace_errors": [],
+                "passed": True,
+                "errors": [],
+            }
+            row.update(outcomes.get(case["case_id"], {}))
+            if "correctness" in outcomes.get(case["case_id"], {}):
+                row["passed"] = (
+                    row["correctness"]
+                    and row["dispatch_trace_passed"] is not False
+                    and not row["errors"]
+                )
+            return row
+        return _run
+
+    def test_a_failed_stage_skips_every_later_stage(self):
+        cases = [
+            {"case_id": "c1", "tag": "correctness"},
+            {"case_id": "b1", "tag": "boundary"},
+            {"case_id": "p1", "tag": "perf"},
+        ]
+        outcomes = {"c1": {"correctness": False}}
+        with mock.patch.object(run_task, "run_case", self._stub_rows(outcomes)):
+            rows, exit_code = run_task.evaluate_cases(
+                self.task, cases, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False,
+            )
+        self.assertEqual(exit_code, exit_codes.EXIT_CORRECTNESS_FAILED)
+        by_id = {row["case_id"]: row for row in rows}
+        self.assertFalse(by_id["c1"].get("skipped", False))
+        self.assertTrue(by_id["b1"]["skipped"])
+        self.assertTrue(by_id["p1"]["skipped"])
+        self.assertIn("correctness stage failed", by_id["p1"]["reason"])
+
+    def test_every_case_within_a_failed_stage_still_runs(self):
+        """Short-circuit is per stage: one wrong answer must not hide the others."""
+        cases = [
+            {"case_id": "c1", "tag": "correctness"},
+            {"case_id": "c2", "tag": "correctness"},
+            {"case_id": "p1", "tag": "perf"},
+        ]
+        outcomes = {"c1": {"correctness": False}, "c2": {"correctness": False}}
+        with mock.patch.object(run_task, "run_case", self._stub_rows(outcomes)):
+            rows, exit_code = run_task.evaluate_cases(
+                self.task, cases, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False,
+            )
+        self.assertEqual(exit_code, exit_codes.EXIT_CORRECTNESS_FAILED)
+        by_id = {row["case_id"]: row for row in rows}
+        self.assertFalse(by_id["c2"].get("skipped", False))
+        self.assertTrue(by_id["p1"]["skipped"])
+
+    def test_a_boundary_failure_only_skips_stages_after_it(self):
+        cases = [
+            {"case_id": "c1", "tag": "correctness"},
+            {"case_id": "b1", "tag": "non_aligned"},
+            {"case_id": "s1", "tag": "stability"},
+        ]
+        outcomes = {"b1": {"correctness": False}}
+        with mock.patch.object(run_task, "run_case", self._stub_rows(outcomes)):
+            rows, exit_code = run_task.evaluate_cases(
+                self.task, cases, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False,
+            )
+        self.assertEqual(exit_code, exit_codes.EXIT_BOUNDARY_FAILED)
+        by_id = {row["case_id"]: row for row in rows}
+        self.assertFalse(by_id["c1"].get("skipped", False))
+        self.assertFalse(by_id["b1"].get("skipped", False))
+        self.assertTrue(by_id["s1"]["skipped"])
+
+    def test_a_perf_case_without_a_measurement_reports_the_perf_code(self):
+        cases = [{"case_id": "p1", "tag": "perf"}]
+        outcomes = {"p1": {"runtime": -1.0, "passed": False}}
+        with mock.patch.object(run_task, "run_case", self._stub_rows(outcomes)):
+            _, exit_code = run_task.evaluate_cases(
+                self.task, cases, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False,
+            )
+        self.assertEqual(exit_code, exit_codes.EXIT_PERFORMANCE_FAILED)
+
+    def test_the_full_pipeline_stops_at_the_audit(self):
+        """evaluate_task must not reach the case loop once the audit rejects."""
+        cases_manifest = {"cases": self.cases_list}
+        with mock.patch.object(run_task, "golden_stage", return_value={
+            "results": [], "counts": {}, "fatal": False, "exit_code": exit_codes.EXIT_OK,
+        }), mock.patch.object(run_task, "run_static_audit", return_value=(
+            False, ["Calls a fused attention entry point: scaled_dot_product_attention"], [],
+        )), mock.patch.object(run_task, "run_case", side_effect=AssertionError("must not run")):
+            report = run_task.evaluate_task(
+                self.task, cases_manifest, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False, Path("/tmp/unused"),
+            )
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API)
+        self.assertNotIn("evaluation", report["stages"])
+
+    def test_the_full_pipeline_stops_at_a_fatal_golden_stage(self):
+        cases_manifest = {"cases": self.cases_list}
+        with mock.patch.object(run_task, "golden_stage", return_value={
+            "results": [], "counts": {"missing": 5},
+            "fatal": True, "exit_code": exit_codes.EXIT_GOLDEN_MISSING,
+        }), mock.patch.object(run_task, "run_static_audit", side_effect=AssertionError("must not run")):
+            report = run_task.evaluate_task(
+                self.task, cases_manifest, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False, Path("/tmp/unused"),
+            )
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_GOLDEN_MISSING)
+        self.assertNotIn("static_audit", report["stages"])
+
+    def test_a_missing_device_stack_reports_the_environment_code(self):
+        """No torch is a machine fact, not a submission verdict."""
+        cases_manifest = {"cases": self.cases_list}
+        with mock.patch.object(run_task, "golden_stage", return_value={
+            "results": [], "counts": {}, "fatal": False, "exit_code": exit_codes.EXIT_OK,
+        }), mock.patch.object(run_task, "run_static_audit", return_value=(True, [], [])), \
+                mock.patch.object(run_task, "run_case", side_effect=ImportError("No module named 'torch'")):
+            report = run_task.evaluate_task(
+                self.task, cases_manifest, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False, Path("/tmp/unused"),
+            )
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_ENVIRONMENT_UNAVAILABLE)
+        self.assertIn("torch", report["environment"]["error"])
+
+    def test_a_case_row_carries_the_golden_status_it_was_given(self):
+        cases = [{"case_id": "c1", "tag": "correctness"}]
+        golden_results = {"c1": {"status": "verified", "verified": True}}
+        with mock.patch.object(run_task, "run_case", self._stub_rows({})):
+            rows, _ = run_task.evaluate_cases(
+                self.task, cases, self.problem_source, VALID_SUBMISSION,
+                "musa", "fp16", 1, 5, False, golden_results,
+            )
+        self.assertEqual(rows[0]["golden"], {"status": "verified", "verified": True})
+
+    def test_the_full_pipeline_stops_at_a_bad_precision(self):
+        cases_manifest = {"cases": self.cases_list}
+        report = run_task.evaluate_task(
+            self.task, cases_manifest, self.problem_source, VALID_SUBMISSION,
+            "musa", "fp32", 1, 5, False, Path("/tmp/unused"),
+        )
+        self.assertEqual(report["summary"]["exit_code"], exit_codes.EXIT_PRECISION_CONTRACT_MISMATCH)
+        self.assertEqual(report["stages"], [])
+
+
+class GoldenTests(unittest.TestCase):
+    """The `golden` field must be consumed, and honestly reported.
+
+    `make_private_manifest.py` has always written the field; nothing read it.
+    These tests use the real generator so the cross-check is exercised against
+    the layout it actually produces, not a hand-written stand-in.
+    """
+
+    CASE = {
+        "case_id": "smoke_001",
+        "tag": "smoke",
+        "seed": 1101,
+        "dtype": "float16",
+        "shape": {"B": 1, "H_q": 4, "H_kv": 4, "S_q": 16, "S_kv": 16, "D": 32},
+        "attributes": {"scale": 0.1767766952966369, "causal": False, "window_left": -1, "window_right": -1},
+        "distribution": "normal",
+    }
+
+    def setUp(self):
+        self.generator = _load_tool("musa_generate_cases", GENERATE_CASES_PATH)
+        self.case = dict(self.CASE)
+        self.case["golden"] = "smoke_001/golden/tensors.json"
+        self.temporary = tempfile.TemporaryDirectory()
+        self.generated_root = Path(self.temporary.name)
+        self.generator.generate_case(self.case, self.generated_root)
+
+    def tearDown(self):
+        self.temporary.cleanup()
+
+    def _verify(self, case, tool=GENERATE_CASES_PATH):
+        return run_task.verify_golden(case, self.generated_root, Path(tool))
+
+    def test_the_generator_and_the_manifest_agree_on_the_layout(self):
+        """The path the manifest names is the path the generator writes."""
+        self.assertTrue((self.generated_root / self.case["golden"]).is_file())
+
+    def test_a_fresh_recomputation_reproduces_the_stored_golden(self):
+        result = self._verify(self.case)
+        self.assertEqual(result["status"], "verified")
+        self.assertTrue(result["verified"])
+        self.assertEqual(sorted(result["tensors"]), ["lse", "output"])
+
+    def test_a_corrupted_blob_is_unusable_rather_than_verified(self):
+        blob = self.generated_root / "smoke_001" / "golden" / "output.bin"
+        data = bytearray(blob.read_bytes())
+        data[0] ^= 0xFF
+        blob.write_bytes(bytes(data))
+        result = self._verify(self.case)
+        self.assertEqual(result["status"], "unusable")
+        self.assertFalse(result["verified"])
+        self.assertTrue(any("sha256" in message for message in result["errors"]))
+
+    def test_a_golden_from_a_different_seed_is_a_mismatch(self):
+        drifted = dict(self.case)
+        drifted["seed"] = self.case["seed"] + 1
+        result = self._verify(drifted)
+        self.assertEqual(result["status"], "mismatch")
+        self.assertFalse(result["verified"])
+        self.assertTrue(result["errors"])
+
+    def test_an_absent_golden_is_reported_as_missing(self):
+        absent = dict(self.case)
+        absent["golden"] = "smoke_001/golden/not_here.json"
+        result = self._verify(absent)
+        self.assertEqual(result["status"], "missing")
+        self.assertFalse(result["verified"])
+        self.assertIn("never generated", result["detail"])
+
+    def test_a_case_without_the_field_says_so_instead_of_passing(self):
+        result = self._verify({"case_id": "smoke_001"})
+        self.assertEqual(result["status"], "not_declared")
+        self.assertFalse(result["verified"])
+
+    def test_without_a_generator_the_golden_is_only_checked_for_integrity(self):
+        result = run_task.verify_golden(self.case, self.generated_root, None)
+        self.assertEqual(result["status"], "integrity_only")
+        self.assertFalse(result["verified"], "an unchecked cross-check is not a verified one")
+        self.assertIn("not against a recomputation", result["detail"])
+
+    def test_a_manifest_without_a_tool_stays_integrity_only(self):
+        result = run_task.verify_golden(self.case, self.generated_root, run_task.resolve_generation_tool({}))
+        self.assertEqual(result["status"], "integrity_only")
+
+    def test_the_golden_stage_counts_every_status_and_flags_the_fatal_ones(self):
+        absent = dict(self.case)
+        absent["case_id"] = "smoke_002"
+        absent["golden"] = "smoke_002/golden/tensors.json"
+        stage = run_task.golden_stage(
+            [self.case, absent],
+            self.generated_root,
+            {"tool": "musa_operator_eval/tools/generate_cases.py"},
+        )
+        self.assertEqual(stage["counts"], {"verified": 1, "missing": 1})
+        self.assertTrue(stage["fatal"])
+        self.assertEqual(stage["exit_code"], exit_codes.EXIT_GOLDEN_MISSING)
+
+    def test_the_golden_stage_is_not_fatal_when_every_declared_golden_verifies(self):
+        stage = run_task.golden_stage(
+            [self.case],
+            self.generated_root,
+            {"tool": "musa_operator_eval/tools/generate_cases.py"},
+        )
+        self.assertFalse(stage["fatal"])
+        self.assertEqual(stage["exit_code"], exit_codes.EXIT_OK)
+
+    def test_an_unparsable_golden_is_unusable(self):
+        (self.generated_root / "smoke_001" / "golden" / "tensors.json").write_text("{not json", encoding="utf-8")
+        result = self._verify(self.case)
+        self.assertEqual(result["status"], "unusable")
+        self.assertFalse(result["verified"])
 
 
 if __name__ == "__main__":
