@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0.0",
+  "family": "sdpa_forward",
+  "set_entry": "kb_l1_97",
+  "note": "Identical to the A-tier package of this entry: §4.2 of the guide requires the two tiers of one family to share a semantic contract, or their goldens stop being interchangeable.",
+  "layout": "BHSD, contiguous",
+  "mask": "none",
+  "scale": "1/sqrt(D), applied by the framework call",
+  "softmax": "max-shift, accumulation in float32",
+  "gqa": "not present; H_q == H_kv",
+  "determinism": "no dropout, so the reference is deterministic"
+}

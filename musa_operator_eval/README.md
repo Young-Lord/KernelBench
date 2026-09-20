@@ -11,14 +11,28 @@ implemented here. It runs on the KernelBench framework in `src/kernelbench/`:
 `scripts/generate_baseline_time.py`. This directory only carries what the
 framework has no notion of.
 
-The two tracks are not packaged the same way, because they do not need the same
-things. An A-tier task *is* a KernelBench problem: the repository already holds
-107 of them under `KernelBench/level1_musa/` and `KernelBench/level3_musa/`, each
-with its hand-written answer, and `sets/attention/` records which of them belong
-to the attention family and what has been measured on them. Nothing here
-redefines them. A B-tier task does need a package, because a tier that is graded
-on how the answer was reached has to state that contract somewhere, and only
-`tasks/sdpa_forward_pilot/` does.
+Both tracks are packaged, but around different things.
+
+An A-tier task *is* a KernelBench problem: the repository holds 107 of them under
+`KernelBench/level1_musa/` and `KernelBench/level3_musa/`, each with its
+hand-written answer, and `sets/attention/` records which of them belong to the
+attention family and what has been measured on them. An A-tier package does not
+redefine that problem — it carries a copy of it, verified byte for byte by a test,
+and adds the contract around it: what the submission may not call, at which
+precision it is graded, and which cases it is shown.
+
+A B-tier task needs something the framework has no notion of, because it is graded
+on how the answer was reached rather than only on what it computes: a library
+whitelist, a dispatch order, and a trace the submission has to emit. Its package
+carries that contract. `sdpa_forward_pilot/` is the family-scoped form of it — its
+problem generalises the attention core past what any one KernelBench entry asks
+for, so it names the entries it covers instead of claiming one.
+
+Task directories are named `<set entry>_a` and `<set entry>_b`, and each package
+declares the entry it realises under `set_entry`. `tests/test_task_packages.py`
+checks that every entry the set marks eligible has a package for that tier, and
+that the two tiers of one entry share a semantic contract.
+
 
 The one framework change that lives with this work: a problem file may declare
 `TIER` and `LIBRARY_POLICY`, and `eval.py` reads them to pick the matching
@@ -28,13 +42,26 @@ source-audit rule set. See `kernel_static_checker.static_audit_kernel`.
 
 - `tasks/`: agent-visible task packages. Each carries a KernelBench-format
   `problem.py` (`Model`, `get_inputs`, `get_init_inputs`, plus `TIER` and
-  `LIBRARY_POLICY`), a `semantics.json` contract, a `PROMPT.md`, and the case list.
-  Only B-tier tasks need one.
+  `LIBRARY_POLICY` for the B tier), a `semantics.json` contract, a `PROMPT.md`,
+  the public case list, and a `tensor_contract` naming the dtypes it is graded
+  at. A task names the environment it was measured on rather than describing it.
+  `problem.py` declares its own tier, so the driver refuses to run it at a
+  precision the contract does not permit.
+- `environments/`: one agent-visible record per machine configuration, named
+  after its `snapshot_id`. A task points here; the device model, architecture and
+  component versions live here and nowhere else, so a machine is described once
+  and two tasks on it cannot disagree about what it is. Full snapshots, which
+  keep the serial number and GPU UUID, live under `private/environments/`.
 - `sets/`: curated operator sets, each with a hand-written manifest and a
   generated index. `sets/attention/` covers the attention family and records
   which A-tier answer, which measurement and which candidate kernel already
-  exist for every entry.
-- `agent_reference/`: sanitized, agent-visible capability descriptions.
+  exist for every entry. A set is a maintainer ledger — it names the A-tier
+  answer path and the candidate implementations, so it is never agent-visible.
+- `agent_reference/`: sanitized, agent-visible capability descriptions, one file
+  per family, named `<family>_capabilities.json`. A capability boundary belongs
+  to the library and the operation rather than to one task, so every task in a
+  family names the same file; the name is what stops a second family from
+  quietly inheriting a first family's boundaries.
 - `sources/`: provenance and license records. `attention-source-001.json` covers the upstream snapshots a task derives from; `attention-kernel-candidates.json` inventories candidate attention kernel implementations and which target each can serve.
 - `templates/`: baseline and gap-evidence templates.
 - `tools/`: capability probing, environment capture, case generation, admission gate, task driver, set verification.
@@ -112,6 +139,10 @@ python musa_operator_eval/tests/test_reference_and_cases.py -v
 
 # Task driver: case specialization, static report, CLI (stdlib only)
 python musa_operator_eval/tests/test_run_task.py -v
+
+# Task packages: set coverage, A-tier reference identity, contracts, cases, and
+# that the driver honours the precision a task's tensor contract permits
+python musa_operator_eval/tests/test_task_packages.py -v
 
 # Attention set: measurement drift, generated index well-formedness (stdlib only)
 python musa_operator_eval/tests/test_attention_set.py -v

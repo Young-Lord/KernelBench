@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "mingpt_block_a_v0",
+  "tier": "A_kernel",
+  "visibility": "public",
+  "set_entry": "kb_l3_44",
+  "case_generation": {
+    "tool": "musa_operator_eval/tools/generate_cases.py",
+    "deterministic": true,
+    "note": "Cases describe parameters and seeds only. Inputs are produced by the problem file's own get_inputs, so this manifest does not pin them."
+  },
+  "cases": [
+    {
+      "case_id": "smoke_001",
+      "tag": "smoke",
+      "seed": 1101,
+      "shape": {
+        "B": 1,
+        "S": 64,
+        "S_max": 64,
+        "C": 128,
+        "H": 4
+      }
+    },
+    {
+      "case_id": "smoke_002",
+      "tag": "smoke",
+      "seed": 1102,
+      "shape": {
+        "B": 2,
+        "S": 128,
+        "S_max": 128,
+        "C": 256,
+        "H": 8
+      }
+    },
+    {
+      "case_id": "smoke_003",
+      "tag": "smoke",
+      "seed": 1103,
+      "shape": {
+        "B": 2,
+        "S": 129,
+        "S_max": 129,
+        "C": 192,
+        "H": 6
+      }
+    }
+  ]
+}

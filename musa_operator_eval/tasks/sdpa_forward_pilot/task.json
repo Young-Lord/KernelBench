@@ -4,6 +4,11 @@
   "id": "sdpa_forward_b_v0",
   "name": "SDPA forward library dispatch",
   "family": "sdpa_forward",
+  "scope": "family",
+  "covers": {
+    "entries": ["kb_l1_97", "kb_l3_43", "kb_l3_31", "kb_l3_30"],
+    "note": "This package is scoped to the family, not to one entry: its problem generalises the attention core to causal, windowed and grouped-query configurations that no single KernelBench entry asks for. Each of the entries it covers also has an entry-scoped package that reproduces that entry's own problem, because §4.2 makes an A/B pair share one semantic contract and this package's contract is the wider one."
+  },
   "source": {
     "project": "attention-source-001",
     "revision": "snapshot-20260901",
@@ -13,9 +18,10 @@
     "snapshot_revision": "2026-09-01"
   },
   "target_environment": {
-    "device_families": ["MTT S4000", "MTT S5000"],
-    "architectures": ["mp_22", "mp_31"],
-    "toolkit_constraint": "exact version is fixed by the active environment snapshot"
+    "snapshot_id": "musa-5f9d7b9dd1233a68",
+    "record": "environments/musa-5f9d7b9dd1233a68.public.json",
+    "backend": "musa",
+    "note": "The task names the environment it was measured in and leaves the device model, architecture and component versions in that record. One machine is described once, so a second task on the same machine cannot disagree with this one about what the machine is. Latencies are comparable only within one snapshot_id."
   },
   "tensor_contract": {
     "input_dtypes": ["float16", "bfloat16"],
@@ -38,6 +44,7 @@
   },
   "problem_file": "problem.py",
   "reference": "problem.py:Model",
+  "capability_reference": "agent_reference/sdpa_forward_capabilities.json",
   "case_parameters": {
     "attributes.scale": "default_scale",
     "attributes.causal": "default_causal",
@@ -52,12 +59,21 @@
   },
   "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
   "outputs": {"required": ["output", "dispatch_trace"]},
+  "admission": {
+    "status": "measured",
+    "decision": "admit",
+    "gate": "geometric mean of naive_library_composition / expert_dispatch over the hidden cases where both pass",
+    "threshold": 1.3,
+    "evidence": "private/sdpa_forward_b_v0/admission.json",
+    "note": "The gate was run on the target environment. The per-case ratios and the hidden cases they were measured on are maintainer assets and are not reproduced in this file."
+  },
   "library_policy": {
     "allowed_libraries": ["libmusa", "libmudnn"],
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
     "case_id_env_var": "KB_DISPATCH_CASE_ID",
+    "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
     "minimum_gap_cases": 3,
     "required_gap_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch"]
   }

@@ -35,6 +35,23 @@ DEFAULT_TASK_DIR = ROOT / "tasks" / "sdpa_forward_pilot"
 
 CASE_OVERRIDE_HEADER = "# --- case overrides injected by run_task.py for {case_id} ---"
 
+# The driver's precision vocabulary, mapped onto the dtype names a task's
+# `tensor_contract` uses. Keeping the mapping in one place is what lets the flag
+# be checked against the contract instead of trusted.
+PRECISION_DTYPE_NAMES = {"fp32": "float32", "fp16": "float16", "bf16": "bfloat16"}
+
+
+def allowed_precisions(task: dict) -> List[str]:
+    """The precisions a task's tensor contract permits, in the driver's vocabulary.
+
+    The A tier was measured at float32 and the fused path the B tier exists to
+    exercise does not answer float32 at all. `--precision` is a free flag, so
+    without this check a run at the wrong precision produces a plausible report
+    of a different task's behaviour and nothing says so.
+    """
+    dtypes = (task.get("tensor_contract") or {}).get("input_dtypes") or []
+    return [name for name, dtype in PRECISION_DTYPE_NAMES.items() if dtype in dtypes]
+
 
 def load_task(task_dir: Path, cases_path: Optional[Path] = None) -> Tuple[dict, dict, str]:
     """Load the contract, the case list and the reference source for a task.
@@ -266,6 +283,16 @@ def main() -> int:
     if args.static_only:
         report = static_report(task, cases, problem_source, submission_source)
     else:
+        permitted = allowed_precisions(task)
+        if args.precision not in permitted:
+            print(
+                f"refusing to run {task.get('id')} at --precision {args.precision}: its tensor "
+                f"contract permits {permitted or 'no precision at all'}. The task was measured at "
+                f"the permitted precision, so a run at another one reports a different task's "
+                f"behaviour without saying so.",
+                file=sys.stderr,
+            )
+            return 2
         rows = [
             run_case(
                 task,

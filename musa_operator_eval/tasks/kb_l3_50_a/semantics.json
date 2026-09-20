@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "family": "relu_attention",
+  "set_entry": "kb_l3_50",
+  "note": "The A tier and the B tier of one family share this contract, so their goldens and case generators stay interchangeable.",
+  "input": "x of shape (B, S, C), not pre-split Q/K/V",
+  "projections": "one fused in-projection to 3C, split into q/k/v; the reference defines an out-projection but never applies it, so the output keeps the head layout",
+  "mask": "causal, top-left, applied before the activation",
+  "activation": "ReLU on the masked scores, in place of Softmax",
+  "normalisation": "none: there is no denominator, so the output is a plain weighted sum",
+  "determinism": "no dropout anywhere, so the reference is deterministic",
+  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer; input length equals max_seqlen in every case"
+}

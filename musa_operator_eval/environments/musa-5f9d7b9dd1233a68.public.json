@@ -1,0 +1,194 @@
+{
+  "schema_version": "2.0.0",
+  "status": "complete",
+  "missing_required_fields": [],
+  "snapshot_id": "musa-5f9d7b9dd1233a68",
+  "visibility": "redacted",
+  "captured_at": "2026-09-20T12:22:54Z",
+  "hardware": {
+    "device_name": "MTT S4000",
+    "architecture": "mp_22",
+    "architecture_source": "torch.musa device properties",
+    "device_count": 1
+  },
+  "software": {
+    "driver": "2.7.0",
+    "driver_release": "Driver Version:20241025 release kuae1.3.0_musa3.1.0 c64ecd8ad@20241024",
+    "driver_commit": "c64ecd8ad",
+    "musa_toolkit": "3.1.0",
+    "mudnn": "2.7.0",
+    "mublas": "1.6.0"
+  },
+  "toolkit_components": {
+    "musa_toolkits": {
+      "status": "ok",
+      "version": "3.1.0",
+      "git branch": "kuae1.3.0_musa3.1.0",
+      "git tag": "No tag",
+      "commit id": "38fe8761d291e32cad642435d9f84c97e4a37bba",
+      "commit date": "2024-09-05 19:33:56 +0800"
+    },
+    "mcc": {
+      "status": "ok",
+      "version": "3.1.0",
+      "git branch": "kuae1.3.0_musa3.1.0",
+      "git tag": "No tag",
+      "commit id": "baf70da0ba9f1a95a844726d8b2c28a1365b886a",
+      "commit date": "2024-10-08 16:20:58 +0800"
+    },
+    "mccl": {
+      "status": "ok",
+      "version": "2.11.4",
+      "build archs": "22",
+      "git branch": "kuae1.3.0_musa3.1.0_mccl1.7.0",
+      "git tag": "No tag",
+      "commit id": "3354f892e15c13ef74b6d7d1bee317c11f9d0af6",
+      "commit date": "2024-06-18 11:21:07 +0800"
+    },
+    "musa_runtime": {
+      "status": "ok",
+      "version": "3.1.0",
+      "git branch": "kuae1.3.0_musa3.1.0",
+      "git tag": "No tag",
+      "commit id": "7b1fcc028ea2604d0571afb18b3662c25edd1512",
+      "commit date": "2024-10-24 06:47:08 +0000",
+      "related": {
+        "driver_dependency": {
+          "git branch": "kuae1.3.0_musa3.1.0",
+          "git tag": "No tag",
+          "commit id": "c64ecd8ad4fa3fd696a5eba63f01e9c8b42c7924",
+          "commit date": "2024-10-24 06:42:43 +0000"
+        }
+      }
+    },
+    "mudnn": {
+      "status": "ok",
+      "version": "2.7.0",
+      "git branch": "kuae1.3.0_musa3.1.0_mudnn2.7.0",
+      "git tag": "No tag",
+      "commit id": "2fa2f81bf0d77fa977ee398f37a3fdfc6d18cfb1",
+      "commit date": "2024-09-14 16:31:08 +0800"
+    },
+    "mublas": {
+      "status": "ok",
+      "version": "1.6.0",
+      "build archs": "21,22",
+      "git branch": "kuae1.3.0_musa3.1.0_mublas1.6.0",
+      "git tag": "No tag",
+      "commit id": "7bd80754907ffe182da297f54737c74f6e4d4e09",
+      "commit date": "2024-09-30 11:42:09 +0800"
+    },
+    "mufft": {
+      "status": "ok",
+      "version": "1.6.0",
+      "build archs": "21;22",
+      "git branch": "kuae1.3.0_musa3.1.0_muFFT1.6.0",
+      "git tag": "No tag",
+      "commit id": "a4790e6ac030a68fb033928c54b2d5044d33cf9e",
+      "commit date": "2024-08-23 10:33:45 +0800"
+    },
+    "muPP": {
+      "status": "ok",
+      "version": "1.7.0",
+      "build archs": "21;22",
+      "git branch": "kuae1.3.0_musa3.1.0_muPP1.7.0",
+      "git tag": "20241024_develop",
+      "commit id": "f0e7e1c596943e2fe98e14ff096e3c2f2c877247",
+      "commit date": "2024-08-23 10:42:21 +0800"
+    },
+    "murand": {
+      "status": "ok",
+      "version": "1.0.0",
+      "build archs": "21;22",
+      "git branch": "kuae1.3.0_musa3.1.0_muRand1.0.0",
+      "git tag": "20241024_develop",
+      "commit id": "bc218b10bf4ab6454fe03816297478391ee6d503",
+      "commit date": "2024-05-17 15:37:47 +0800"
+    },
+    "musolver": {
+      "status": "ok",
+      "version": "1.0.0",
+      "build archs": "21,22",
+      "git branch": "kuae1.3.0_musa3.1.0_musolver1.0.0",
+      "git tag": "No tag",
+      "commit id": "65e4a393fa32b27068a993d8bf080645dd16f534",
+      "commit date": "2024-08-29 10:20:23 +0800"
+    },
+    "musparse": {
+      "status": "ok",
+      "version": "1.1.0",
+      "build archs": "21,22",
+      "git branch": "kuae1.3.0_musa3.1.0_musparse1.1.0",
+      "git tag": "20240909_develop",
+      "commit id": "73a84b13534251f7d0ea4d832c9f11839914c59a",
+      "commit date": "2024-08-23 10:32:58 +0800"
+    },
+    "musify": {
+      "status": "ok",
+      "version": "1.0.0",
+      "git branch": "kuae1.3.0_musa3.1.0_musify1.0.0",
+      "commit id": "d0720f523c8744a882484be081133054ebd9012f",
+      "commit date": "2024-08-23 11:19:27 +0800"
+    },
+    "CUB": {
+      "status": "ok",
+      "version": "1.12.1",
+      "git branch": "musa-1.12.1",
+      "commit id": "5ffbaa4336090806eacfb46394cc8b66cea2b0e5",
+      "commit date": "2024-09-13 16:27:37 +0800"
+    },
+    "Thrust": {
+      "status": "ok",
+      "version": "1.12.1",
+      "git branch": "musa-1.12.1",
+      "commit id": "5a5e67602f52056122186cd5c07d3fc540274ea6",
+      "commit date": "2024-09-14 09:00:20 +0800"
+    }
+  },
+  "device_properties_via_torch": {
+    "status": "ok",
+    "device_count": 1,
+    "name": "MTT S4000",
+    "major": 2,
+    "minor": 2,
+    "multi_processor_count": 56,
+    "total_memory_mb": 49061
+  },
+  "cgroup_limits": {
+    "memory_max": {
+      "value": "107374182400",
+      "source": "/sys/fs/cgroup/memory.max"
+    },
+    "cpu_max": {
+      "value": "1500000 100000",
+      "source": "/sys/fs/cgroup/cpu.max"
+    },
+    "cpu_quota": {
+      "value": null,
+      "reason": "no cgroup file readable"
+    },
+    "cpu_period": {
+      "value": null,
+      "reason": "no cgroup file readable"
+    },
+    "pids_max": {
+      "value": "20480",
+      "source": "/sys/fs/cgroup/pids.max"
+    }
+  },
+  "python_stack": {
+    "torch": "2.2.0a0+git8ac9b20",
+    "torch_musa": "1.3.0",
+    "torchvision": "0.17.2+c1d70fe",
+    "torchada": "0.1.74",
+    "numpy": "1.26.4",
+    "packaging": "24.2",
+    "python": "3.10.8 (main, Nov 24 2022, 14:13:03) [GCC 11.2.0]",
+    "torch_musa_build": "81caf0a4aebcbfac26c6f93acbc66132bdcd66b0",
+    "torch_musa_version_string": "1.3.0+81caf0a"
+  },
+  "build": {
+    "flags": [],
+    "fast_math": false
+  }
+}

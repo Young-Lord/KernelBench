@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0.0",
+  "tier": "A_kernel",
+  "id": "vision_attention_a_v0",
+  "name": "Vision attention block",
+  "family": "sdpa_forward",
+  "set_entry": "kb_l3_31",
+  "source": {
+    "project": "KernelBench problem set",
+    "problem": "KernelBench/level3/31_VisionAttention.py",
+    "record": "sources/attention-source-001.json",
+    "note": "The A-tier reference is the KernelBench problem itself; this package adds the contract around it rather than redefining it."
+  },
+  "target_environment": {
+    "snapshot_id": "musa-5f9d7b9dd1233a68",
+    "record": "environments/musa-5f9d7b9dd1233a68.public.json",
+    "backend": "musa",
+    "note": "The task names the environment it was measured in and leaves the device model, architecture and component versions in that record. Latencies are comparable only within one snapshot_id."
+  },
+  "problem_file": "problem.py",
+  "reference": "problem.py:Model",
+  "case_parameters": {
+    "shape.B": "batch_size",
+    "shape.H": "image_height",
+    "shape.W": "image_width"
+  },
+  "tolerances": {
+    "atol": 0.01,
+    "rtol": 0.01,
+    "max_abs_error": 0.05
+  },
+  "tensor_contract": {
+    "input_dtypes": [
+      "float32"
+    ],
+    "accumulation_dtype": "float32",
+    "note": "float32 only, which is what every A-tier measurement in sets/attention was taken at and what the hand-written kernels in this repository were tuned for."
+  },
+  "prohibited": [
+    "muDNN",
+    "muBLAS",
+    "SDPA",
+    "ATen",
+    "CUDA residue",
+    "host-side tensor math",
+    "network fetch",
+    "lookup tables"
+  ],
+  "submission": {
+    "entrypoint": "ModelNew",
+    "language": "python",
+    "fallback_kernel": "musa_inline",
+    "note": "KernelBench-style submission: a Python module defining ModelNew, with no library compute in the core."
+  },
+  "attempt_budget": {
+    "max_attempts": 20,
+    "wall_time_seconds": 7200
+  },
+  "outputs": {
+    "required": [
+      "output"
+    ]
+  },
+  "scoring": {
+    "speedup": "upstream_musa_baseline_latency / submission_latency",
+    "ranking": "A-kernel track only; never merged or averaged with the B-library track"
+  }
+}

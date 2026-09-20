@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "family": "sdpa_forward",
+  "set_entry": "kb_l3_31",
+  "note": "The A tier and the B tier of one family share this contract, so their goldens and case generators stay interchangeable.",
+  "input": "x of shape (B, C, H, W)",
+  "reshape": "x is viewed as (B, C, H*W), permuted to (H*W, B, C), attended, then mapped back to (B, C, H, W)",
+  "attention": "self-attention over the H*W tokens with the framework's default 1/sqrt(D) scale and no mask",
+  "head_split": "D = C / num_heads, fixed at 32 by the problem defaults",
+  "norm": "LayerNorm over the channel axis, applied to the attention output plus the residual input",
+  "residual": "the residual is added inside the norm, not before it",
+  "determinism": "no dropout, so the reference is deterministic",
+  "sequence_length": "S = H*W is a derived quantity; changing H or W changes it"
+}

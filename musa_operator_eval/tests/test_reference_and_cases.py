@@ -1,6 +1,7 @@
 import ast
 import importlib.util
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -46,6 +47,7 @@ class TierContractConsistencyTests(unittest.TestCase):
         self.policy = read_library_policy_from_problem()
         self.task = json.loads((TASK_DIR / "task.json").read_text(encoding="utf-8"))
         self.declared = self.task["library_policy"]
+        self.capabilities = json.loads((ROOT / self.task["capability_reference"]).read_text(encoding="utf-8"))
 
     def test_tier_agrees(self):
         self.assertEqual(self.task["tier"], "B_library")
@@ -78,13 +80,10 @@ class TierContractConsistencyTests(unittest.TestCase):
         self.assertEqual(tuple(self.policy["required_trace_fields"]), tuple(transport.REQUIRED_TRACE_FIELDS))
 
     def test_dispatch_order_matches_the_capability_reference(self):
-        capabilities = json.loads((ROOT / "agent_reference" / "attention_capabilities.json").read_text(encoding="utf-8"))
-        self.assertEqual(self.policy["dispatch_order"], capabilities["dispatch_contract"]["ordered_paths"])
+        self.assertEqual(self.policy["dispatch_order"], self.capabilities["dispatch_contract"]["ordered_paths"])
 
     def test_gap_reasons_come_from_the_declared_vocabulary(self):
-        vocabulary = set(json.loads(
-            (ROOT / "agent_reference" / "attention_capabilities.json").read_text(encoding="utf-8")
-        )["dispatch_contract"]["failure_reasons"])
+        vocabulary = set(self.capabilities["dispatch_contract"]["failure_reasons"])
         for reason in self.policy["required_gap_reasons"]:
             self.assertIn(reason, vocabulary, f"{reason} is not a declared failure reason")
 
@@ -93,6 +92,164 @@ class TierContractConsistencyTests(unittest.TestCase):
         module_name, _, attribute = self.task["reference"].partition(":")
         self.assertEqual(module_name, self.task["problem_file"])
         self.assertIn(attribute, {"Model", "ModelNew"})
+
+
+class TargetEnvironmentTests(unittest.TestCase):
+    """A task names the environment it was measured on; the record describes it.
+
+    The device facts live in `environments/`, not in the task package. One
+    machine is described once: two tasks that each carried their own copy of the
+    toolkit version could disagree about it, and nothing would notice.
+    """
+
+    def setUp(self):
+        self.task = json.loads((TASK_DIR / "task.json").read_text(encoding="utf-8"))
+        self.target = self.task["target_environment"]
+        self.record_path = ROOT / self.target["record"]
+        self.record = json.loads(self.record_path.read_text(encoding="utf-8"))
+
+    def test_the_record_lives_outside_the_task_package(self):
+        self.assertTrue(self.record_path.is_relative_to(ROOT / "environments"))
+        self.assertFalse(self.record_path.is_relative_to(TASK_DIR))
+
+    def test_the_record_is_named_after_its_snapshot_id(self):
+        self.assertEqual(self.record_path.name, f"{self.target['snapshot_id']}.public.json")
+
+    def test_the_declared_snapshot_id_is_the_one_inside_the_record(self):
+        self.assertEqual(self.target["snapshot_id"], self.record["snapshot_id"])
+
+    def test_the_task_does_not_restate_the_device_facts(self):
+        """Restating a fact in two places is how the two places drift apart.
+
+        The task names a snapshot and stops. A device name or a version string
+        anywhere in it would be a second copy of something the record already
+        says, and the two copies would be free to disagree.
+        """
+        declared = (TASK_DIR / "task.json").read_text(encoding="utf-8")
+        restated = {
+            "device name": self.record["hardware"]["device_name"],
+            "architecture": self.record["hardware"]["architecture"],
+            "toolkit version": self.record["software"]["musa_toolkit"],
+            "mudnn version": self.record["software"]["mudnn"],
+            "mublas version": self.record["software"]["mublas"],
+            "driver version": self.record["software"]["driver"],
+        }
+        for fact, value in restated.items():
+            if value:
+                with self.subTest(fact=fact):
+                    self.assertNotIn(str(value), declared)
+
+    def test_the_record_carries_no_machine_identity(self):
+        self.assertEqual(self.record["visibility"], "redacted")
+        for key in ("device_instance", "device_instance_id", "host", "raw_probes", "container"):
+            self.assertNotIn(key, self.record)
+
+    def test_the_record_carries_no_field_the_collector_redacts(self):
+        """The artifact is checked against the rule, not against a copy of it."""
+        collector = load("collect_environment", ROOT / "tools" / "collect_environment.py")
+        for key in collector.REDACTED_KEYS:
+            self.assertNotIn(key, self.record)
+        self.assertNotIn("device_instance_id", self.record)
+
+    def test_the_record_keeps_the_configuration_the_agent_needs(self):
+        self.assertTrue(self.record["hardware"]["device_name"])
+        self.assertTrue(self.record["hardware"]["architecture"])
+        self.assertTrue(self.record["software"]["musa_toolkit"])
+        self.assertTrue(self.record["software"]["mudnn"])
+        self.assertTrue(self.record["toolkit_components"])
+
+
+class EnvironmentDirectoryTests(unittest.TestCase):
+    """The directory is the index, so an unlisted record is an undiscoverable one."""
+
+    def setUp(self):
+        self.directory = ROOT / "environments"
+        self.records = sorted(self.directory.glob("*.public.json"))
+        self.readme = (self.directory / "README.md").read_text(encoding="utf-8")
+
+    def test_there_is_at_least_one_record(self):
+        self.assertTrue(self.records)
+
+    def test_every_record_is_named_after_the_snapshot_id_inside_it(self):
+        for path in self.records:
+            with self.subTest(record=path.name):
+                record = json.loads(path.read_text(encoding="utf-8"))
+                self.assertEqual(path.name, f"{record['snapshot_id']}.public.json")
+
+    def test_every_record_is_listed_in_the_readme(self):
+        for path in self.records:
+            with self.subTest(record=path.name):
+                self.assertIn(path.name, self.readme)
+
+    def test_every_record_is_described_by_device_and_architecture(self):
+        for path in self.records:
+            with self.subTest(record=path.name):
+                record = json.loads(path.read_text(encoding="utf-8"))
+                self.assertIn(record["hardware"]["device_name"], self.readme)
+                self.assertIn(record["hardware"]["architecture"], self.readme)
+
+
+class CapabilityReferenceTests(unittest.TestCase):
+    """One capability reference per family, named after the family it describes.
+
+    The reference is family-level because a capability boundary belongs to the
+    library and the operation, not to one task: every task in a family probes
+    the same surface. Naming the file after the family is what stops a second
+    family from quietly inheriting a first family's boundaries.
+    """
+
+    def setUp(self):
+        self.task = json.loads((TASK_DIR / "task.json").read_text(encoding="utf-8"))
+        self.path = ROOT / self.task["capability_reference"]
+        self.capabilities = json.loads(self.path.read_text(encoding="utf-8"))
+
+    def test_the_reference_is_named_after_the_family_it_describes(self):
+        self.assertEqual(self.path.name, f"{self.task['family']}_capabilities.json")
+
+    def test_the_reference_declares_the_same_family_as_the_task(self):
+        self.assertEqual(self.capabilities["family"], self.task["family"])
+
+    def test_the_reference_is_marked_agent_visible(self):
+        self.assertEqual(self.capabilities["visibility"], "agent_visible")
+
+    def test_the_reference_does_not_name_the_ops_the_probe_resolves(self):
+        """probe_sdpa records which ops answer which configuration.
+
+        Discovering that is the task. A reference that lists the ops hands the
+        dispatch decision over before the submission writes a probe.
+        """
+        probe = load("probe_sdpa", ROOT / "tools" / "probe_sdpa.py")
+        blob = self.path.read_text(encoding="utf-8").lower()
+        for op in probe.FUSED_LIBRARY_OPS | probe.LIBRARY_COMPOSITION_OPS:
+            with self.subTest(op=op):
+                self.assertNotIn(op.lower(), blob)
+
+    def test_the_reference_does_not_name_the_installed_component_versions(self):
+        """§4.5 forbids version numbers, and the environment record has every one."""
+        record = json.loads((ROOT / self.task["target_environment"]["record"]).read_text(encoding="utf-8"))
+        blob = self.path.read_text(encoding="utf-8")
+        for component in ("driver", "musa_toolkit", "mudnn", "mublas", "driver_commit"):
+            version = record["software"].get(component)
+            if version:
+                with self.subTest(component=component):
+                    self.assertNotIn(str(version), blob)
+
+    def test_the_reference_does_not_name_the_libraries(self):
+        """§4.5 permits "what kind of capability exists", not which library has it.
+
+        Naming the library collapses the space the probe is supposed to search.
+        """
+        libraries = (
+            "mudnn", "mublas", "torch_musa", "mate", "mutlass", "tilelang",
+            "vllm", "paddle", "llama", "flashmla", "flash_attn",
+        )
+        blob = self.path.read_text(encoding="utf-8").lower()
+        for library in libraries:
+            with self.subTest(library=library):
+                self.assertIsNone(
+                    re.search(rf"\b{library}\b", blob),
+                    f"{library} appears in the agent-visible capability reference",
+                )
 
 
 class ReferenceTests(unittest.TestCase):

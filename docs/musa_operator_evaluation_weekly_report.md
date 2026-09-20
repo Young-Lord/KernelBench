@@ -214,8 +214,11 @@ Schema
 本周补充了专供 Agent 使用的脱敏 Attention 能力参考：
 
 ```text
-musa_operator_eval/agent_reference/attention_capabilities.json
+musa_operator_eval/agent_reference/sdpa_forward_capabilities.json
 ```
+
+> 该文件初版名为 `attention_capabilities.json`。能力边界是**族**的属性而不是单题的属性，
+> 所以现在按族命名：`agent_reference/<family>_capabilities.json`，一份对应一个族。
 
 该文件只公开：
 

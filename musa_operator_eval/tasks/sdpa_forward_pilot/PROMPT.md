@@ -71,7 +71,8 @@ with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
 - 库组合路径覆盖面通常更广，但可能产生中间张量和额外 launch。
 - fallback 中可考虑分块 QK、在线 Softmax、K/V tile 复用和非对齐边界处理。
 - 未知配置必须探测，不能默认融合库支持。
-- `agent_reference/attention_capabilities.json` 提供结构化的通用能力说明，不代表任何具体配置必然受支持。
+- `agent_reference/sdpa_forward_capabilities.json` 提供结构化的通用能力说明，不代表任何具体配置必然受支持。
+- 目标环境记录在 `environments/musa-5f9d7b9dd1233a68.public.json`，`environments/README.md` 列出了所有可用机器。架构和 dtype 都会影响融合路径是否存在，但**哪条路径服务于哪个配置必须由运行时探测得出**，不得按版本号硬编码。
 
 ## 评分口径
 

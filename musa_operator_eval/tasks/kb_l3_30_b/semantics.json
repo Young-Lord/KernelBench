@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "family": "windowed_attention",
+  "set_entry": "kb_l3_30",
+  "note": "Identical to the A-tier package of this entry: §4.2 of the guide requires the two tiers of one family to share a semantic contract, or their goldens stop being interchangeable.",
+  "input": "x of shape (B, 3, image, image)",
+  "output": "logits of shape (B, num_classes); this is a whole classifier, not an attention core",
+  "patch_embed": "4x4 convolution with stride 4, then LayerNorm",
+  "stages": "4 stages with patch merging between them; dim doubles per stage while the resolution halves",
+  "window": "7x7 windows, with cyclic shift on alternating blocks and a -100 additive attention mask for the shifted ones",
+  "attention": "cosine similarity between L2-normalised q and k, scaled by a clamped learnable logit scale",
+  "bias": "a continuous relative position bias produced by a small MLP over the relative coordinate table, then 16*sigmoid",
+  "determinism": "dropout and stochastic depth are at 0 in the problem defaults",
+  "image_size": "must be divisible by patch 4 and by 2^3 for the three patch-merging stages, so multiples of 32"
+}

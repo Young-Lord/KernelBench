@@ -1,0 +1,41 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "swin_transformer_v2_a_v0",
+  "tier": "A_kernel",
+  "visibility": "public",
+  "set_entry": "kb_l3_30",
+  "case_generation": {
+    "tool": "musa_operator_eval/tools/generate_cases.py",
+    "deterministic": true,
+    "note": "Cases describe parameters and seeds only. Inputs are produced by the problem file's own get_inputs, so this manifest does not pin them."
+  },
+  "cases": [
+    {
+      "case_id": "smoke_001",
+      "tag": "smoke",
+      "seed": 1101,
+      "shape": {
+        "B": 1,
+        "image": 32
+      }
+    },
+    {
+      "case_id": "smoke_002",
+      "tag": "smoke",
+      "seed": 1102,
+      "shape": {
+        "B": 2,
+        "image": 32
+      }
+    },
+    {
+      "case_id": "smoke_003",
+      "tag": "smoke",
+      "seed": 1103,
+      "shape": {
+        "B": 1,
+        "image": 64
+      }
+    }
+  ]
+}

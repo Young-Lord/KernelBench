@@ -1,0 +1,50 @@
+{
+  "schema_version": "1.0.0",
+  "task_id": "scaled_dot_product_attention_b_v0",
+  "tier": "B_library",
+  "visibility": "public",
+  "set_entry": "kb_l1_97",
+  "case_generation": {
+    "tool": "musa_operator_eval/tools/generate_cases.py",
+    "deterministic": true,
+    "note": "A public list never carries a library gap and never expects a non-fused path: that would hand the submission the configuration the task exists to make it discover."
+  },
+  "cases": [
+    {
+      "case_id": "smoke_001",
+      "tag": "smoke",
+      "seed": 1201,
+      "shape": {
+        "B": 1,
+        "H": 4,
+        "S": 64,
+        "D": 64
+      },
+      "expected_path": "fused_library"
+    },
+    {
+      "case_id": "smoke_002",
+      "tag": "smoke",
+      "seed": 1202,
+      "shape": {
+        "B": 2,
+        "H": 8,
+        "S": 128,
+        "D": 64
+      },
+      "expected_path": "fused_library"
+    },
+    {
+      "case_id": "smoke_003",
+      "tag": "smoke",
+      "seed": 1203,
+      "shape": {
+        "B": 2,
+        "H": 4,
+        "S": 129,
+        "D": 96
+      },
+      "expected_path": "fused_library"
+    }
+  ]
+}

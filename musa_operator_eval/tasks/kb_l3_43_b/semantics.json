@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "family": "sdpa_forward",
+  "set_entry": "kb_l3_43",
+  "note": "Identical to the A-tier package of this entry: §4.2 of the guide requires the two tiers of one family to share a semantic contract, or their goldens stop being interchangeable.",
+  "input": "x of shape (B, S, C), not pre-split Q/K/V",
+  "projections": "one fused in-projection to 3C, split into q/k/v, plus a final out-projection",
+  "head_split": "D = C / H is derived, not a free parameter",
+  "mask": "causal, top-left: query i attends to j <= i",
+  "scale": "1/sqrt(D)",
+  "softmax": "max-shift, accumulation in float32",
+  "dropout": "attn_pdrop and resid_pdrop; the graded cases set both to 0, which is also the problem default",
+  "determinism": "with both dropout rates at 0 the reference is deterministic",
+  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer, so every case must satisfy S <= max_seqlen"
+}

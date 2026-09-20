@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0.0",
+  "family": "transformer_block",
+  "set_entry": "kb_l3_44",
+  "note": "Identical to the A-tier package of this entry: §4.2 of the guide requires the two tiers of one family to share a semantic contract, or their goldens stop being interchangeable.",
+  "block": "LayerNorm -> causal self-attention -> residual -> LayerNorm -> MLP -> residual",
+  "attention": "identical to kb_l3_43, including the top-left causal alignment and the 1/sqrt(D) scale",
+  "mlp": "Linear to 4C, GELU (the tanh approximation in the reference), Linear back to C",
+  "norm": "LayerNorm over the last axis, default eps and no elementwise affine",
+  "dropout": "resid_pdrop, set to 0 in the graded cases",
+  "determinism": "with dropout at 0 the reference is deterministic",
+  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer, so every case must satisfy S <= max_seqlen"
+}
