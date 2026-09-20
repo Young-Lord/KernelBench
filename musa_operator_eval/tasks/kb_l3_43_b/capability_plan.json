@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0.0",
+  "family": "sdpa_forward",
+  "purpose": "Settle whether the fused path this task's public cases expect actually answers them, before any baseline is measured",
+  "required_routes": ["torch_musa_sdpa", "mudnn_fused"],
+  "record_fields": ["dtype", "shape", "accepted", "selected_route", "deciding_op", "latency_ms", "peak_memory_bytes", "error", "evidence"],
+  "route_resolution": "the route is read from the aten op the dispatcher actually runs, not from a successful high-level call; it stays unverified when profiling is unavailable",
+  "note": "Every case here is causal and half precision, which is what this task grades. The public smoke cases are B=1 H=4 S=64 D=32, B=2 H=8 S=128 D=32 and B=2 H=6 S=129 D=32; the rest are boundary variants of them that the hidden set is expected to draw from, so the probe covers the shape neighbourhood rather than only the three published points.",
+  "cases": [
+    {"probe_id": "causal_fp16_smoke_001", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 4, "H_kv": 4, "S_q": 64, "S_kv": 64, "D": 32, "causal": true, "window_left": -1, "window_right": -1},
+    {"probe_id": "causal_fp16_smoke_002", "dtype": "float16", "layout": "BHSD", "B": 2, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 32, "causal": true, "window_left": -1, "window_right": -1},
+    {"probe_id": "causal_fp16_smoke_003", "dtype": "float16", "layout": "BHSD", "B": 2, "H_q": 6, "H_kv": 6, "S_q": 129, "S_kv": 129, "D": 32, "causal": true, "window_left": -1, "window_right": -1},
+    {"probe_id": "causal_bf16_smoke_002", "dtype": "bfloat16", "layout": "BHSD", "B": 2, "H_q": 8, "H_kv": 8, "S_q": 128, "S_kv": 128, "D": 32, "causal": true, "window_left": -1, "window_right": -1},
+    {"probe_id": "causal_fp16_head_dim_96", "dtype": "float16", "layout": "BHSD", "B": 1, "H_q": 8, "H_kv": 8, "S_q": 512, "S_kv": 512, "D": 96, "causal": true, "window_left": -1, "window_right": -1},
+    {"probe_id": "causal_fp32_control", "dtype": "float32", "layout": "BHSD", "B": 1, "H_q": 4, "H_kv": 4, "S_q": 64, "S_kv": 64, "D": 32, "causal": true, "window_left": -1, "window_right": -1}
+  ]
+}

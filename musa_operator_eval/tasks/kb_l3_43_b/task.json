@@ -100,6 +100,13 @@
   "admission": {
     "status": "pending_device_measurement",
     "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
-    "dispatch_note": "the attention core is a single causal SDPA over (B, H, S, D), which is the shape a fused library answers"
+    "dispatch_note": "the attention core is a single causal SDPA over (B, H, S, D), which is the shape a fused library answers",
+    "route_probe": {
+      "state": "measured",
+      "evidence": "private/mingpt_causal_attention_b_v0/route_probe.json",
+      "finding": "all five half-precision configurations resolve to the fused path and the float32 control resolves to the composition path, so the public cases' expected_path holds and the precision this task declares is load-bearing rather than defensive",
+      "routes_probed": ["torch_musa_sdpa"],
+      "routes_not_probed": ["mudnn_fused"]
+    }
   }
 }
