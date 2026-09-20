@@ -142,17 +142,20 @@ LIBRARY_POLICY = {
         "custom_fallback"
     ],
     "minimum_gap_cases": 3,
-    # Only the reasons a hidden case of this task can reach; each is one of the
+    # Only the reason a hidden case of this task can reach; it is one of the
     # canonical failure_reasons in agent_reference/transformer_block_capabilities.json.
-    # `multi_operator_required`: the reference is a whole block, so no single fused
-    # call serves it — the fused attention covers the core and the LayerNorms, MLP
-    # projections, GELU and residuals have to be composed around it.
     # `unsupported_shape`: head_dim is n_embd / n_head, so the fused path's
-    # head-dimension window can be stepped past. `semantic_mismatch` and
-    # `layout_mismatch` do not apply: the scale is hard-coded to 1/sqrt(D), the mask
-    # is plain causal so no row is empty, and the attention layout is contiguous BHSD.
+    # head-dimension window can be stepped past with 192/256.
+    # `multi_operator_required` is not a gap here. The block's LayerNorms, 4C MLP
+    # projections, GELU and residuals have no fused equivalent at any width, so the
+    # block is always composed around the attention call -- but that is true of
+    # every case rather than of a subset, so no hidden case could carry it and it
+    # separates nothing. `semantic_mismatch` and `layout_mismatch` do not apply
+    # either: the scale is hard-coded to 1/sqrt(D), the mask is plain top-left
+    # causal so no row is empty, attn_pdrop is 0.0, and the attention layout is
+    # contiguous BHSD.
+    # `task.json:admission.gap_reason_coverage` records the same shortfall and why.
     "required_gap_reasons": [
-        "unsupported_shape",
-        "multi_operator_required"
+        "unsupported_shape"
     ]
 }

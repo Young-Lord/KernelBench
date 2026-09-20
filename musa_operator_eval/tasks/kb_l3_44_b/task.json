@@ -87,8 +87,7 @@
     ],
     "minimum_gap_cases": 3,
     "required_gap_reasons": [
-      "unsupported_shape",
-      "multi_operator_required"
+      "unsupported_shape"
     ]
   },
   "scoring": {
@@ -101,10 +100,10 @@
     "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
     "dispatch_note": "two dispatchable segments rather than one: the causal attention core, and the 4C-expansion MLP projections",
     "gap_reason_coverage": {
-      "state": "covered",
-      "reachable": ["unsupported_shape", "multi_operator_required"],
-      "unreachable": ["semantic_mismatch", "layout_mismatch"],
-      "basis": "satisfies the §4.3 two-category floor. multi_operator_required: the problem is a whole transformer block, and the fused attention call covers only its core, so the LayerNorms, the 4C MLP projections, the tanh-approximation GELU and the residuals have to be composed around it — this is the same fact the dispatch_note records. unsupported_shape: head_dim is n_embd / n_head, so the fused path's head-dimension window can be stepped past with 192/256. semantic_mismatch is unreachable because the scale is hard-coded to 1/sqrt(D) (the only value the fused path accepts) and the mask is plain causal, so every query row sees j <= i and no row is fully masked. layout_mismatch is unreachable because the attention layout is contiguous BHSD."
+      "state": "open",
+      "reachable": ["unsupported_shape"],
+      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is n_embd / n_head rather than a free parameter, and the fused attention path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path — measured, and independent of seq_len and dtype. multi_operator_required was declared here before it was checked, and it is not a gap. The fact behind it is real and is the same one dispatch_note records: the block is LayerNorm, attention, residual, LayerNorm, MLP, residual, and the fused attention call covers only the core, so both LayerNorms, the 4C MLP projections, the GELU and the residuals have to be composed around it. That holds for every case in the block rather than for a subset of them, so it names no configuration a submission could be graded on. It cannot be given to a hidden case either: the case schema requires a gap's expected path to be library_composition or custom_fallback, so a case whose attention core the fused kernel does serve is expected on fused_library and is not a gap, while a case the fused kernel declines is already the unsupported_shape gap — the two labels can never disagree, which is what makes it not a category. semantic_mismatch is unreachable because the scale is hard-coded to 1/sqrt(head_dim) (the only value the fused path accepts), the mask is plain top-left causal so every query row sees j <= i and none is fully masked, and the block's attn_pdrop is 0.0, so there is no dropout semantics for the two paths to disagree about. layout_mismatch is unreachable because the attention layout is contiguous BHSD, which the measurement showed still dispatches fused. Either a second measured category has to be found on the device or this entry needs a wider contract before it can meet the floor."
     }
   }
 }
