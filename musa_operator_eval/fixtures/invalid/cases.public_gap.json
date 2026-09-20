@@ -1,4 +1,0 @@
-{
-  "schema_version": "1.0.0", "task_id": "bad_b", "tier": "B_library", "visibility": "public",
-  "cases": [{"case_id": "leaked_gap", "tag": "smoke", "seed": 1, "dtype": "float16", "shape": {"B": 1, "H_q": 1, "H_kv": 1, "S_q": 1, "S_kv": 1, "D": 80}, "attributes": {}, "distribution": "normal", "tolerance": {"atol": 0.01, "rtol": 0.01}, "golden": "golden.bin", "expected_path": "custom_fallback", "library_gap": {"reason": "unsupported_shape", "expected_path": "custom_fallback", "evidence": "must stay hidden"}}]
-}

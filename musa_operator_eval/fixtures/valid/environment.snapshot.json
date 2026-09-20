@@ -1,7 +1,0 @@
-{
-  "schema_version": "1.0.0", "snapshot_id": "fixture-mp22", "visibility": "redacted", "captured_at": "2026-09-19T00:00:00Z",
-  "hardware": {"device_name": "MTT S4000", "architecture": "mp_22", "device_count": 1},
-  "software": {"driver": "fixture", "musa_toolkit": "fixture", "torch": "fixture", "torch_musa": "fixture", "mudnn": "fixture", "mublas": "fixture"},
-  "compiler": {"mcc_version": "fixture", "target_arch": "mp_22"}, "build": {"flags": ["--cuda-gpu-arch=mp_22"], "fast_math": false},
-  "container": {"image_digest": "sha256:fixture"}
-}

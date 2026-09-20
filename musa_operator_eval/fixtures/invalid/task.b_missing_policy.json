@@ -1,8 +1,0 @@
-{
-  "schema_version": "1.0.0", "tier": "B_library", "id": "bad_b", "name": "Bad B task", "family": "sdpa_forward",
-  "source": {"project": "x", "revision": "1234567", "license": "MIT", "snapshot": "sources/x"},
-  "target_environment": {"device_families": ["MTT S5000"], "architectures": ["mp_31"], "toolkit_constraint": "fixed"},
-  "tensor_contract": {"input_dtypes": ["float16"], "accumulation_dtype": "float32", "layouts": ["BHSD"], "dynamic_axes": []},
-  "tolerances": {"atol": 0.01, "rtol": 0.01, "max_abs_error": 0.05}, "prohibited": ["ATen"], "entrypoint": "run.sh", "editable_files": ["dispatch.cpp"],
-  "attempt_budget": {"max_attempts": 1, "wall_time_seconds": 1}, "outputs": {"required": ["output"], "optional": []}
-}
