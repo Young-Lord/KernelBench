@@ -6,11 +6,13 @@
 
 ## 交付物
 
-- 完成 `starter/src/dispatch.cpp` 中标记的分派区域。
-- 完成 `starter/src/launch.mu` 中标记的 Host 启动区域。
-- 完成 `starter/src/fallback_kernel.mu` 中标记的兜底 kernel 区域。
-- runner 为每个 Case 输出 `output`，可选输出 `lse`。
-- runner 为每个 Case 写出一条分派轨迹。
+一个 Python 模块，定义 `ModelNew`（与 KernelBench 其它题目一致）：
+
+- `ModelNew.__init__` 接收与 reference `Model` 相同的初始化参数。
+- `ModelNew.forward` 接收与 reference 相同的输入，返回 `output`，可选同时返回 `lse`。
+- 分派逻辑写在 `forward` 内或它调用的方法内；没有任何需要修改的冻结文件。
+- 兜底 kernel 可用 `kernelbench.musa_extension.load_inline` JIT 编译 `.mu` 源码。
+- 每个 Case 写出一条分派轨迹。
 
 ## 必须做
 
@@ -19,7 +21,7 @@
 - 在库拒绝配置或库语义不等价时使用正确的兜底路径。
 - 保持 top-left causal、窗口方向、FP32 Softmax 累加和全 mask 行语义。
 - 处理非 tile 对齐的动态形状，不能只支持公开 Case。
-- 只修改 `starter_manifest.json` 声明的编辑区域。
+- 提交为单个自包含的 Python 模块，只依赖任务白名单内的库。
 
 ## 禁止做
 
@@ -29,7 +31,7 @@
 - 联网、动态下载或动态加载外部实现。
 - 将第三方 kernel 源码改名后内联到提交中。
 - 用固定输出、Case ID 分支或 shape 查表绕过计算。
-- 修改冻结的 ABI、主程序、张量 IO 或构建入口。
+- 继承或包裹 reference `Model` 后直接调用它来产出结果。
 
 ## 工程提示
 

@@ -38,13 +38,20 @@
 
 ```text
 <eval_root>/
-├── sources/<id>/       # 仅维护者：完整快照 + Commit + LICENSE + 原始实现
-├── tasks/<id>/         # Agent 可见：任务契约、语义契约、题面、reference、公开 Case、starter/
-├── private/<id>/       # 仅评测端：隐藏 Case、golden、基线
-└── evaluator/          # 评测服务：构建、正确性、性能、审计脚本
+├── sources/<id>/       # 仅维护者：快照记录 + Commit + LICENSE（快照本体在库外）
+├── tasks/<id>/         # Agent 可见：任务契约、语义契约、题面、reference、公开 Case
+└── private/<id>/       # 仅评测端：隐藏 Case、golden、基线
 ```
 
 公开目录只放任务定义，原始源码与隐藏资产必须与 Agent 隔离。
+
+> **实现说明（2026-09-20）**：编译、正确性、计时、speedup 与源码审计均已改为复用
+> KernelBench 框架（`src/kernelbench/` 下的 `eval.py`、`timing.py`、
+> `kernel_static_checker.py`、`musa_extension.py`），因此不再需要独立的
+> `evaluator/` 目录。同理，下面这份冻结 Starter（C++17 + 裸二进制 ABI）已经弃用：
+> B 类必须经 torch_musa 调用 muDNN，"绕开 libtorch"与题目前提冲突。
+> 被测程序统一交付 KernelBench 风格的 Python `ModelNew`，兜底 kernel 用
+> `musa_extension.load_inline` JIT 编译 `.mu`。下表保留作为分工设计依据。
 
 | Starter 内的文件 | 角色 | A 类 | B 类 |
 | --- | --- | --- | --- |

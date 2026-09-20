@@ -1,5 +1,13 @@
 # MUSA 算子评测集 v0 周工作汇报
 
+> **修订说明（2026-09-20）**
+> 本文描述的是第一轮实现。其中的原生 C++ ABI、7 类 JSON Schema、fixtures、并行评测器
+> 和打包/泄漏审计脚本已经删除：它们重复实现了 KernelBench 框架已有的能力
+> （`eval.py`、`timing.py`、`kernel_static_checker.py`、`musa_extension.py`），
+> 而冻结的 ABI 又与 B 类"必须调用 muDNN"的前提相冲突。
+> 保留下来的只有 KernelBench 没有的部分：能力探测、环境采集、隐藏 Case 生成和候选门禁。
+> 下文凡提到已删除组件的段落仅作为决策记录保留，当前布局见 `musa_operator_eval/README.md`。
+
 ## 一、本周工作主题
 
 **将 MUSA 算子评测集设计文档转换为可执行规范，并完成首个 SDPA 候选题的本地评测闭环。**
