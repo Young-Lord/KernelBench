@@ -582,6 +582,135 @@ def check_precision_downgrade(code: str, precision: str = "fp32") -> Tuple[bool,
 
 
 # =============================================================================
+# B-TIER (LIBRARY DISPATCH) CHECKS
+#
+# The checks above assume the submission must implement everything in a device
+# kernel, so calling a torch compute op is a hack. The B tier inverts that
+# premise: calling a whitelisted library *is* the task, and the hacks become
+# calling something outside the whitelist, picking a path from a version string
+# instead of a runtime probe, and never emitting a dispatch trace.
+#
+# These are configured from the task contract's `library_policy` block and are
+# wired up by `validate_library_kernel_static` below.
+# =============================================================================
+
+# Modules that are plumbing rather than a compute library: tensor allocation,
+# dtype casts, module structure, and the standard library. Matched on the
+# top-level module name, so every `torch.*` submodule counts as plumbing and the
+# actual compute-op question stays with `check_torch_computation_ops`.
+LIBRARY_PLUMBING_ROOTS = {
+    "abc", "argparse", "collections", "contextlib", "copy", "ctypes",
+    "dataclasses", "enum", "functools", "importlib", "itertools", "json",
+    "logging", "math", "operator", "os", "pathlib", "random", "re", "string",
+    "sys", "textwrap", "time", "typing", "warnings",
+    "numpy", "np",
+    "torch",
+}
+
+IMPORT_PATTERNS = [
+    r"^\s*import\s+([A-Za-z_][\w.]*)",
+    r"^\s*from\s+([A-Za-z_][\w.]*)\s+import",
+    r"""importlib\.import_module\s*\(\s*["']([A-Za-z_][\w.]*)["']""",
+]
+
+# Rationale: pulling in a compiled library by path sidesteps the import scan.
+CTYPES_LOAD_PATTERN = r"""CDLL\s*\(\s*["']([^"']+)["']"""
+
+# Rationale: the task contract forbids choosing a dispatch path from a driver,
+# Toolkit or library version string. Capability must be probed at runtime.
+# `parse_version` / `LooseVersion` are matched as bare names on purpose: merely
+# importing one signals the intent to compare versions.
+VERSION_DISPATCH_PATTERNS = [
+    r"\b__version__",
+    r"\btorch\.version\b",
+    r"\bparse_version\b",
+    r"\bget_version\s*\(",
+    r"\bversion\s*(?:==|!=|>=|<=|>|<)\s*[\"']",
+    r"\bLooseVersion\b|\bStrictVersion\b",
+]
+
+
+def _allowed_library_roots(allowed_libraries: Optional[List[str]]) -> set:
+    """Normalize `allowed_libraries` to import-root names.
+
+    `libmudnn` is accepted as the import name `mudnn`, so a task contract can
+    name either the linker library or the Python module.
+    """
+    roots = set()
+    for library in allowed_libraries or []:
+        normalized = library[3:] if library.lower().startswith("lib") else library
+        roots.add(normalized.lower())
+    return roots
+
+
+def check_library_whitelist(
+    code: str,
+    allowed_libraries: Optional[List[str]] = None,
+    allowed_symbol_prefixes: Optional[List[str]] = None,
+) -> Tuple[bool, str]:
+    """Check that every library the submission pulls in is whitelisted.
+
+    A module is accepted when its top-level name is plumbing, is exactly an
+    entry of `allowed_libraries` (with a leading `lib` stripped), or contains one
+    of `allowed_symbol_prefixes`. The substring rule is what lets a contract
+    whitelist `["musa", "mudnn"]` and thereby accept `torch_musa` and `mudnn`.
+    """
+    source = _strip_comments(code)
+    allowed_roots = _allowed_library_roots(allowed_libraries)
+    prefixes = [prefix.lower() for prefix in allowed_symbol_prefixes or []]
+
+    def is_allowed(module_name: str) -> bool:
+        root = module_name.split(".")[0].lower()
+        if root in LIBRARY_PLUMBING_ROOTS or root in allowed_roots:
+            return True
+        return any(prefix in root for prefix in prefixes)
+
+    for pattern in IMPORT_PATTERNS:
+        for match in re.finditer(pattern, source, flags=re.MULTILINE):
+            module_name = match.group(1)
+            if not is_allowed(module_name):
+                return (True, f"Imports non-whitelisted library: {module_name}")
+
+    for match in re.finditer(CTYPES_LOAD_PATTERN, source):
+        library_path = match.group(1)
+        stem = re.split(r"[/\\]", library_path)[-1].split(".")[0]
+        if not is_allowed(stem):
+            return (True, f"Loads non-whitelisted shared library: {library_path}")
+
+    return (False, "")
+
+
+def check_version_string_dispatch(code: str) -> Tuple[bool, str]:
+    """Check for dispatch decisions keyed on a version string."""
+    source = _strip_comments(code)
+    for pattern in VERSION_DISPATCH_PATTERNS:
+        match = re.search(pattern, source)
+        if match:
+            return (True, f"Dispatches on a version string: {match.group(0)}")
+    return (False, "")
+
+
+def check_dispatch_trace_emission(
+    code: str,
+    required_trace_fields: Optional[List[str]] = None,
+) -> Tuple[bool, str]:
+    """Check that the submission can emit a dispatch trace.
+
+    The trace is what makes the B tier gradeable, so a submission that never
+    mentions the required field names cannot produce one. This is a structural
+    proxy, not a proof: the runtime trace comparison is what actually decides.
+    """
+    source = _strip_comments(code)
+    missing = [
+        field for field in required_trace_fields or []
+        if f'"{field}"' not in source and f"'{field}'" not in source
+    ]
+    if missing:
+        return (True, "dispatch trace is missing required fields: " + ", ".join(missing))
+    return (False, "")
+
+
+# =============================================================================
 # REGISTRY & PRESETS
 # =============================================================================
 
@@ -711,3 +840,70 @@ def validate_kernel_static(
     
     valid = len(errors) == 0 # valid if no errors
     return valid, errors, warnings_list
+
+
+def validate_library_kernel_static(
+    code: str,
+    policy: dict,
+    backend: str = "musa",
+    precision: str = "fp16",
+    forbidden: Optional[List[str]] = None,
+    warnings: Optional[List[str]] = None,
+) -> Tuple[bool, List[str], List[str]]:
+    """Validate a B-tier (library dispatch) submission against a task contract.
+
+    Reuses the A-tier strict checks and swaps the premise, because the B tier is
+    graded on dispatching to a whitelisted library rather than on implementing
+    everything in a device kernel:
+
+    - calling library compute is the task, so `torch_computation_ops` and
+      `pytorch_wrap` stay warnings instead of becoming errors;
+    - the backend implementation check only runs when the submission actually
+      defines a device kernel, since the fused and composition paths need none;
+    - three B-tier rules become errors: every imported library must be
+      whitelisted, dispatch must not key on a version string, and the required
+      dispatch-trace fields must be present.
+
+    Args:
+        code: submission source
+        policy: the task contract's `library_policy` block. Reads
+            `allowed_libraries`, `allowed_symbol_prefixes` and
+            `required_trace_fields`.
+        backend: backend name for the optional implementation check
+        precision: forwarded to the precision-dependent checks
+        forbidden: override the strict check set
+        warnings: override the warning check set
+
+    Returns:
+        (valid, errors, warnings)
+    """
+    allowed_libraries = policy.get("allowed_libraries", [])
+    allowed_symbol_prefixes = policy.get("allowed_symbol_prefixes", [])
+    required_trace_fields = policy.get("required_trace_fields", [])
+
+    # An empty backend skips the backend implementation check in
+    # validate_kernel_static; B-tier code is not required to define a kernel.
+    valid, errors, warnings_list = validate_kernel_static(
+        code,
+        backend="",
+        precision=precision,
+        forbidden=forbidden,
+        warnings=warnings,
+    )
+
+    for has_issue, message in (
+        check_library_whitelist(code, allowed_libraries, allowed_symbol_prefixes),
+        check_version_string_dispatch(code),
+        check_dispatch_trace_emission(code, required_trace_fields),
+    ):
+        if has_issue:
+            errors.append(message)
+
+    if "__global__" in _strip_comments(code):
+        impl_check_name = BACKEND_IMPL_CHECK.get(backend)
+        if impl_check_name and impl_check_name in CHECK_FUNCTIONS:
+            has_issue, message = CHECK_FUNCTIONS[impl_check_name](code)
+            if has_issue:
+                errors.append(message)
+
+    return len(errors) == 0, errors, warnings_list

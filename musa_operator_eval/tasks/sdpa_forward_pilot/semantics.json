@@ -10,7 +10,7 @@
     {"name": "lse", "role": "optional_output", "shape": ["B", "H_q", "S_q"], "dtypes": ["float32"], "layout": "BHSD", "stride": "contiguous"}
   ],
   "dynamic_axes": {"B": [1, 32], "H_q": [1, 64], "H_kv": [1, 64], "S_q": [1, 4096], "S_kv": [1, 4096], "D": [32, 256]},
-  "abi": {"format": "raw_binary", "manifest": "tensors.json", "allocation_owner": "runner", "stream": "current_musa_stream"},
+  "abi": {"passing": "in_process_torch_tensors", "layout": "contiguous", "stream": "current_musa_stream", "note": "runner is a KernelBench ModelNew evaluated in the same process as the reference"},
   "attention": {
     "scale": "case_value",
     "softmax_max_shift": true,

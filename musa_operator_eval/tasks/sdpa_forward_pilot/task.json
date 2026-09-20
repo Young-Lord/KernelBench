@@ -36,6 +36,8 @@
     "fallback_kernel": "musa_inline",
     "note": "KernelBench-style submission: a Python module defining ModelNew. fused_library and library_composition call torch_musa / muDNN directly; custom_fallback may JIT-compile a .mu kernel through kernelbench.musa_extension.load_inline."
   },
+  "problem_file": "problem.py",
+  "reference": "problem.py:Model",
   "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
   "outputs": {"required": ["output", "dispatch_trace"], "optional": ["lse"]},
   "library_policy": {

@@ -13,7 +13,9 @@ framework has no notion of.
 
 ## Layout
 
-- `tasks/`: agent-visible task packages (contract, semantics, prompt, cases, reference).
+- `tasks/`: agent-visible task packages. Each carries a KernelBench-format
+  `problem.py` (`Model`, `get_inputs`, `get_init_inputs`, plus `TIER` and
+  `LIBRARY_POLICY`), a `semantics.json` contract, a `PROMPT.md`, and the case list.
 - `agent_reference/`: sanitized, agent-visible capability descriptions.
 - `sources/`: provenance and license records for the upstream snapshots a task derives from.
 - `templates/`: baseline and gap-evidence templates.
@@ -49,6 +51,13 @@ probes and baselines are not, and must run on the target device.
 ## Tests
 
 ```bash
+# Case generation, environment and capability tooling (stdlib + NumPy)
 python musa_operator_eval/tests/test_environment_tools.py -v
 python musa_operator_eval/tests/test_reference_and_cases.py -v
+
+# Cross-checks the task's PyTorch reference against the NumPy one (needs torch)
+python musa_operator_eval/tests/test_problem_reference.py -v
+
+# B-tier library-dispatch static checker (stdlib only)
+python src/kernelbench/unit_tests/test_library_static_checker.py -v
 ```

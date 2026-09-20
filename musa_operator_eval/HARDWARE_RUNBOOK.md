@@ -28,16 +28,23 @@ python musa_operator_eval/tools/make_private_manifest.py \
 
 ## 3. Implement the reference and expert solutions
 
-The reference `Model` stays plain PyTorch. The maintainer-side expert dispatch
-is a `ModelNew` implementing the `fused_library → library_composition →
-custom_fallback` order with runtime probing; build it against the real muDNN /
-torch_musa APIs and verify it against the reference before it becomes the
-speedup denominator.
+The reference `Model` stays plain PyTorch and lives in the task's `problem.py`
+alongside `get_inputs` / `get_init_inputs`, matching how every other KernelBench
+problem is written. The maintainer-side expert dispatch is a `ModelNew`
+implementing the `fused_library → library_composition → custom_fallback` order
+with runtime probing; build it against the real muDNN / torch_musa APIs and
+verify it against the reference before it becomes the speedup denominator.
 
-Record the actual library symbols the expert calls. The submission-side check —
-allowing whitelisted symbol prefixes while still rejecting ATen and PyTorch
-compute — is not yet wired into `kernel_static_checker.py`; today that module
-only implements the reject-only mode used by the A track.
+Run the submission-side audit with the task's own policy:
+
+```python
+from kernelbench.kernel_static_checker import validate_library_kernel_static
+valid, errors, warnings = validate_library_kernel_static(source, LIBRARY_POLICY)
+```
+
+This inverts the A-tier premise: whitelisted library compute is allowed, and the
+hard errors become non-whitelisted imports, version-string dispatch, and a
+missing dispatch trace.
 
 ## 4. Establish baselines
 
