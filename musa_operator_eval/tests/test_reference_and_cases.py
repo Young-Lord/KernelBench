@@ -1,3 +1,4 @@
+import ast
 import importlib.util
 import json
 import tempfile
@@ -8,6 +9,7 @@ import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TASK_DIR = ROOT / "tasks" / "sdpa_forward_pilot"
 
 
 def load(name, path):
@@ -18,8 +20,64 @@ def load(name, path):
     return module
 
 
-reference = load("sdpa_reference", ROOT / "tasks" / "sdpa_forward_pilot" / "reference" / "sdpa_reference.py")
+def read_library_policy_from_problem():
+    """Read LIBRARY_POLICY out of problem.py without importing it.
+
+    problem.py imports torch, which is not available on every machine that runs
+    this suite, so the literal is recovered from the AST instead.
+    """
+    tree = ast.parse((TASK_DIR / "problem.py").read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "LIBRARY_POLICY" for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    raise AssertionError("problem.py does not define LIBRARY_POLICY")
+
+
+reference = load("sdpa_reference", TASK_DIR / "reference" / "sdpa_reference.py")
 generator = load("generate_cases", ROOT / "tools" / "generate_cases.py")
+
+
+class TierContractConsistencyTests(unittest.TestCase):
+    """problem.py and task.json both declare the tier policy; they must agree."""
+
+    def setUp(self):
+        self.policy = read_library_policy_from_problem()
+        self.task = json.loads((TASK_DIR / "task.json").read_text(encoding="utf-8"))
+        self.declared = self.task["library_policy"]
+
+    def test_tier_agrees(self):
+        self.assertEqual(self.task["tier"], "B_library")
+
+    def test_shared_policy_fields_are_identical(self):
+        for field in (
+            "allowed_libraries", "allowed_symbol_prefixes", "required_trace_fields",
+            "trace_env_var", "minimum_gap_cases", "required_gap_reasons",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(field, self.declared, f"task.json is missing library_policy.{field}")
+                self.assertEqual(
+                    self.policy[field], self.declared[field],
+                    f"{field} differs between problem.py:TIER and task.json:library_policy",
+                )
+
+    def test_dispatch_order_matches_the_capability_reference(self):
+        capabilities = json.loads((ROOT / "agent_reference" / "attention_capabilities.json").read_text(encoding="utf-8"))
+        self.assertEqual(self.policy["dispatch_order"], capabilities["dispatch_contract"]["ordered_paths"])
+
+    def test_gap_reasons_come_from_the_declared_vocabulary(self):
+        vocabulary = set(json.loads(
+            (ROOT / "agent_reference" / "attention_capabilities.json").read_text(encoding="utf-8")
+        )["dispatch_contract"]["failure_reasons"])
+        for reason in self.policy["required_gap_reasons"]:
+            self.assertIn(reason, vocabulary, f"{reason} is not a declared failure reason")
+
+    def test_problem_file_and_reference_entrypoint_exist(self):
+        self.assertTrue((TASK_DIR / self.task["problem_file"]).is_file())
+        module_name, _, attribute = self.task["reference"].partition(":")
+        self.assertEqual(module_name, self.task["problem_file"])
+        self.assertIn(attribute, {"Model", "ModelNew"})
 
 
 class ReferenceTests(unittest.TestCase):

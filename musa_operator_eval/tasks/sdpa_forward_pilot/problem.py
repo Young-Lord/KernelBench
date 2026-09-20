@@ -136,5 +136,8 @@ LIBRARY_POLICY = {
     "trace_env_var": "KB_DISPATCH_TRACE",
     "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
     "minimum_gap_cases": 3,
-    "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"],
+    # `unsupported_dtype` was added after measuring that float16 and bfloat16
+    # reach the fused path while float32 and float64 do not. Keep this list
+    # identical to `library_policy.required_gap_reasons` in task.json.
+    "required_gap_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch"],
 }
