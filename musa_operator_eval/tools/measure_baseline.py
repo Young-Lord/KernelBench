@@ -60,6 +60,11 @@ ROOT = Path(__file__).resolve().parents[1]
 REPO_TOP = ROOT.parent
 
 sys.path.insert(0, str(REPO_TOP / "src"))
+from kernelbench.dispatch_trace import (  # noqa: E402
+    DispatchTraceError,
+    check_trace,
+    read_trace,
+)
 from kernelbench.eval import (  # noqa: E402
     _process_input_tensor,
     resolve_tolerance,
@@ -159,8 +164,21 @@ def time_median(fn, warmup=PROTOCOL["warmup"], measurements=PROTOCOL["measuremen
     return sorted(samples)[len(samples) // 2]
 
 
-def _measure(name, call, expected, tolerance):
+def _measure(name, call, expected, tolerance, trace=None, must_trace=False, required_fields=None):
+    """Run one implementation on one case and return its row.
+
+    `trace` is `(trace_dir, case_id, expected_path)` when the implementation is
+    expected to record a dispatch, and None when it is not. The trace file is
+    truncated before the run rather than appended to, so the records belong to this
+    implementation and this case and to nothing earlier.
+    """
     row = {"case_id": None, "implementation": name, "status": "pass", "latency_ms": None}
+    if trace is not None:
+        trace_dir, case_id, _expected_path = trace
+        trace_path = Path(trace_dir) / f"{case_id}.{name}.jsonl"
+        trace_path.unlink(missing_ok=True)
+        os.environ["KB_DISPATCH_CASE_ID"] = case_id
+        os.environ["KB_DISPATCH_TRACE"] = str(trace_path)
     try:
         with torch.no_grad():
             actual = call()
@@ -174,9 +192,55 @@ def _measure(name, call, expected, tolerance):
             return row
         with torch.no_grad():
             row["latency_ms"] = time_median(call)
+
+        # The dispatch half of the gate. A speedup is only meaningful once it is
+        # known which path earned it, so a row whose trace does not match is not a
+        # fast row, it is an unanswered one, and it must not reach the ratio.
+        if trace is not None:
+            _, case_id, expected_path = trace
+            problems = _trace_problems(trace_path, case_id, expected_path, required_fields, must_trace)
+            row["recorded_paths"] = _recorded_paths(trace_path)
+            if problems is None:
+                row["dispatch_trace_passed"] = None  # the implementation records nothing
+            else:
+                row["dispatch_trace_passed"] = not problems
+                if problems:
+                    row.update(status="fail", reason="; ".join(problems)[:200])
+                    return row
     except Exception as exc:
         row.update(status="error", reason=f"{type(exc).__name__}: {str(exc)[:160]}")
     return row
+
+
+def _recorded_paths(trace_path: Path):
+    try:
+        return sorted({str(record.get("selected_path")) for record in read_trace(trace_path)})
+    except DispatchTraceError:
+        return None
+
+
+def _trace_problems(trace_path, case_id, expected_path, required_fields, must_trace):
+    """Problems with this implementation's trace, or None when it records none.
+
+    An implementation that records nothing is not a failure unless it is the expert.
+    The naive is the scoring baseline -- it is the number a submission is asked to
+    beat, not a submission -- so it is allowed to be an ordinary library call with
+    no dispatch story. The expert exists to demonstrate the dispatch decision, and
+    the gate's second half reads exactly that, so an expert with no trace leaves the
+    half unmeasured and counts against the entry.
+    """
+    try:
+        records = read_trace(trace_path)
+    except DispatchTraceError as error:
+        return [str(error)] if must_trace else None
+    if not records:
+        return ["expert recorded no dispatch; the gate's second half cannot be read"] if must_trace else None
+    return check_trace(
+        records,
+        expected_path=expected_path,
+        required_fields=required_fields,
+        case_id=case_id,
+    )
 
 
 def measure_case(case, task, problem_source, implementations: dict, unavailable: dict, trace_dir: Path):
@@ -185,20 +249,9 @@ def measure_case(case, task, problem_source, implementations: dict, unavailable:
     # measured at the tolerance submissions are actually scored against.
     tolerance = resolve_tolerance(dtype, (task.get("tolerances") or {}).get("max_abs_error"))
 
-    # The dispatch contract asks a submission to record the path it took per case,
-    # and the expert dispatch is a submission. Without these the expert raises on
-    # the missing variable; with them the baseline carries the same trace the
-    # grading run will, so the two can be compared.
-    #
-    # The file is removed rather than appended to: a submission records once per
-    # process, so a second run of the same case would otherwise leave the first
-    # run's record behind it and a reader could not tell which run the file
-    # describes.
-    trace_path = trace_dir / f"{case['case_id']}.jsonl"
-    trace_path.unlink(missing_ok=True)
-    os.environ["KB_DISPATCH_CASE_ID"] = case["case_id"]
-    os.environ["KB_DISPATCH_TRACE"] = str(trace_path)
-
+    # Each implementation gets its own trace file, created and truncating inside
+    # `_measure`. A single file per case would mix the naive's records with the
+    # expert's, and the check would then be comparing two dispatch stories at once.
     with torch.no_grad():
         expected = reference(*inputs)
 
@@ -206,9 +259,21 @@ def measure_case(case, task, problem_source, implementations: dict, unavailable:
     # cost of a fresh model at this case's shapes. Measured for scale: it is the
     # number a submission is being asked to beat by a library call.
     rows = [_measure_existing(REFERENCE_ROLE, reference, inputs, expected, tolerance)]
+    expected_path = case.get("expected_path")
+    required_fields = (task.get("library_policy") or {}).get("required_trace_fields")
     for name, model_class in implementations.items():
         model = build_model(model_class, init_inputs, dtype, case["seed"])
-        rows.append(_measure(name, lambda model=model: model(*inputs), expected, tolerance))
+        rows.append(
+            _measure(
+                name,
+                lambda model=model: model(*inputs),
+                expected,
+                tolerance,
+                trace=(trace_dir, case["case_id"], expected_path),
+                must_trace=(name == EXPERT_ROLE),
+                required_fields=required_fields,
+            )
+        )
 
     for name, reason in unavailable.items():
         rows.append({"case_id": case["case_id"], "implementation": name, "status": "unavailable",
