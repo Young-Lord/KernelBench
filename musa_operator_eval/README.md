@@ -38,6 +38,22 @@ The one framework change that lives with this work: a problem file may declare
 `TIER` and `LIBRARY_POLICY`, and `eval.py` reads them to pick the matching
 source-audit rule set. See `kernel_static_checker.static_audit_kernel`.
 
+The A tier adds one check to the shipped defaults: `attention_entry_point`, which
+rejects a call to a fused attention entry point. That is not because every torch
+op is forbidden — it is not, and the answers in `KernelBench/level3_musa/` hold
+their projections as `nn.Linear` while computing the attention themselves. It is
+because the reference implementation calls that same entry point, so a
+submission that calls it matches the reference exactly and passes every
+correctness check, while scoring about 2.5x on `kb_l1_97` against a hand-written
+baseline the library call beats. The upstream `torch_computation_ops` check that
+would also catch it ships as a warning.
+
+Where that check cannot reach, each A-tier contract declares its own
+`kernel_scope`: what must be in a kernel, and what may stay in the library. An
+`nn.Linear` holding weights and one computing a projection are the same source,
+so that half of the boundary is stated for a reader rather than enforced by a
+pattern.
+
 ## Layout
 
 - `tasks/`: agent-visible task packages. Each carries a KernelBench-format

@@ -60,6 +60,26 @@
       "output"
     ]
   },
+  "kernel_scope": {
+    "level": "attention_core",
+    "enforced_by": "attention_entry_point",
+    "enforced_note": "The audit rejects a call to a fused attention entry point. It does not reject every torch op, because an nn.Linear holding weights and an nn.Linear computing a projection are the same source and only the author knows which is which; the two lists below are what a reader audits against.",
+    "must_be_in_kernel": [
+      "window QK^T",
+      "cosine normalisation and logit scale",
+      "relative position bias",
+      "softmax",
+      "P·V"
+    ],
+    "may_stay_library": [
+      "patch embedding",
+      "patch merging",
+      "LayerNorms",
+      "the MLP stages",
+      "the classifier head"
+    ],
+    "note": "A full Swin V2 classifier. The window attention is in scope, including the bias path, because the bias is part of the attention rather than plumbing around it."
+  },
   "scoring": {
     "speedup": "upstream_musa_baseline_latency / submission_latency",
     "ranking": "A-kernel track only; never merged or averaged with the B-library track"

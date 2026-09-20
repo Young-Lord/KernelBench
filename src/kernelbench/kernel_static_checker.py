@@ -164,6 +164,38 @@ def check_torch_computation_ops(code: str) -> Tuple[bool, str]:
     
     return (False, "")
 
+# --- Attention Entry Points ---
+# Rationale: unlike `torch.matmul` or `nn.Linear`, one of these is never a
+# weight container. A submission may legitimately hold a projection as an
+# `nn.Linear` and compute with its weights, but calling a fused attention entry
+# point *is* the core computation, so it is the one boundary a static check can
+# draw without guessing where a task's kernel scope ends.
+#
+# These are A-tier checks only. The B tier is built around calling exactly these,
+# which is why they are not in STRICT_CHECKS.
+ATTENTION_ENTRY_POINTS = [
+    r"\bscaled_dot_product_attention\s*\(",
+    r"\bflash_attention_forward\s*\(",
+    r"\befficient_attention_forward\s*\(",
+    r"\bflash_attn\w*\s*\(",
+    r"\bmemory_efficient_attention\s*\(",
+]
+
+
+def check_attention_entry_point(code: str) -> Tuple[bool, str]:
+    """
+    Check for a call to a fused attention entry point.
+
+    Matched as a call rather than as a bare name: a submission is allowed to
+    describe what it does not do, but not to do it.
+    """
+    code = _strip_comments(code)
+    for pattern in ATTENTION_ENTRY_POINTS:
+        match = re.search(pattern, code)
+        if match:
+            return (True, f"Calls a fused attention entry point: {match.group(0).rstrip('( ')}")
+    return (False, "")
+
 # =============================================================================
 # Backend Specific Checks
 # =============================================================================
@@ -763,7 +795,23 @@ CHECK_FUNCTIONS: Dict[str, Union[Callable[[str], Tuple[bool, str]], Callable[[st
     "tk_impl": check_tk_impl,
     "cute_impl": check_cute_impl,
     "tilelang_impl": check_tilelang_impl,
+
+    # A-tier checks. Not in STRICT_CHECKS because the B tier is built around
+    # calling exactly what this one forbids.
+    "attention_entry_point": check_attention_entry_point,
 }
+
+# What the A tier adds on top of the strict checks.
+#
+# The A tier forbids library compute, but "the core computation" has no single
+# definition: an answer may hold a projection as an `nn.Linear` and compute with
+# its weights, which is a container, or call it, which is compute, and no static
+# check can tell those apart. The attention entry point can be told apart, so it
+# is the boundary this tier enforces; every task's contract states the rest of
+# its kernel scope under `kernel_scope` for a reader rather than for this check.
+A_TIER_FORBIDDEN_CHECKS = [
+    "attention_entry_point",
+]
 
 # Checks that require additional parameters beyond just code
 PRECISION_DEPENDENT_CHECKS = {"precision_downgrade"}
@@ -1010,6 +1058,14 @@ def static_audit_kernel(
 
     if tier != "A_kernel":
         raise ValueError(f"unknown tier {tier!r}; expected one of {KNOWN_TIERS}")
+
+    # The A tier adds its own checks to the shipped defaults. `STRICT_CHECKS`
+    # does not police library compute on its own, which is deliberate upstream:
+    # a stock KernelBench task is graded on speedup, and its author may be
+    # content to let a submission wrap a torch op as long as the result is
+    # faster. This tier is not, so the attention entry point is an error here.
+    if forbidden is None:
+        forbidden = list(STRICT_CHECKS) + A_TIER_FORBIDDEN_CHECKS
 
     return validate_kernel_static(
         code,

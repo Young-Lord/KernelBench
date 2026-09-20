@@ -62,6 +62,21 @@
       "output"
     ]
   },
+  "kernel_scope": {
+    "level": "attention_core",
+    "enforced_by": "attention_entry_point",
+    "enforced_note": "The audit rejects a call to a fused attention entry point. It does not reject every torch op, because an nn.Linear holding weights and an nn.Linear computing a projection are the same source and only the author knows which is which; the two lists below are what a reader audits against.",
+    "must_be_in_kernel": [
+      "QK^T",
+      "top-left causal mask",
+      "ReLU",
+      "P·V"
+    ],
+    "may_stay_library": [
+      "QKV projection"
+    ],
+    "note": "The reference never applies its output projection, so there is none to leave in or take out of the library."
+  },
   "scoring": {
     "speedup": "upstream_musa_baseline_latency / submission_latency",
     "ranking": "A-kernel track only; never merged or averaged with the B-library track"

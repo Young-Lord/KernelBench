@@ -61,6 +61,22 @@
       "output"
     ]
   },
+  "kernel_scope": {
+    "level": "attention_core",
+    "enforced_by": "attention_entry_point",
+    "enforced_note": "The audit rejects a call to a fused attention entry point. It does not reject every torch op, because an nn.Linear holding weights and an nn.Linear computing a projection are the same source and only the author knows which is which; the two lists below are what a reader audits against.",
+    "must_be_in_kernel": [
+      "the packed-weight self-attention over the token sequence",
+      "QK^T",
+      "softmax",
+      "P·V"
+    ],
+    "may_stay_library": [
+      "LayerNorm",
+      "the reshape between image and token layout"
+    ],
+    "note": "The existing answer runs the packed projections inside its own two-stage GEMM, which is why they are in scope here. It instantiates nn.MultiheadAttention only to hold the reference weight layout; a container is not a compute path."
+  },
   "scoring": {
     "speedup": "upstream_musa_baseline_latency / submission_latency",
     "ranking": "A-kernel track only; never merged or averaged with the B-library track"

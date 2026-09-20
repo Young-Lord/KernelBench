@@ -390,5 +390,169 @@ class TensorContractTests(unittest.TestCase):
             self.assertIn("fp32", completed.stderr)
 
 
+CHEATING_SUBMISSION = '''
+"""A submission that computes nothing itself."""
+import torch
+import torch.nn.functional as F
+from kernelbench.musa_extension import load_inline
+
+_SOURCE = r"""
+#include <musa_runtime.h>
+__global__ void scratch_kernel(float* x) { x[0] = 0.0f; }
+"""
+
+_scratch = load_inline(name="scratch", cpp_sources="", musa_sources=_SOURCE, functions=[])
+
+
+class ModelNew(torch.nn.Module):
+    def __init__(self, scale, causal, window_left, window_right):
+        super().__init__()
+        self.scale = scale
+        self.causal = causal
+
+    def forward(self, q, k, v):
+        return F.scaled_dot_product_attention(q, k, v, is_causal=self.causal, scale=self.scale)
+'''
+
+
+HONEST_SUBMISSION = '''
+"""A submission that writes the attention and never calls the library entry point."""
+import torch
+from kernelbench.musa_extension import load_inline
+
+_SOURCE = r"""
+#include <musa_runtime.h>
+__global__ void attention_kernel(const float* q, const float* k, const float* v, float* out) {
+    out[threadIdx.x] = q[threadIdx.x] + k[threadIdx.x] + v[threadIdx.x];
+}
+"""
+
+_ext = load_inline(name="attention", cpp_sources="", musa_sources=_SOURCE, functions=[])
+
+
+class ModelNew(torch.nn.Module):
+    def __init__(self, scale, causal, window_left, window_right):
+        super().__init__()
+        self.scale = scale
+
+
+# This one describes the entry point without calling it, which is allowed.
+# The check matches a call, not a name.
+# scaled_dot_product_attention is deliberately not used above.
+'''
+
+
+class ATierKernelScopeTests(unittest.TestCase):
+    """The A tier must not be beatable by calling the fused attention entry point.
+
+    The reference implementation calls the same entry point a submission could,
+    so a submission that calls it matches the reference bit for bit and passes
+    every correctness check. On `kb_l1_97` that submission would also score about
+    2.5x, because the hand-written baseline it is divided by is slower than the
+    library call it replaces. Nothing else in the pipeline rejects it: the
+    upstream `torch_computation_ops` check ships as a warning.
+    """
+
+    def setUp(self):
+        self.checker = load("kernel_static_checker", REPO / "src" / "kernelbench" / "kernel_static_checker.py")
+
+    def audit(self, code, tier="A_kernel"):
+        return self.checker.static_audit_kernel(code, tier=tier, backend="musa", precision="fp32")
+
+    def test_the_check_that_catches_it_is_in_the_a_tier_set(self):
+        self.assertIn("attention_entry_point", self.checker.A_TIER_FORBIDDEN_CHECKS)
+        self.assertNotIn("attention_entry_point", self.checker.STRICT_CHECKS)
+
+    def test_a_submission_that_calls_the_fused_entry_point_is_rejected(self):
+        valid, errors, _ = self.audit(CHEATING_SUBMISSION)
+        with self.subTest(errors=errors):
+            self.assertFalse(valid, "a submission calling the fused entry point was accepted")
+        self.assertTrue(any("scaled_dot_product_attention" in error for error in errors),
+                        f"the rejection does not name the entry point: {errors}")
+
+    def test_a_submission_that_never_calls_it_is_accepted(self):
+        valid, errors, _ = self.audit(HONEST_SUBMISSION)
+        self.assertTrue(valid, f"an honest submission was rejected: {errors}")
+
+    def test_naming_the_entry_point_without_calling_it_is_not_a_rejection(self):
+        """The check matches a call, so describing the prohibition is allowed.
+
+        Without this the prompt could not name what it forbids.
+        """
+        valid, _errors, _ = self.audit(HONEST_SUBMISSION)
+        self.assertTrue(valid)
+
+    def test_the_b_tier_is_unaffected(self):
+        """The B tier is built around calling exactly what this check forbids."""
+        policy = {
+            "allowed_libraries": ["libmusa", "libmudnn"],
+            "allowed_symbol_prefixes": ["musa", "mudnn"],
+            "required_trace_fields": ["case_id", "selected_path", "probe_status"],
+            "trace_env_var": "KB_DISPATCH_TRACE",
+            "case_id_env_var": "KB_DISPATCH_CASE_ID",
+        }
+        valid, errors, _ = self.checker.static_audit_kernel(
+            CHEATING_SUBMISSION, tier="B_library", library_policy=policy, backend="musa",
+        )
+        self.assertFalse(any("attention_entry_point" in error for error in errors),
+                         f"the B tier was held to an A-tier check: {errors}")
+
+    def test_the_hand_written_answers_survive_the_tier_audit(self):
+        """A check that rejects the answers in this repository would be worthless.
+
+        Those answers compute the attention in a `.mu` kernel and hold the
+        surrounding projections as `nn.Linear`, which is why the tier polices the
+        entry point rather than every torch op. Only the attention set's own
+        answers are checked: the rest of the 107 are outside this tier's scope
+        and some of them fail checks that predate this work.
+        """
+        entries = json.loads(SET_PATH.read_text(encoding="utf-8"))["entries"]
+        answers = [
+            REPO / entry["tier"]["A_kernel"]["answer"]
+            for entry in entries
+            if entry["tier"]["A_kernel"].get("eligible") and entry["tier"]["A_kernel"].get("answer")
+        ]
+        self.assertTrue(answers, "the attention set names no A-tier answers")
+        for answer in answers:
+            with self.subTest(answer=answer.parent.name):
+                self.assertTrue(answer.is_file(), f"{answer} is missing")
+                valid, errors, _ = self.audit(answer.read_text(encoding="utf-8"))
+                self.assertTrue(valid, f"{answer} is rejected by its own tier's audit: {errors}")
+
+
+    def test_every_a_tier_contract_declares_its_kernel_scope(self):
+        """A reader needs the boundary even where a check cannot draw it.
+
+        The audit rejects the attention entry point. Everything else the tier
+        permits or forbids has to be stated, because an `nn.Linear` that holds
+        weights and one that computes are the same source.
+        """
+        scoped = 0
+        for directory, task in all_packages():
+            if task["tier"] != "A_kernel":
+                continue
+            scope = task.get("kernel_scope")
+            with self.subTest(task=task["id"]):
+                self.assertIsNotNone(scope, f"{directory.name} declares no kernel_scope")
+                self.assertTrue(scope["must_be_in_kernel"], "no kernel work is named")
+                self.assertIsInstance(scope["may_stay_library"], list)
+                self.assertIn(scope["level"], {"attention_core", "whole_problem"})
+            scoped += 1
+        self.assertTrue(scoped, "no A-tier package was checked")
+
+    def test_the_declared_enforcement_matches_the_check_the_audit_runs(self):
+        for _, task in all_packages():
+            if task["tier"] != "A_kernel":
+                continue
+            with self.subTest(task=task["id"]):
+                self.assertIn(task["kernel_scope"]["enforced_by"],
+                              self.checker.A_TIER_FORBIDDEN_CHECKS)
+
+    def test_a_scope_that_permits_nothing_else_admits_it(self):
+        """`kb_l1_97` is the attention and nothing more, so it leaves nothing out."""
+        task = json.loads((TASKS_DIR / "kb_l1_97_a" / "task.json").read_text(encoding="utf-8"))
+        self.assertEqual(task["kernel_scope"]["may_stay_library"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
