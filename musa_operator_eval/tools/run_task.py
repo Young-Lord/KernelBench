@@ -202,6 +202,11 @@ def run_case(
         precision=get_torch_dtype_from_string(precision),
         num_correct_trials=num_correct_trials,
         num_perf_trials=num_perf_trials,
+        # `measure_performance` defaults to False upstream, and without it the
+        # evaluator returns runtime -1.0 no matter what num_perf_trials says.
+        # That silently produced reports where every case passed and no number
+        # was ever recorded, which is exactly the number the B tier scores.
+        measure_performance=num_perf_trials > 0,
         verbose=verbose,
     )
 

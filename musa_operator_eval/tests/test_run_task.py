@@ -227,6 +227,65 @@ class StaticReportTests(unittest.TestCase):
         self.assertTrue(report["case_parameters"]["errors"])
 
 
+class RunCaseWiringTests(unittest.TestCase):
+    """What run_case actually asks the evaluator for.
+
+    `eval_kernel_against_ref` defaults `measure_performance` to False, and when
+    it is left there the evaluator returns runtime -1.0 regardless of
+    num_perf_trials. A report full of passing cases and no latency is a silent
+    failure, so the wiring is pinned rather than assumed.
+    """
+
+    def _drive(self, num_perf_trials):
+        task, cases, problem_source = run_task.load_task(TASK_DIR)
+        captured = {}
+
+        class _Result:
+            compiled = True
+            correctness = True
+            dispatch_trace_passed = True
+            runtime = 12.5
+            ref_runtime = 25.0
+            metadata = {"tier": "B_library"}
+
+        def _record(*args, **kwargs):
+            captured.update(kwargs)
+            return _Result()
+
+        fake_eval = types.ModuleType("kernelbench.eval")
+        fake_eval.eval_library_dispatch_against_ref = _record
+        fake_eval.get_torch_dtype_from_string = lambda name: name
+        fake_package = types.ModuleType("kernelbench")
+
+        with mock.patch.dict(sys.modules, {"kernelbench": fake_package, "kernelbench.eval": fake_eval}):
+            row = run_task.run_case(
+                task, cases["cases"][0], problem_source, VALID_SUBMISSION,
+                backend="musa", precision="fp16",
+                num_correct_trials=1, num_perf_trials=num_perf_trials, verbose=False,
+            )
+        return captured, row
+
+    def test_performance_measurement_is_requested(self):
+        captured, _ = self._drive(num_perf_trials=25)
+        self.assertTrue(captured.get("measure_performance"), "timing must be switched on explicitly")
+        self.assertEqual(captured["num_perf_trials"], 25)
+
+    def test_zero_perf_trials_disables_measurement(self):
+        captured, _ = self._drive(num_perf_trials=0)
+        self.assertFalse(captured.get("measure_performance"))
+
+    def test_case_identity_and_expected_path_are_forwarded(self):
+        captured, _ = self._drive(num_perf_trials=5)
+        self.assertEqual(captured["dispatch_case_id"], "smoke_001")
+        self.assertEqual(captured["expected_dispatch_path"], "fused_library")
+
+    def test_timings_reach_the_report(self):
+        _, row = self._drive(num_perf_trials=5)
+        self.assertEqual(row["runtime"], 12.5)
+        self.assertEqual(row["ref_runtime"], 25.0)
+        self.assertTrue(row["passed"])
+
+
 class CliTests(unittest.TestCase):
     def test_static_only_cli_returns_zero_for_a_valid_submission(self):
         with tempfile.TemporaryDirectory() as temporary:
