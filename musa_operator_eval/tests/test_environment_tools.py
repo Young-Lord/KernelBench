@@ -205,19 +205,53 @@ class PrivateManifestGoldenPathTests(unittest.TestCase):
     produces (`<case_id>/golden/tensors.json`), so every path pointed at nothing.
     """
 
-    EVIDENCE = {"gaps": [
-        {"case_id": "hidden_gap_001", "reason": "unsupported_shape",
-         "expected_path": "library_composition", "evidence": "recorded on device"},
-        {"case_id": "hidden_gap_002", "reason": "unsupported_shape",
-         "expected_path": "library_composition", "evidence": "recorded on device"},
-        {"case_id": "hidden_gap_003", "reason": "semantic_mismatch",
-         "expected_path": "custom_fallback", "evidence": "recorded on device"},
-        {"case_id": "hidden_gap_004", "reason": "semantic_mismatch",
-         "expected_path": "custom_fallback", "evidence": "recorded on device"},
+    # A hidden-case plan in the shape `make_private_manifest.py` now reads: the
+    # maintainer supplies every case, including the performance and generalisation
+    # ones, and the tool refuses a plan that is missing a role.
+    EVIDENCE = {"cases": [
+        {"case_id": "hidden_gap_001", "role": "gap", "tag": "boundary", "seed": 91, "dtype": "float16",
+         "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 8, "S_kv": 8, "D": 16},
+         "attributes": {"scale": 0.25, "causal": False, "window_left": -1, "window_right": -1},
+         "distribution": "normal", "expected_path": "library_composition",
+         "library_gap": {"reason": "unsupported_shape", "expected_path": "library_composition",
+                         "evidence": "recorded on device"}},
+        {"case_id": "hidden_gap_002", "role": "gap", "tag": "boundary", "seed": 92, "dtype": "float16",
+         "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 16, "S_kv": 16, "D": 32},
+         "attributes": {"scale": 0.1767766952966369, "causal": False, "window_left": -1, "window_right": -1},
+         "distribution": "normal", "expected_path": "library_composition",
+         "library_gap": {"reason": "unsupported_shape", "expected_path": "library_composition",
+                         "evidence": "recorded on device"}},
+        {"case_id": "hidden_gap_003", "role": "gap", "tag": "boundary", "seed": 93, "dtype": "float16",
+         "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 32, "S_kv": 32, "D": 64},
+         "attributes": {"scale": 0.1, "causal": False, "window_left": -1, "window_right": -1},
+         "distribution": "normal", "expected_path": "custom_fallback",
+         "library_gap": {"reason": "semantic_mismatch", "expected_path": "custom_fallback",
+                         "evidence": "recorded on device"}},
+        {"case_id": "hidden_perf_001", "role": "perf", "tag": "perf", "seed": 94, "dtype": "float16",
+         "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 64, "S_kv": 64, "D": 16},
+         "attributes": {"scale": 0.25, "causal": False, "window_left": -1, "window_right": -1},
+         "distribution": "normal", "expected_path": "fused_library",
+         "performance": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median"}},
+        {"case_id": "hidden_probe_001", "role": "probe", "tag": "generalization", "seed": 95, "dtype": "float16",
+         "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 128, "S_kv": 128, "D": 16},
+         "attributes": {"scale": 0.25, "causal": False, "window_left": -1, "window_right": -1},
+         "distribution": "normal", "expected_path": "fused_library"},
     ]}
 
+    # The task a plan belongs to. Only the fields the tool checks are needed: the
+    # contract's required reasons, its id and tier, and -- through the caller's
+    # `_public_cases` injection -- the public list it must not repeat.
+    TASK = {
+        "id": "test_task_b_v0",
+        "tier": "B_library",
+        "library_policy": {"required_gap_reasons": ["unsupported_shape", "semantic_mismatch"]},
+        "admission": {"gap_reason_coverage": {"state": "covered"}},
+        "target_environment": {"snapshot_id": "musa-test"},
+        "_public_cases": [],
+    }
+
     def manifest(self):
-        return load_manifest_tool().build_manifest(self.EVIDENCE)
+        return load_manifest_tool().build_manifest(self.EVIDENCE["cases"], dict(self.TASK))
 
     def test_every_case_names_its_golden_under_its_own_case_directory(self):
         manifest = self.manifest()
@@ -248,23 +282,98 @@ class PrivateManifestGoldenPathTests(unittest.TestCase):
     def test_the_visibility_is_private(self):
         self.assertEqual(self.manifest()["visibility"], "private")
 
-    def test_too_few_gaps_is_refused(self):
-        thin = {"gaps": self.EVIDENCE["gaps"][:2]}
-        with self.assertRaises(ValueError):
-            load_manifest_tool().build_manifest(thin)
+    def problems(self, plan, task=None):
+        """The refusals a plan earns, as a list rather than as an exception.
 
-    def test_one_reason_category_is_refused(self):
-        """Two categories are the minimum; a single cause is not a gap set."""
-        same_reason = {"gaps": [
-            {"case_id": "hidden_gap_001", "reason": "unsupported_shape",
-             "expected_path": "library_composition", "evidence": "x"},
-            {"case_id": "hidden_gap_002", "reason": "unsupported_shape",
-             "expected_path": "library_composition", "evidence": "x"},
-            {"case_id": "hidden_gap_003", "reason": "unsupported_shape",
-             "expected_path": "library_composition", "evidence": "x"},
-        ]}
+        `check_plan` returns every problem at once so a maintainer sees all of
+        them, which is why the tests assert on the list rather than on a raise.
+        """
+        return load_manifest_tool().check_plan(plan, dict(task or self.TASK))
+
+    def test_too_few_gaps_is_refused(self):
+        thin = [case for case in self.EVIDENCE["cases"]
+                if case["role"] != "gap" or case["case_id"] == "hidden_gap_001"]
+        self.assertTrue(any("at least 3" in problem for problem in self.problems(thin)))
+
+    def test_one_reason_category_is_refused_unless_the_contract_records_it(self):
+        """§4.3 asks for two categories, and most entry-scoped tasks reach one.
+
+        A task whose reference fixes its scale, has no window and is causal has
+        exactly one library boundary to find, so the shortfall is a property of the
+        task. It is allowed only when the contract says so: a silent single-category
+        set is indistinguishable from an unfinished one.
+        """
+        one_category = [
+            {**case, "library_gap": {**case["library_gap"], "reason": "unsupported_shape"}}
+            if case["role"] == "gap" else case
+            for case in self.EVIDENCE["cases"]
+        ]
+        silent = dict(self.TASK)
+        silent["admission"] = {"gap_reason_coverage": {"state": "covered"}}
+        self.assertTrue(any("reason category" in problem for problem in self.problems(one_category, silent)))
+
+        recorded = dict(self.TASK)
+        recorded["admission"] = {"gap_reason_coverage": {"state": "open"}}
+        # The contract has to agree: a task that reaches one category must require
+        # one, or the required-reason check fires on the same plan for a second and
+        # unrelated reason.
+        recorded["library_policy"] = {**self.TASK["library_policy"],
+                                      "required_gap_reasons": ["unsupported_shape"]}
+        self.assertEqual(self.problems(one_category, recorded), [])
+
+    def test_a_required_reason_that_no_gap_produces_is_refused(self):
+        """A reason the contract requires and the set never produces is a broken promise."""
+        without_the_semantic_gap = [case for case in self.EVIDENCE["cases"]
+                                    if case["case_id"] != "hidden_gap_003"]
+        self.assertTrue(any("requires gap reasons" in problem
+                            for problem in self.problems(without_the_semantic_gap)))
+
+    def test_a_gap_with_no_evidence_is_refused(self):
+        """An unmeasured gap is a guess wearing a measurement's authority."""
+        hollowed = [
+            {**case, "library_gap": {**case["library_gap"], "evidence": ""}}
+            if case["role"] == "gap" else case
+            for case in self.EVIDENCE["cases"]
+        ]
+        self.assertTrue(any("no evidence" in problem for problem in self.problems(hollowed)))
+
+    def test_a_reason_outside_the_vocabulary_is_refused(self):
+        strayed = [
+            {**case, "library_gap": {**case["library_gap"], "reason": "unsupported_dtype"}}
+            if case["role"] == "gap" else case
+            for case in self.EVIDENCE["cases"]
+        ]
+        self.assertTrue(any("unsupported_dtype" in problem for problem in self.problems(strayed)))
+
+    def test_a_hidden_shape_repeating_a_public_one_is_refused(self):
+        """Otherwise passing the public set would be enough to pass the hidden one."""
+        task = dict(self.TASK)
+        task["_public_cases"] = [{"shape": self.EVIDENCE["cases"][0]["shape"]}]
+        self.assertTrue(any("already in the public list" in problem for problem in self.problems(self.EVIDENCE["cases"], task)))
+
+    def test_a_plan_without_a_performance_case_is_refused(self):
+        """A set of gaps measures coverage and not speed, and the gate is a speed ratio."""
+        no_perf = [case for case in self.EVIDENCE["cases"] if case["role"] != "perf"]
+        self.assertTrue(any("no perf case" in problem for problem in self.problems(no_perf)))
+
+    def test_a_plan_without_a_generalisation_probe_is_refused(self):
+        no_probe = [case for case in self.EVIDENCE["cases"] if case["role"] != "probe"]
+        self.assertTrue(any("no probe case" in problem for problem in self.problems(no_probe)))
+
+    def test_a_free_text_tag_is_refused(self):
+        """§4.3 fixes the tag vocabulary so the set can be counted by category."""
+        renamed = [dict(case, tag="head_dim_beyond_fused_bound") for case in self.EVIDENCE["cases"]]
+        self.assertTrue(any("fixed tags" in problem for problem in self.problems(renamed)))
+
+    def test_a_plan_without_any_cases_is_refused(self):
         with self.assertRaises(ValueError):
-            load_manifest_tool().build_manifest(same_reason)
+            load_manifest_tool().load_plan({})
+
+    def test_the_plan_role_is_not_copied_into_the_manifest(self):
+        """`role` is how the tool sorts the plan; a case has a tag, not a role."""
+        for case in self.manifest()["cases"]:
+            with self.subTest(case=case["case_id"]):
+                self.assertNotIn("role", case)
 
 
 class PrivateManifestSchemaTests(unittest.TestCase):
@@ -279,9 +388,10 @@ class PrivateManifestSchemaTests(unittest.TestCase):
     CASE_TAGS = {"smoke", "correctness", "boundary", "non_aligned", "extreme", "perf", "generalization"}
 
     EVIDENCE = PrivateManifestGoldenPathTests.EVIDENCE
+    TASK = PrivateManifestGoldenPathTests.TASK
 
     def manifest(self):
-        return load_manifest_tool().build_manifest(self.EVIDENCE)
+        return load_manifest_tool().build_manifest(self.EVIDENCE["cases"], dict(self.TASK))
 
     def validator(self):
         path = ROOT / "tools" / "validate_schemas.py"

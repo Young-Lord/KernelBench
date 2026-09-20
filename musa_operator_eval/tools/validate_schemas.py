@@ -237,10 +237,15 @@ def business_errors(instance: dict, kind: str) -> List[str]:
         if instance.get("visibility") == "private" and instance.get("tier") == "B_library":
             if gaps < 3:
                 errors.append(f"cases: a private B manifest needs at least 3 library gaps, found {gaps}")
-            if len(reasons) < 2:
-                errors.append(
-                    f"cases: a private B manifest needs at least 2 gap-reason categories, found {sorted(reasons)}"
-                )
+            if not reasons:
+                errors.append("cases: a private B manifest carries no library gap with a reason")
+
+    # §4.3 also asks a hidden gap set to cover at least two reason categories, and
+    # that rule is deliberately not enforced here. It is a statement about a task
+    # contract and a case list together -- a task that cannot reach a second
+    # category is allowed one, if its contract records why -- and a validator that
+    # sees one document at a time cannot tell the two apart. It is enforced where
+    # both are in scope, in `make_private_manifest.py`.
 
     if kind == "baseline":
         declared = set(instance.get("implementations", []))

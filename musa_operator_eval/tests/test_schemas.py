@@ -308,11 +308,27 @@ class CaseManifestRuleTests(unittest.TestCase):
         errors = validator.validate_instance(document, "case_manifest", engine="stdlib")
         self.assertTrue(any("at least 3 library gaps" in error for error in errors), errors)
 
-    def test_a_private_b_manifest_below_the_reason_count_is_rejected(self):
+    def test_a_single_reason_category_is_left_to_the_generator(self):
+        """The two-category floor is a cross-file rule, so the schema does not carry it.
+
+        §4.3 asks a hidden gap set for two categories, but whether a task can reach
+        two is a fact about its contract: a task whose reference fixes its scale,
+        has no window and is causal has one boundary to find. A validator seeing one
+        document at a time cannot tell an unfinished set from a task that has one
+        boundary, so the rule lives in `make_private_manifest.py`, which reads both.
+        """
         cases = [gap(f"hidden_gap_{index:03d}", "unsupported_shape") for index in range(1, 4)]
         document = manifest_document("B_library", "private", cases)
+        self.assertEqual(validator.validate_instance_stdlib(document, "case_manifest"), [])
+
+    def test_a_private_manifest_with_no_reason_at_all_is_rejected(self):
+        """Structural, and therefore the schema's business: a gap must say why."""
+        cases = [gap(f"hidden_gap_{index:03d}", "unsupported_shape") for index in range(1, 4)]
+        for case in cases:
+            del case["library_gap"]["reason"]
+        document = manifest_document("B_library", "private", cases)
         errors = validator.validate_instance(document, "case_manifest", engine="stdlib")
-        self.assertTrue(any("2 gap-reason categories" in error for error in errors), errors)
+        self.assertTrue(any("reason" in error for error in errors), errors)
 
     def test_a_gap_reason_outside_the_vocabulary_is_rejected(self):
         document = manifest_document("B_library", "private", [gap("hidden_gap_001", "unsupported_dtype")])

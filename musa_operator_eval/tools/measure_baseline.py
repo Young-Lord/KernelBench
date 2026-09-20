@@ -218,6 +218,10 @@ def _measure_existing(name, model, inputs, expected, tolerance):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--task-dir", type=Path, required=True)
+    parser.add_argument("--cases", type=Path, default=None,
+                        help="the case manifest to measure. Defaults to the task's public list; point it at "
+                             "the private one to measure the set the gate is actually defined over, which "
+                             "is the only set an admission decision may be based on.")
     parser.add_argument("--naive", type=Path, required=True,
                         help="the task's naive library composition; the gate's numerator")
     parser.add_argument("--expert", type=Path, required=True,
@@ -231,7 +235,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
-    task, cases_manifest, problem_source = load_task(args.task_dir)
+    task, cases_manifest, problem_source = load_task(args.task_dir, args.cases)
 
     implementations = {NAIVE_ROLE: load_model_class(args.naive), EXPERT_ROLE: load_model_class(args.expert)}
     if args.blind is not None:
