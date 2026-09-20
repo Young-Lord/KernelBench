@@ -190,5 +190,22 @@
   "build": {
     "flags": [],
     "fast_math": false
+  },
+  "library_contracts": {
+    "scaled_dot_product_attention": {
+      "probed_at": "2026-09-21",
+      "probe": "Which attn_mask layouts the library accepts, and whether an accepted mask is applied. Compared against a float32 reference carrying the same bias; an error near zero means applied, an error the size of the bias means dropped.",
+      "shapes_probed": {"batch": 8, "heads": 6, "sequence": 49, "head_dim": 32},
+      "dtypes_probed": ["float16", "bfloat16"],
+      "additive_mask": {
+        "accepted_and_applied": ["(B, H, S, S)"],
+        "accepted_and_silently_dropped": ["(S, S)"],
+        "refused": ["(H, S, S)"],
+        "refusal_error": "RuntimeError: MuDNNFlashSDPAFwd MUDNN failed in: Run SDPA; muDNN reason: Internal error 3d mask shape"
+      },
+      "boolean_mask": {"accepted": ["(S, S)", "(B, H, S, S)"], "note": "is_causal=True is also accepted"},
+      "head_dim_boundary": "head_dim <= 128 reaches the fused kernel; 192 and 256 land on the math path, with the library warning that the MUSA flash path requires head_dim <= 128. Independent of sequence length and dtype.",
+      "why_it_matters": "The mask contract is not documented and does not match what the interface suggests. A two-dimensional additive mask is accepted and then ignored, so a submission that broadcasts its bias to the wrong rank returns a correctly shaped, correctly typed, wrong tensor. Any entry whose core carries a pre-softmax additive term depends on this, and it cannot be read off the interface; it has to be probed."
+    }
   }
 }

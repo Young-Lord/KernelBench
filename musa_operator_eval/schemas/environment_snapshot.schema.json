@@ -64,6 +64,19 @@
         "fast_math": {"type": "boolean"}
       }
     },
+    "library_contracts": {
+      "description": "Measured behaviour of the toolkit's library ops, keyed by op name. Probed rather than documented: an op's accepted layouts and its internal routing are not part of any interface this environment publishes, and a submission's dispatch decision depends on them.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["probe", "why_it_matters"],
+        "properties": {
+          "probed_at": {"type": "string"},
+          "probe": {"type": "string"},
+          "why_it_matters": {"type": "string"}
+        }
+      }
+    },
     "raw_probes": {"type": "object"}
   },
   "allOf": [
