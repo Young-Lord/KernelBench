@@ -14,6 +14,7 @@
       "case_id": "smoke_001",
       "tag": "smoke",
       "seed": 1201,
+      "dtype": "float16",
       "shape": {
         "B": 1,
         "image": 32
@@ -24,6 +25,7 @@
       "case_id": "smoke_002",
       "tag": "smoke",
       "seed": 1202,
+      "dtype": "bfloat16",
       "shape": {
         "B": 2,
         "image": 32
@@ -34,6 +36,7 @@
       "case_id": "smoke_003",
       "tag": "smoke",
       "seed": 1203,
+      "dtype": "float16",
       "shape": {
         "B": 1,
         "image": 64

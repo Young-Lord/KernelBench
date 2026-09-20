@@ -374,6 +374,37 @@ class TensorContractTests(unittest.TestCase):
                 else:
                     self.assertEqual(permitted, {"float16", "bfloat16"})
 
+    def test_every_public_case_pins_a_dtype_its_contract_permits(self):
+        """A contract with two dtypes leaves each case to say which one it is.
+
+        The case list is what the harness builds tensors from, and a case with no
+        dtype is not runnable at all, so this is the difference between a package
+        and a package-shaped file. Every entry-scoped package had this gap at
+        once, which is the argument for asserting it rather than reviewing it.
+        """
+        for directory, task in all_packages():
+            permitted = set(task["tensor_contract"]["input_dtypes"])
+            cases = json.loads((directory / "public_cases.json").read_text(encoding="utf-8"))["cases"]
+            for case in cases:
+                with self.subTest(task=task["id"], case=case["case_id"]):
+                    self.assertIn(case.get("dtype"), permitted)
+
+    def test_every_half_precision_package_exercises_both_contract_dtypes(self):
+        """Otherwise the second dtype in the contract is decoration.
+
+        The B tier's fused path is reached differently per dtype, so a package
+        that only ever runs float16 has a contract that claims coverage it does
+        not take.
+        """
+        for directory, task in all_packages():
+            permitted = set(task["tensor_contract"]["input_dtypes"])
+            if len(permitted) < 2:
+                continue
+            cases = json.loads((directory / "public_cases.json").read_text(encoding="utf-8"))["cases"]
+            exercised = {case["dtype"] for case in cases}
+            with self.subTest(task=task["id"]):
+                self.assertEqual(exercised, permitted)
+
     def test_the_driver_refuses_a_precision_the_contract_does_not_permit(self):
         """The pilot is a B-tier task; running it at float32 must not start."""
         pilot = TASKS_DIR / "sdpa_forward_pilot"
