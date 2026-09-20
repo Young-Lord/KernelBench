@@ -694,14 +694,20 @@ def check_dispatch_trace_emission(
     code: str,
     required_trace_fields: Optional[List[str]] = None,
     trace_env_var: Optional[str] = None,
+    case_id_env_var: Optional[str] = None,
 ) -> Tuple[bool, str]:
     """Check that the submission can emit a dispatch trace.
 
     The trace is what makes the B tier gradeable, so a submission that never
-    mentions the required field names cannot produce one. Requiring the trace
-    environment variable as well matters more than it looks: field names can
+    mentions the required field names cannot produce one. Requiring the
+    environment variables as well matters more than it looks: field names can
     appear in a docstring, an env var lookup cannot — it is the thing that
-    actually locates the file the evaluator will read.
+    actually locates the file the evaluator will read, and the case identity the
+    record has to carry.
+
+    The case-id variable is checked because a trace record must name the case it
+    belongs to and the evaluator compares that against the case it asked for. A
+    submission that never reads it can only be guessing.
 
     This is a structural proxy, not a proof: the runtime trace comparison is
     what actually decides.
@@ -709,7 +715,8 @@ def check_dispatch_trace_emission(
     Args:
         code: submission source
         required_trace_fields: field names the trace records must carry
-        trace_env_var: the environment variable the submission must read
+        trace_env_var: the environment variable locating the trace file
+        case_id_env_var: the environment variable naming the current case
     """
     source = _strip_comments(code)
     missing = [
@@ -719,8 +726,9 @@ def check_dispatch_trace_emission(
     if missing:
         return (True, "dispatch trace is missing required fields: " + ", ".join(missing))
 
-    if trace_env_var and f'"{trace_env_var}"' not in source and f"'{trace_env_var}'" not in source:
-        return (True, f"dispatch trace never reads {trace_env_var}")
+    for env_var, purpose in ((trace_env_var, "locates the trace file"), (case_id_env_var, "names the current case")):
+        if env_var and f'"{env_var}"' not in source and f"'{env_var}'" not in source:
+            return (True, f"dispatch trace never reads {env_var}, which {purpose}")
 
     return (False, "")
 
@@ -896,6 +904,7 @@ def validate_library_kernel_static(
     allowed_symbol_prefixes = policy.get("allowed_symbol_prefixes", [])
     required_trace_fields = policy.get("required_trace_fields", [])
     trace_env_var = policy.get("trace_env_var")
+    case_id_env_var = policy.get("case_id_env_var")
 
     # An empty backend skips the backend implementation check in
     # validate_kernel_static; B-tier code is not required to define a kernel.
@@ -910,7 +919,7 @@ def validate_library_kernel_static(
     for has_issue, message in (
         check_library_whitelist(code, allowed_libraries, allowed_symbol_prefixes),
         check_version_string_dispatch(code),
-        check_dispatch_trace_emission(code, required_trace_fields, trace_env_var),
+        check_dispatch_trace_emission(code, required_trace_fields, trace_env_var, case_id_env_var),
     ):
         if has_issue:
             errors.append(message)

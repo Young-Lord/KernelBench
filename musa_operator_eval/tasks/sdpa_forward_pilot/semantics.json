@@ -6,9 +6,9 @@
     {"name": "q", "role": "input", "shape": ["B", "H_q", "S_q", "D"], "dtypes": ["float16", "bfloat16"], "layout": "BHSD", "stride": "contiguous"},
     {"name": "k", "role": "input", "shape": ["B", "H_kv", "S_kv", "D"], "dtypes": ["float16", "bfloat16"], "layout": "BHSD", "stride": "contiguous"},
     {"name": "v", "role": "input", "shape": ["B", "H_kv", "S_kv", "D"], "dtypes": ["float16", "bfloat16"], "layout": "BHSD", "stride": "contiguous"},
-    {"name": "output", "role": "output", "shape": ["B", "H_q", "S_q", "D"], "dtypes": ["float16", "bfloat16"], "layout": "BHSD", "stride": "contiguous"},
-    {"name": "lse", "role": "optional_output", "shape": ["B", "H_q", "S_q"], "dtypes": ["float32"], "layout": "BHSD", "stride": "contiguous"}
+    {"name": "output", "role": "output", "shape": ["B", "H_q", "S_q", "D"], "dtypes": ["float16", "bfloat16"], "layout": "BHSD", "stride": "contiguous"}
   ],
+  "outputs_note": "One output only. A log-sum-exp would be a second output, and the harness compares exactly one tensor; more importantly the library's fused kernel does not produce one, so requiring it would close the fused path this task exists to exercise.",
   "dynamic_axes": {"B": [1, 32], "H_q": [1, 64], "H_kv": [1, 64], "S_q": [1, 4096], "S_kv": [1, 4096], "D": [32, 256]},
   "abi": {"passing": "in_process_torch_tensors", "layout": "contiguous", "stream": "current_musa_stream", "note": "runner is a KernelBench ModelNew evaluated in the same process as the reference"},
   "attention": {
@@ -17,7 +17,7 @@
     "accumulation_dtype": "float32",
     "causal_alignment": "top_left",
     "window": {"left": "case.window_left", "right": "case.window_right", "unlimited_value": -1},
-    "fully_masked_row": {"output": "zeros", "lse": "negative_infinity"}
+    "fully_masked_row": {"output": "zeros"}
   },
   "determinism": {"required": true, "seed_source": "case_manifest"}
 }

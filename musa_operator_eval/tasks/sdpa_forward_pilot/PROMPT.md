@@ -9,7 +9,7 @@
 一个 Python 模块，定义 `ModelNew`（与 KernelBench 其它题目一致）：
 
 - `ModelNew.__init__` 接收与 reference `Model` 相同的初始化参数（`scale`、`causal`、`window_left`、`window_right`）。
-- `ModelNew.forward` 接收与 reference 相同的输入，返回 `output`，可选同时返回 `lse`。
+- `ModelNew.forward` 接收与 reference 相同的输入，返回**单个 `output` 张量**。不要返回元组：评测端直接在返回值上取 `.shape` 做比较，返回元组会在比较之前抛 `AttributeError`，导致每个 Case 的每次 trial 全部失败。
 - 分派逻辑写在 `forward` 内或它调用的方法内；没有任何需要修改的冻结文件。
 - 兜底 kernel 可用 `kernelbench.musa_extension.load_inline` JIT 编译 `.mu` 源码。
 - 每个 Case 写出一条分派轨迹。
@@ -18,15 +18,23 @@ reference 实现在 `problem.py` 的 `Model` 类里，用普通 PyTorch 算子�
 
 ## 分派轨迹
 
-评测端会设置环境变量 `KB_DISPATCH_TRACE`，其值是一个文件路径。你的 `ModelNew` 每处理一个 Case，就要往该文件**追加一行 JSON**（UTF-8，一行一个对象）：
+评测端会设置两个环境变量：
+
+- `KB_DISPATCH_TRACE`：一个文件路径。你的 `ModelNew` 每处理一个 Case，就要往该文件**追加一行 JSON**（UTF-8，一行一个对象）。
+- `KB_DISPATCH_CASE_ID`：**当前正在评测的 Case id**。`case_id` 字段必须填这个值——评测端会拿它和它要求的 Case 比对，而 Case id 无法从输入推断（两个 Case 可以 shape 相同、只差一个属性）。
 
 ```json
-{"case_id": "<该 Case 的 id>", "selected_path": "<fused_library|library_composition|custom_fallback>", "probe_status": "<你的运行时探测返回的状态>"}
+{"case_id": "<os.environ[\"KB_DISPATCH_CASE_ID\"]>", "selected_path": "<fused_library|library_composition|custom_fallback>", "probe_status": "<你的运行时探测返回的状态>"}
 ```
 
 ```python
 import json, os
 
+record = {
+    "case_id": os.environ["KB_DISPATCH_CASE_ID"],
+    "selected_path": "fused_library",
+    "probe_status": "accepted",
+}
 with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
     handle.write(json.dumps(record) + "\n")
 ```
@@ -36,6 +44,7 @@ with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
 - 三个字段都要有，且非空；`selected_path` 只能是上面三个值之一。
 - 同一个 Case 的多次 forward 必须报**同一条路径**。同一配置报出两条不同路径会被判定为分派不稳定。
 - 每个 Case 至少一条记录。没有轨迹就无法判分——它正是 B 类的判分点。
+- 不读 `KB_DISPATCH_CASE_ID` 会被静态审计直接拒绝：一个不知道自己在对哪个 Case 负责的提交，只能靠猜。
 
 ## 必须做
 

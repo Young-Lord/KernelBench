@@ -14,9 +14,15 @@ The semantics encoded here are the contract (see `semantics.json`):
 - a window is [query_index - window_left, query_index + window_right], and -1
   means unbounded in that direction;
 - scores accumulate in float32 with a max-shift softmax;
-- a fully masked query row produces a zero output and a negative-infinite LSE.
+- a fully masked query row produces a zero output.
 
-Any path a submission takes must reproduce all five.
+Any path a submission takes must reproduce all four.
+
+Only the output tensor is returned. The library's fused attention kernel does not
+produce the log-sum-exp, so requiring `lse` would close the fused path and push
+every case onto the custom fallback, which is not the question this task asks.
+The independent NumPy oracle still computes it, because a golden LSE is the
+cheapest way to check the oracle itself.
 """
 
 import torch
@@ -53,8 +59,9 @@ class Model(nn.Module):
             v: (B, H_kv, S_kv, D)
 
         Returns:
-            (output, lse) with output shaped like q in q.dtype and lse
-            (B, H_q, S_q) in float32.
+            output shaped like q and in q.dtype. A bare tensor rather than a
+            tuple: the evaluation harness compares one tensor against one tensor,
+            and returning a tuple makes it raise on the reference's return value.
         """
         num_query_heads = q.shape[1]
         num_kv_heads = k.shape[1]
@@ -80,9 +87,8 @@ class Model(nn.Module):
         # where it turns 0/0 into 0 and satisfies the contract.
         denominator = weights.sum(dim=-1, keepdim=True).clamp_min(torch.finfo(torch.float32).tiny)
         output = torch.matmul(weights, v.float()) / denominator
-        lse = row_max.squeeze(-1) + torch.log(denominator.squeeze(-1))
 
-        return output.to(q.dtype), lse
+        return output.to(q.dtype)
 
 
 # ============================================================================
@@ -134,6 +140,11 @@ LIBRARY_POLICY = {
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
+    # The trace has to name the case, and the evaluator compares that against the
+    # case it asked for, so the case identity is published the same way the trace
+    # file is. A submission cannot infer it: two cases can share a shape and
+    # differ only in an attribute.
+    "case_id_env_var": "KB_DISPATCH_CASE_ID",
     "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
     "minimum_gap_cases": 3,
     # `unsupported_dtype` was added after measuring that float16 and bfloat16

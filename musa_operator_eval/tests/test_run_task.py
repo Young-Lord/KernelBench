@@ -55,7 +55,7 @@ class ModelNew(torch.nn.Module):
 
     def forward(self, q, k, v):
         record = dict(self.dispatch)
-        record["case_id"] = os.environ.get("KB_CASE_ID", "case")
+        record["case_id"] = os.environ["KB_DISPATCH_CASE_ID"]
         with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\\n")
         return torch_musa.sdpa(q, k, v)

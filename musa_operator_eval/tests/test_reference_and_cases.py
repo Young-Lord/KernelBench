@@ -53,7 +53,7 @@ class TierContractConsistencyTests(unittest.TestCase):
     def test_shared_policy_fields_are_identical(self):
         for field in (
             "allowed_libraries", "allowed_symbol_prefixes", "required_trace_fields",
-            "trace_env_var", "minimum_gap_cases", "required_gap_reasons",
+            "trace_env_var", "case_id_env_var", "minimum_gap_cases", "required_gap_reasons",
         ):
             with self.subTest(field=field):
                 self.assertIn(field, self.declared, f"task.json is missing library_policy.{field}")
@@ -61,6 +61,21 @@ class TierContractConsistencyTests(unittest.TestCase):
                     self.policy[field], self.declared[field],
                     f"{field} differs between problem.py:TIER and task.json:library_policy",
                 )
+
+    def test_trace_variables_match_the_transport_constants(self):
+        """The contract names env vars the transport actually sets.
+
+        A contract that promises a variable nothing publishes is worse than one
+        that promises nothing: the submission reads it, gets None, and the
+        failure surfaces as an unreadable trace rather than a missing feature.
+        """
+        transport = load("dispatch_trace", ROOT.parent / "src" / "kernelbench" / "dispatch_trace.py")
+        self.assertEqual(self.policy["trace_env_var"], transport.TRACE_ENV_VAR)
+        self.assertEqual(self.policy["case_id_env_var"], transport.CASE_ID_ENV_VAR)
+
+    def test_required_trace_fields_match_the_transport_defaults(self):
+        transport = load("dispatch_trace", ROOT.parent / "src" / "kernelbench" / "dispatch_trace.py")
+        self.assertEqual(tuple(self.policy["required_trace_fields"]), tuple(transport.REQUIRED_TRACE_FIELDS))
 
     def test_dispatch_order_matches_the_capability_reference(self):
         capabilities = json.loads((ROOT / "agent_reference" / "attention_capabilities.json").read_text(encoding="utf-8"))

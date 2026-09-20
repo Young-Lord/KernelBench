@@ -51,12 +51,13 @@
     "shape.D": "head_dimension"
   },
   "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
-  "outputs": {"required": ["output", "dispatch_trace"], "optional": ["lse"]},
+  "outputs": {"required": ["output", "dispatch_trace"]},
   "library_policy": {
     "allowed_libraries": ["libmusa", "libmudnn"],
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
+    "case_id_env_var": "KB_DISPATCH_CASE_ID",
     "minimum_gap_cases": 3,
     "required_gap_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch"]
   }

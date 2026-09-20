@@ -800,7 +800,12 @@ def eval_library_dispatch_against_ref(
         The KernelExecResult, with `dispatch_trace_passed` set and the trace
         path, errors and summary recorded in metadata.
     """
-    with dispatch_trace() as trace_path:
+    # `dispatch_case_id` has to be published before the submission runs, not just
+    # used to filter the trace afterwards: the trace requires a `case_id` field
+    # and the check compares it against the case that was asked for, so a
+    # submission that is never told which case it is answering cannot produce a
+    # passing record.
+    with dispatch_trace(case_id=dispatch_case_id) as trace_path:
         result = eval_kernel_against_ref(
             original_model_src,
             custom_model_src,

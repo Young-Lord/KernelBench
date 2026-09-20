@@ -9,10 +9,11 @@ falls back to the slow composition path is indistinguishable from one that hit
 the fused library.
 
 The transport is deliberately dumb. The evaluator points an environment variable
-at a scratch file, the submission appends one JSON object per case, and the
-evaluator reads the file back:
+at a scratch file, tells the submission which case it is running, the submission
+appends one JSON object, and the evaluator reads the file back:
 
     KB_DISPATCH_TRACE=/tmp/.../dispatch_trace.jsonl
+    KB_DISPATCH_CASE_ID=hidden_gap_003
 
 A file rather than an attribute on the model, because the custom fallback path
 JIT-compiles and may hand work to a helper process; an environment variable and a
@@ -33,6 +34,16 @@ from typing import Dict, Iterable, Iterator, List, Optional, Sequence, Tuple
 #: Environment variable the submission reads to find where to append its trace.
 TRACE_ENV_VAR = "KB_DISPATCH_TRACE"
 
+#: Environment variable carrying the case the submission is being evaluated on.
+#:
+#: The trace requires a `case_id`, and the evaluator checks the record against
+#: the case it asked for, so the submission has to be told which case it is
+#: answering. It cannot be inferred from the inputs: two cases may share a shape
+#: and differ only in an attribute, and a submission must not guess. Passed
+#: through the environment for the same reason the trace path is -- the custom
+#: fallback path JIT-compiles and may run its work out of process.
+CASE_ID_ENV_VAR = "KB_DISPATCH_CASE_ID"
+
 #: Paths the B tier understands, in preference order.
 DISPATCH_PATHS = ("fused_library", "library_composition", "custom_fallback")
 
@@ -45,15 +56,42 @@ class DispatchTraceError(ValueError):
 
 
 @contextmanager
-def dispatch_trace(path: Optional[Path] = None) -> Iterator[Path]:
-    """Point the trace env var at a scratch file for the duration of the block.
+def _environment(variables: Dict[str, Optional[str]]) -> Iterator[None]:
+    """Set environment variables for the duration of the block, then restore them.
 
-    Yields the trace path. The previous value of the env var is restored on exit
-    (including being unset), so repeated evaluations in one process do not leak
-    state into each other.
+    Restoring an unset variable to being unset matters: repeated evaluations in
+    one process must not leak a previous case's identity into the next one.
+    """
+    missing = object()
+    previous = {name: os.environ.get(name, missing) for name in variables}
+    for name, value in variables.items():
+        if value is None:
+            os.environ.pop(name, None)
+        else:
+            os.environ[name] = value
+    try:
+        yield
+    finally:
+        for name, value in previous.items():
+            if value is missing:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value  # type: ignore[assignment]
+
+
+@contextmanager
+def dispatch_trace(path: Optional[Path] = None, case_id: Optional[str] = None) -> Iterator[Path]:
+    """Point the trace env vars at a scratch file for the duration of the block.
+
+    Yields the trace path. The previous values of both variables are restored on
+    exit (including being unset), so repeated evaluations in one process do not
+    leak state into each other.
 
     Args:
         path: where to collect the trace. A temporary file is used when omitted.
+        case_id: the case being evaluated. Published through CASE_ID_ENV_VAR so
+            the submission can label its trace records; when omitted the variable
+            is left unset and a submission cannot know which case it is running.
     """
     if path is None:
         handle, name = tempfile.mkstemp(prefix="kb_dispatch_trace_", suffix=".jsonl")
@@ -64,16 +102,17 @@ def dispatch_trace(path: Optional[Path] = None) -> Iterator[Path]:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("", encoding="utf-8")
 
-    missing = object()
-    previous = os.environ.get(TRACE_ENV_VAR, missing)
-    os.environ[TRACE_ENV_VAR] = str(path)
-    try:
+    with _environment({TRACE_ENV_VAR: str(path), CASE_ID_ENV_VAR: case_id}):
         yield path
-    finally:
-        if previous is missing:
-            os.environ.pop(TRACE_ENV_VAR, None)
-        else:
-            os.environ[TRACE_ENV_VAR] = previous  # type: ignore[assignment]
+
+
+def current_case_id() -> Optional[str]:
+    """The case the evaluator is currently running, as published to submissions.
+
+    Exposed so a submission can read it the same way the checks do rather than
+    hard-coding the variable name in two places.
+    """
+    return os.environ.get(CASE_ID_ENV_VAR)
 
 
 def read_trace(path: Path) -> List[dict]:

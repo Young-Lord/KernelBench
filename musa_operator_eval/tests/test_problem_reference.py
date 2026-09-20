@@ -90,17 +90,16 @@ class ProblemReferenceTests(unittest.TestCase):
         k_t, k_np = _to_torch(rng.standard_normal((batch, h_kv, s_kv, d), dtype=np.float32), dtype)
         v_t, v_np = _to_torch(rng.standard_normal((batch, h_kv, s_kv, d), dtype=np.float32), dtype)
 
-        expected_output, expected_lse = REFERENCE.sdpa_forward(
+        expected_output, _ = REFERENCE.sdpa_forward(
             q_np, k_np, v_np,
             scale=scale, causal=causal, window_left=window_left, window_right=window_right,
         )
 
         model = PROBLEM.Model(scale, causal, window_left, window_right)
-        output, lse = model(q_t, k_t, v_t)
+        output = model(q_t, k_t, v_t)
 
         self.assertEqual(tuple(output.shape), (batch, h_q, s_q, d), "output shape")
         self.assertEqual(output.dtype, dtype, "output dtype must follow the input")
-        self.assertEqual(tuple(lse.shape), (batch, h_q, s_q), "lse shape")
 
         self.assertTrue(
             torch.isfinite(output).all(),
@@ -109,10 +108,6 @@ class ProblemReferenceTests(unittest.TestCase):
         np.testing.assert_allclose(
             output.float().numpy(), expected_output, atol=atol, rtol=rtol,
             err_msg=f"output mismatch for shape={shape} causal={causal} dtype={dtype}",
-        )
-        np.testing.assert_allclose(
-            lse.float().numpy(), expected_lse, atol=atol, rtol=rtol,
-            err_msg=f"lse mismatch for shape={shape} causal={causal} dtype={dtype}",
         )
 
     def test_matches_numpy_reference_fp32(self):
@@ -136,7 +131,7 @@ class ProblemReferenceTests(unittest.TestCase):
                     q_np, k_np, v_np,
                     scale=scale, causal=causal, window_left=window_left, window_right=window_right,
                 )
-                output, _ = PROBLEM.Model(scale, causal, window_left, window_right)(q_t, k_t, v_t)
+                output = PROBLEM.Model(scale, causal, window_left, window_right)(q_t, k_t, v_t)
 
                 np.testing.assert_allclose(
                     output.float().numpy(), expected_output, atol=1e-2, rtol=1e-2,
@@ -148,9 +143,23 @@ class ProblemReferenceTests(unittest.TestCase):
         q = torch.randn(1, 4, 4, 32, dtype=torch.bfloat16)
         k = torch.randn(1, 4, 4, 32, dtype=torch.bfloat16)
         v = torch.randn(1, 4, 4, 32, dtype=torch.bfloat16)
-        output, lse = model(q, k, v)
+        output = model(q, k, v)
         self.assertEqual(output.dtype, torch.bfloat16)
-        self.assertEqual(lse.dtype, torch.float32)
+
+    def test_reference_returns_a_bare_tensor(self):
+        """The harness compares `output.shape`, so a tuple reference cannot be graded.
+
+        This is not a style preference: run_and_check_correctness reads `.shape`
+        off the reference's return value, and a tuple raises AttributeError before
+        any comparison happens, failing every trial of every case.
+        """
+        model = PROBLEM.Model(0.125, False, -1, -1)
+        q = torch.randn(1, 2, 4, 32)
+        k = torch.randn(1, 2, 4, 32)
+        v = torch.randn(1, 2, 4, 32)
+        output = model(q, k, v)
+        self.assertIsInstance(output, torch.Tensor, "the reference must return one tensor, not a tuple")
+        self.assertEqual(tuple(output.shape), (1, 2, 4, 32))
 
     def test_public_cases_match_the_reference(self):
         """Every public case must reproduce under the torch reference."""
@@ -183,7 +192,7 @@ class ProblemReferenceTests(unittest.TestCase):
         k_t, k_np = _to_torch(rng.standard_normal((batch, h_kv, s, d), dtype=np.float32), torch.float32)
         v_t, v_np = _to_torch(rng.standard_normal((batch, h_kv, s, d), dtype=np.float32), torch.float32)
 
-        output, lse = model(q_t, k_t, v_t)
+        output = model(q_t, k_t, v_t)
         expected, _ = REFERENCE.sdpa_forward(q_np, k_np, v_np, scale=1.0)
         np.testing.assert_allclose(output.float().numpy(), expected, atol=1e-3, rtol=1e-3)
 
@@ -192,9 +201,9 @@ class ProblemReferenceTests(unittest.TestCase):
         # different result, otherwise this test could not catch a wrong expansion.
         tiled_k_t = torch.cat([k_t, k_t], dim=1)
         tiled_v_t = torch.cat([v_t, v_t], dim=1)
-        _, lse_from_tiled_kv = PROBLEM.Model(1.0, False, -1, -1)(q_t, tiled_k_t, tiled_v_t)
+        output_from_tiled_kv = PROBLEM.Model(1.0, False, -1, -1)(q_t, tiled_k_t, tiled_v_t)
         self.assertFalse(
-            torch.allclose(lse, lse_from_tiled_kv, atol=1e-6),
+            torch.allclose(output, output_from_tiled_kv, atol=1e-6),
             "tiling K/V instead of repeating them should change the result",
         )
 

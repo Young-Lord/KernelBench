@@ -27,11 +27,13 @@ assert _spec is not None and _spec.loader is not None
 _trace = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_trace)
 
+CASE_ID_ENV_VAR = _trace.CASE_ID_ENV_VAR
 DispatchTraceError = _trace.DispatchTraceError
 DISPATCH_PATHS = _trace.DISPATCH_PATHS
 REQUIRED_TRACE_FIELDS = _trace.REQUIRED_TRACE_FIELDS
 TRACE_ENV_VAR = _trace.TRACE_ENV_VAR
 check_trace = _trace.check_trace
+current_case_id = _trace.current_case_id
 dispatch_trace = _trace.dispatch_trace
 read_trace = _trace.read_trace
 summarize_trace = _trace.summarize_trace
@@ -74,6 +76,55 @@ class TransportTests(unittest.TestCase):
                 self.assertEqual(path, target)
                 self.assertEqual(path.read_text(encoding="utf-8"), "")
             self.assertIsNotNone(path)
+
+
+class CaseIdentityTests(unittest.TestCase):
+    """The trace must name the case, so the evaluator has to publish which one."""
+
+    def setUp(self):
+        os.environ.pop(CASE_ID_ENV_VAR, None)
+        self.addCleanup(os.environ.pop, CASE_ID_ENV_VAR, None)
+
+    def test_case_id_is_published_inside_the_block(self):
+        with dispatch_trace(case_id="hidden_gap_003"):
+            self.assertEqual(current_case_id(), "hidden_gap_003")
+            self.assertEqual(os.environ[CASE_ID_ENV_VAR], "hidden_gap_003")
+
+    def test_case_id_is_unset_after_the_block_when_it_was_unset_before(self):
+        with dispatch_trace(case_id="hidden_gap_003"):
+            pass
+        self.assertNotIn(CASE_ID_ENV_VAR, os.environ, "the case identity must not leak")
+        self.assertIsNone(current_case_id())
+
+    def test_a_previous_case_id_is_restored(self):
+        os.environ[CASE_ID_ENV_VAR] = "previous_case"
+        with dispatch_trace(case_id="another_case"):
+            self.assertEqual(current_case_id(), "another_case")
+        self.assertEqual(current_case_id(), "previous_case")
+
+    def test_case_id_is_restored_even_when_the_body_raises(self):
+        with self.assertRaises(RuntimeError):
+            with dispatch_trace(case_id="exploding_case"):
+                raise RuntimeError("evaluation blew up")
+        self.assertNotIn(CASE_ID_ENV_VAR, os.environ)
+
+    def test_consecutive_evaluations_do_not_see_each_others_case(self):
+        """Two cases in one process must not be able to label each other's record."""
+        with dispatch_trace(case_id="first"):
+            self.assertEqual(current_case_id(), "first")
+        with dispatch_trace(case_id="second"):
+            self.assertEqual(current_case_id(), "second")
+
+    def test_omitting_the_case_id_leaves_it_unset(self):
+        """Silently inheriting the previous case would let a submission pass by luck."""
+        self.assertIsNone(current_case_id())
+        with dispatch_trace():
+            self.assertIsNone(current_case_id())
+
+    def test_a_restored_empty_caller_value_is_not_treated_as_set(self):
+        with dispatch_trace(case_id="inner"):
+            self.assertEqual(current_case_id(), "inner")
+        self.assertIsNone(current_case_id())
 
 
 class ReadTraceTests(unittest.TestCase):

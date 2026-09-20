@@ -39,6 +39,7 @@ POLICY = {
     "allowed_symbol_prefixes": ["musa", "mudnn"],
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
+    "case_id_env_var": "KB_DISPATCH_CASE_ID",
 }
 
 # A submission that probes at runtime, dispatches to a whitelisted library, and
@@ -55,7 +56,23 @@ import mudnn
 class ModelNew(torch.nn.Module):
     def forward(self, q, k, v):
         probe = mudnn.sdpa_supported(q.dtype, q.shape[-1])
-        record = {"case_id": case_id, "selected_path": "fused_library", "probe_status": "accepted"}
+        record = {"case_id": os.environ["KB_DISPATCH_CASE_ID"], "selected_path": "fused_library", "probe_status": "accepted"}
+        with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\\n")
+        return torch_musa.sdpa(q, k, v)
+"""
+
+# Locates the trace file but never asks which case it is running, so every record
+# it writes would have to guess at the case id.
+NO_CASE_ID_SUBMISSION = """
+import json
+import os
+
+import torch_musa
+
+class ModelNew(torch.nn.Module):
+    def forward(self, q, k, v):
+        record = {"case_id": "unknown", "selected_path": "fused_library", "probe_status": "accepted"}
         with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
             handle.write(json.dumps(record) + "\\n")
         return torch_musa.sdpa(q, k, v)
@@ -188,6 +205,32 @@ class DispatchTraceTests(unittest.TestCase):
         valid, errors, _ = validate_library_kernel_static(FIELDS_ONLY_SUBMISSION, POLICY)
         self.assertFalse(valid)
         self.assertTrue(any("KB_DISPATCH_TRACE" in message for message in errors), errors)
+
+    def test_case_id_env_var_is_required_when_the_contract_declares_it(self):
+        has_issue, message = check_dispatch_trace_emission(
+            NO_CASE_ID_SUBMISSION, ["case_id", "selected_path", "probe_status"],
+            "KB_DISPATCH_TRACE", "KB_DISPATCH_CASE_ID",
+        )
+        self.assertTrue(has_issue, "a submission that never reads the case id can only be guessing")
+        self.assertIn("KB_DISPATCH_CASE_ID", message)
+
+        valid, errors, _ = validate_library_kernel_static(NO_CASE_ID_SUBMISSION, POLICY)
+        self.assertFalse(valid)
+        self.assertTrue(any("KB_DISPATCH_CASE_ID" in message for message in errors), errors)
+
+    def test_reading_the_case_id_satisfies_it(self):
+        has_issue, message = check_dispatch_trace_emission(
+            GOOD_SUBMISSION, ["case_id", "selected_path", "probe_status"],
+            "KB_DISPATCH_TRACE", "KB_DISPATCH_CASE_ID",
+        )
+        self.assertFalse(has_issue, message)
+
+    def test_case_id_env_var_is_optional_when_the_contract_omits_it(self):
+        """A contract that publishes no case identity cannot require reading one."""
+        has_issue, message = check_dispatch_trace_emission(
+            NO_CASE_ID_SUBMISSION, ["case_id", "selected_path", "probe_status"], "KB_DISPATCH_TRACE",
+        )
+        self.assertFalse(has_issue, message)
 
 
 class OptionalDeviceKernelTests(unittest.TestCase):

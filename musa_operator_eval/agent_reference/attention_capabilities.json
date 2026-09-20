@@ -36,6 +36,7 @@
     "forbidden_basis": "version_string",
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
+    "case_id_env_var": "KB_DISPATCH_CASE_ID",
     "failure_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
   },
   "semantic_summary": {
@@ -45,8 +46,7 @@
     "window_unlimited_value": -1,
     "softmax_stability": "max_shift_required",
     "accumulation_dtype": "float32",
-    "fully_masked_output": "zeros",
-    "fully_masked_lse": "negative_infinity"
+    "fully_masked_output": "zeros"
   },
   "engineering_hints": [
     "probe_before_dispatch",
