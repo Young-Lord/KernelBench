@@ -107,6 +107,18 @@
       "finding": "all five half-precision configurations resolve to the fused path and the float32 control resolves to the composition path, so the public cases' expected_path holds and the precision this task declares is load-bearing rather than defensive",
       "routes_probed": ["torch_musa_sdpa"],
       "routes_not_probed": ["mudnn_fused"]
+    },
+    "public_case_baseline": {
+      "state": "measured",
+      "evidence": "private/mingpt_causal_attention_b_v0/baseline.json",
+      "covers": "the three public smoke cases only",
+      "not_the_gate": "the gate this task is admitted by is defined over the hidden set, which does not exist yet, so the status above stays pending. What this records is that the measurement pipeline drives this task end to end and that a real expert dispatch passes correctness under the same weight alignment the harness uses.",
+      "latency_ms": {
+        "smoke_001": {"naive_library_composition": 0.5464, "expert_dispatch": 0.1360, "ratio": 4.02},
+        "smoke_002": {"naive_library_composition": 0.7618, "expert_dispatch": 0.1371, "ratio": 5.56},
+        "smoke_003": {"naive_library_composition": 0.8596, "expert_dispatch": 0.1329, "ratio": 6.47}
+      },
+      "paths_taken": "fused_library on all three, confirmed by the dispatch trace rather than by the call returning a tensor"
     }
   }
 }
