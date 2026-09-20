@@ -174,7 +174,14 @@ def main() -> int:
 
     previously = task.get("admission") or {}
     was_pending = previously.get("status") == "pending_device_measurement"
-    for key in ("reason", "dispatch_note", "gap_reason_coverage", "notes", "also_answered"):
+    for key in (
+        "reason",
+        "dispatch_note",
+        "gap_reason_coverage",
+        "notes",
+        "also_answered",
+        "how_to_read_the_mean",
+    ):
         if key not in previously:
             continue
         # `reason` on a pending block explains why nothing could be asserted yet.

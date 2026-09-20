@@ -98,30 +98,35 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
-    "gate": "geometric mean of naive_library_composition / expert_dispatch over the hidden cases where both pass",
+    "measured_geometric_mean": 2.26657050258605,
     "threshold": 1.3,
-    "measured_geometric_mean": 2.2687,
-    "evidence": "private/mingpt_block_b_v0/baseline.hidden.json",
-    "measured_on": "the hidden set, not the public one. The gate is defined over the cases a submission cannot read, so a ratio measured on the public smoke cases would be a real number about a different question.",
-    "per_case_ratios": {
-      "hidden_gap_001": 1.2916,
-      "hidden_gap_002": 1.5186,
-      "hidden_gap_003": 1.5635,
-      "hidden_gap_004": 1.5065,
-      "hidden_perf_001": 5.3628,
-      "hidden_perf_002": 6.4792,
-      "hidden_probe_001": 2.1559,
-      "hidden_probe_002": 2.0280
+    "ratios": {
+      "hidden_gap_001": 1.2876376983539473,
+      "hidden_gap_002": 1.5190828159273206,
+      "hidden_gap_003": 1.56559874060757,
+      "hidden_gap_004": 1.5015217481886844,
+      "hidden_perf_001": 5.349780015231601,
+      "hidden_perf_002": 6.463887523713883,
+      "hidden_probe_001": 2.15626524444383,
+      "hidden_probe_002": 2.031583786071486
     },
-    "why_the_margin_is_narrow": "2.27 against a threshold of 1.3 is the tightest of the packaged B-tier tasks, and the reason is structural rather than a weakness in the measurement: the MLP, the two LayerNorms, the GELU and the residual are the same code on both sides of the ratio, so they dilute it whatever the attention core costs. Sizing the performance cases at long sequences is what keeps the attention share large enough to clear the floor -- at S=2048 and S=4096 the ratio is 5-6x, where the same task's public cases at S=64..129 measured about 2x.",
-    "also_answered": "the two performance cases run to sequence lengths of 2048 and 4096, far past the 512 the head-dimension probe covered, and both dispatch fused. That closes the open question of whether sequence length eventually moves the route; on this build it does not.",
+    "measured_over": "the private case manifest, which is the set the gate is defined over",
+    "measured_in": "musa-5f9d7b9dd1233a68",
+    "baseline": "musa_operator_eval/private/mingpt_block_b_v0/baseline.hidden.json",
+    "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
     "dispatch_note": "two dispatchable segments rather than one: the causal attention core, and the 4C-expansion MLP projections",
     "gap_reason_coverage": {
       "state": "open",
-      "reachable": ["unsupported_shape"],
-      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "reachable": [
+        "unsupported_shape"
+      ],
+      "unreachable": [
+        "semantic_mismatch",
+        "layout_mismatch",
+        "multi_operator_required"
+      ],
       "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is n_embd / n_head rather than a free parameter, and the fused attention path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path — measured, and independent of seq_len and dtype. multi_operator_required was declared here before it was checked, and it is not a gap. The fact behind it is real and is the same one dispatch_note records: the block is LayerNorm, attention, residual, LayerNorm, MLP, residual, and the fused attention call covers only the core, so both LayerNorms, the 4C MLP projections, the GELU and the residuals have to be composed around it. That holds for every case in the block rather than for a subset of them, so it names no configuration a submission could be graded on. It cannot be given to a hidden case either: the case schema requires a gap's expected path to be library_composition or custom_fallback, so a case whose attention core the fused kernel does serve is expected on fused_library and is not a gap, while a case the fused kernel declines is already the unsupported_shape gap — the two labels can never disagree, which is what makes it not a category. semantic_mismatch is unreachable because the scale is hard-coded to 1/sqrt(head_dim) (the only value the fused path accepts), the mask is plain top-left causal so every query row sees j <= i and none is fully masked, and the block's attn_pdrop is 0.0, so there is no dropout semantics for the two paths to disagree about. layout_mismatch is unreachable because the attention layout is contiguous BHSD, which the measurement showed still dispatches fused. Either a second measured category has to be found on the device or this entry needs a wider contract before it can meet the floor."
-    }
+    },
+    "also_answered": "the two performance cases run to sequence lengths of 2048 and 4096, far past the 512 the head-dimension probe covered, and both dispatch fused. That closes the open question of whether sequence length eventually moves the route; on this build it does not."
   }
 }

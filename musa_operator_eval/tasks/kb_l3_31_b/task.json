@@ -98,17 +98,17 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 1.5127721822466733,
+    "measured_geometric_mean": 1.472776075733718,
     "threshold": 1.3,
     "ratios": {
-      "hidden_gap_001": 0.894982055250074,
-      "hidden_gap_002": 1.0101877217958044,
-      "hidden_gap_003": 1.0020995806831428,
-      "hidden_gap_004": 1.2317804372006815,
-      "hidden_perf_001": 3.2906572256873314,
-      "hidden_perf_002": 3.9790799041766562,
-      "hidden_probe_001": 1.8750938002212765,
-      "hidden_probe_002": 1.0010121260544296
+      "hidden_gap_001": 0.8950974642155859,
+      "hidden_gap_002": 1.0121750973094494,
+      "hidden_gap_003": 1.0015436425252433,
+      "hidden_gap_004": 0.9983009589204932,
+      "hidden_perf_001": 3.290180175655243,
+      "hidden_perf_002": 3.9726558168679187,
+      "hidden_probe_001": 1.8696558334357836,
+      "hidden_probe_002": 0.9999404424286946
     },
     "measured_over": "the private case manifest, which is the set the gate is defined over",
     "measured_in": "musa-5f9d7b9dd1233a68",
@@ -125,6 +125,7 @@
         "multi_operator_required"
       ],
       "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is embed_dim / num_heads, both now case parameters, and the fused path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path. This was measured: head_dim 32 dispatches fused at every sequence length tried from 49 to 1000, and 192 and 256 do not. layout_mismatch was the reason declared here before that measurement, and it is not a gap: the fused path accepted the contiguous, the transposed and the strided views this task produces, and refused only a three-dimensional input, which is a rank error rather than a layout the library declines, since nn.MultiheadAttention always hands it four dimensions. semantic_mismatch is unreachable: the scale is the framework default 1/sqrt(D) and there is no mask, so no row can be fully masked. multi_operator_required is unreachable: one attention op. This entry needs a second measurable category before it can meet the floor."
-    }
+    },
+    "how_to_read_the_mean": "The mean is diluted by the gap cases, and that is structural rather than a sign of a weak entry. Where a case's expected path is `library_composition`, the expert has nothing better to do than the naive -- both end up on the library's own non-fused path -- so the ratio is 1.0 by construction and what is left is measurement noise. Four of the eight hidden cases here are gaps and two more are probes that land on the composition path; the two perf cases are where the fused path is reachable, and they carry ratios of 3.29 and 3.97. So comparing this entry's 1.47 against kb_l3_43_b's 3.47 compares how many of each entry's cases are gaps, not how much better one expert is than the other. The measured mean moved between 1.47 and 1.51 across two runs of the same code on the same device, which is the reproducibility available here; both are above the threshold, so the decision is stable but the third digit is not."
   }
 }
