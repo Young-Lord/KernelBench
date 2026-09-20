@@ -306,7 +306,7 @@ The attention family of the MUSA operator evaluation: every KernelBench attentio
 
 ## 引用路径状态
 
-这些路径被仓库内的文件引用为上游快照。要分清两种情况：标了分支的，本工作树里没有、但在 `feat/import-musa-attention-set` 上存在——上游源码归档就放在那条分支，没有合进来，因为 `.gitignore` 已经确立了「vendored 上游 MUSA 源码按需取、不入库」的约定；没标分支的，是本机也确实不存在。
+这些路径被仓库内的文件引用为上游快照。要分清两种情况：标了分支的，本工作树里没有、但在 `feat/import-musa-attention-set` 上存在——上游源码归档在那条分支上，尚未合入，是否合入尚未决定；没标分支的，是本机也确实不存在。
 
 | 引用方 | 路径 | 角色 | 本工作树 | 所在分支 |
 |---|---|---|---|---|

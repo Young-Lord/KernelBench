@@ -14,7 +14,7 @@
     "research_notes": "musa_attention_set/research_notes.md",
     "integrations": "musa_attention_set/integrations.md",
     "verifier": "musa_attention_set/scripts/verify_snapshots.py",
-    "why_not_merged": "The archive is 2126 files and about 676k lines of vendored upstream source. .gitignore already establishes that vendored upstream MUSA sources are not committed and are fetched on demand into third_party/musa-sources/, so merging it here would contradict the convention this repository already set. It stays on its own branch and this record points at it.",
+    "merge_status": "Not merged. The archive sits on its own branch and is absent from main, which is all that is known; whether to merge it is an open decision. An earlier version of this record asserted a reason (that .gitignore's vendored-source convention ruled the merge out) and that reason was never agreed with anyone -- it is removed rather than replaced with another guess.",
     "consequence": "Every upstream fact below is transcribed from that archive's manifest.csv and research_notes.md at the commit above, not researched independently. Re-check against the archive before relying on it; the archive's own verifier covers hash and layout integrity, this record only covers which entry can serve which task."
   },
 

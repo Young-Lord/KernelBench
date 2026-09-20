@@ -370,7 +370,7 @@ class CandidateFindingTests(unittest.TestCase):
     def test_the_source_archive_block_points_at_a_branch(self):
         archive = self.record["source_archive"]
         self.assertEqual(archive["branch"], "feat/import-musa-attention-set")
-        self.assertTrue(archive["why_not_merged"])
+        self.assertTrue(archive["merge_status"])
 
 
 class ServesAgreementTests(unittest.TestCase):
