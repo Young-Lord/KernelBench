@@ -5,10 +5,37 @@ architecture. Never reuse latency numbers across environments.
 
 ## 1. Capture the environment
 
-Run `tools/collect_environment.py` with the exact device, architecture, driver,
-Toolkit, muDNN, muBLAS, image digest, architecture flag and fast-math setting.
-Store the resulting snapshot next to the task contract; it is the identifier
-every later measurement is tied to.
+```bash
+python musa_operator_eval/tools/collect_environment.py --output-dir runs/<task>/env
+```
+
+Nothing needs to be passed: the device is read through `mthreads-gmi`, every
+toolkit component through its own `<name>_version` helper, the architecture from
+`torch.musa` device properties, and the driver through `driver_version_query`
+(host-side, so no container image can pin it). The `--device-name`, `--driver`,
+`--toolkit`, `--mudnn`, `--mublas` and `--architecture` flags exist only to
+override a probe that misread.
+
+Store the snapshot next to the task contract; it is the identifier every later
+measurement is tied to. It carries two of them, because they answer different
+questions:
+
+- `snapshot_id` — the software and hardware configuration. Two machines built
+  the same way share it.
+- `device_instance_id` — the specific physical card, derived from the GPU UUID.
+  On a rented host this is the identifier that changes when an instance comes up
+  on a different machine, which is the failure a container image digest cannot
+  detect at all.
+
+Latency numbers may only be compared between runs whose `snapshot_id` matches,
+and only reused for `device_instance_id` when the rentable instance is known to
+be pinned to one host.
+
+A container image digest is recorded when the platform exposes one and set to
+`null` with an `image_digest_unavailable_reason` otherwise. A missing digest is
+not an error: it would not have covered the driver, the GPU identity or the
+cgroup limits, all of which are collected directly. A field that could not be
+read is always reported as missing with its reason, never as a silent null.
 
 ## 2. Probe capabilities
 
