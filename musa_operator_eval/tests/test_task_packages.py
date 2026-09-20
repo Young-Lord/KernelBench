@@ -335,6 +335,71 @@ class LibraryPolicyTests(unittest.TestCase):
                     json.loads(reference.read_text(encoding="utf-8"))["family"], task["family"])
 
 
+class CapabilityReferenceTests(unittest.TestCase):
+    """The family capability references are agent-facing documents, so they are checked.
+
+    They are read by the agent, not by code, which is why nothing noticed when they
+    drifted: the newest one gained `semantic_summary` and the other never did, one
+    of them carried a relative path that resolved to nothing, and one was left
+    describing a family no task asks about. A document whose reader is a person or
+    an agent needs the same treatment as a field whose reader is a function.
+
+    §4.2 of the guide is what fixes the content: three facts have to be written down
+    rather than left to be inferred, because a golden produced under the wrong one
+    of them fails in a way that is hard to trace back. They are stated once per
+    family, which is what locks them for every task in it.
+    """
+
+    #: §4.2's three mandatory declarations, as the references spell them.
+    MANDATORY_SEMANTIC_KEYS = (
+        "causal_alignment",       # top_left vs bottom_right for S_q != S_kv
+        "window_interval",        # window_size = (left, right), visible j in [i-left, i+right]
+        "window_unlimited_value",  # what a direction means when it is unbounded
+        "fully_masked_output",    # what a row with no visible key produces
+    )
+
+    def references(self):
+        for path in sorted((ROOT / "agent_reference").glob("*_capabilities.json")):
+            yield path, json.loads(path.read_text(encoding="utf-8"))
+
+    def test_every_b_tier_family_has_a_reference(self):
+        families = {task["family"] for _, task in all_packages() if task["tier"] == "B_library"}
+        named = {document["family"] for _, document in self.references()}
+        self.assertLessEqual(families, named, f"a B-tier family has no reference: {families - named}")
+
+    def test_every_reference_is_claimed_by_a_task(self):
+        """An agent-visible reference nothing points at reads as though something does."""
+        claimed = {task["family"] for _, task in all_packages() if task["tier"] == "B_library"}
+        for path, document in self.references():
+            with self.subTest(reference=path.name):
+                self.assertIn(document["family"], claimed)
+
+    def test_every_reference_has_the_same_shape(self):
+        """Two references of the same kind drifting apart is how one of them goes stale."""
+        shapes = {path.name: tuple(document) for path, document in self.references()}
+        distinct = set(shapes.values())
+        self.assertEqual(len(distinct), 1, f"capability references disagree on their fields: {shapes}")
+
+    def test_every_reference_declares_the_mandatory_semantics(self):
+        for path, document in self.references():
+            summary = document.get("semantic_summary", {})
+            missing = [key for key in self.MANDATORY_SEMANTIC_KEYS if key not in summary]
+            with self.subTest(reference=path.name):
+                self.assertEqual(missing, [], f"{path.name} does not declare {missing}")
+
+    def test_no_reference_names_a_path(self):
+        """A family document cannot point at a task-scoped file, so it must not try.
+
+        `../semantics.json` used to sit in one of these. There is no such file and
+        there cannot be one: the semantics contract belongs to a task and this
+        belongs to a family, so the path was unresolvable by construction and an
+        agent following it got nothing.
+        """
+        for path, document in self.references():
+            with self.subTest(reference=path.name):
+                self.assertNotIn("contract_reference", document)
+
+
 CANONICAL_GAP_REASONS = (
     "unsupported_shape",
     "semantic_mismatch",

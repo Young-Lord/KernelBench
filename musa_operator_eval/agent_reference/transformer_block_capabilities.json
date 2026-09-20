@@ -66,6 +66,15 @@
       "multi_operator_required"
     ]
   },
+  "semantic_summary": {
+    "layout": "BHSD",
+    "causal_alignment": "top_left",
+    "window_interval": "[query_index - left, query_index + right]",
+    "window_unlimited_value": -1,
+    "softmax_stability": "max_shift_required",
+    "accumulation_dtype": "float32",
+    "fully_masked_output": "cannot_occur; the causal mask alone leaves every query row at least j = i"
+  },
   "engineering_hints": [
     "probe_before_dispatch",
     "prefer_the_fused_path_when_it_accepts_the_configuration",
