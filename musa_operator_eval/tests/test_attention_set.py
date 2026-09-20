@@ -214,6 +214,107 @@ class Level1ArchiveTests(unittest.TestCase):
         self.assertEqual(self.summary["largest_library_gaps"][0]["problem_id"], 97)
 
 
+class KernelCandidateTests(unittest.TestCase):
+    """The candidate inventory, and the reference discipline between it and the set."""
+
+    def setUp(self):
+        self.manifest = _manifest()
+        self.record = collector.load_candidate_record(self.manifest)
+        self.candidates, self.problems = collector.verify_candidates(self.manifest, self.record)
+
+    def test_the_shipped_record_verifies_clean(self):
+        self.assertEqual(self.problems, [], f"candidate record has drifted: {self.problems}")
+
+    def test_record_is_maintainer_only(self):
+        self.assertEqual(self.record["visibility"], "maintainer_only")
+
+    def test_candidate_ids_are_unique(self):
+        ids = [candidate["candidate_id"] for candidate in self.candidates]
+        self.assertEqual(len(ids), len(set(ids)))
+
+    def test_every_candidate_declares_at_least_one_target(self):
+        for candidate in self.candidates:
+            with self.subTest(candidate=candidate["candidate_id"]):
+                self.assertTrue(candidate["targets"])
+
+    def test_every_candidate_of_a_maintainer_record_carries_evidence(self):
+        for candidate in self.candidates:
+            with self.subTest(candidate=candidate["candidate_id"]):
+                self.assertTrue(candidate["evidence"])
+
+    def test_an_entry_pointing_at_an_unknown_candidate_is_caught(self):
+        manifest = _manifest()
+        manifest["entries"][0]["candidate_kernels"] = ["not_a_candidate"]
+        _, problems = collector.verify_candidates(manifest, self.record)
+        self.assertTrue(any("not_a_candidate" in problem for problem in problems), problems)
+
+    def test_an_unknown_target_is_caught(self):
+        record = json.loads(json.dumps(self.record))
+        record["candidates"][0]["targets"] = ["s9999_fp64"]
+        _, problems = collector.verify_candidates(self.manifest, record)
+        self.assertTrue(any("s9999_fp64" in problem for problem in problems), problems)
+
+    def test_an_unknown_kind_is_caught(self):
+        record = json.loads(json.dumps(self.record))
+        record["candidates"][0]["kind"] = "vibes"
+        _, problems = collector.verify_candidates(self.manifest, record)
+        self.assertTrue(any("vibes" in problem for problem in problems), problems)
+
+    def test_a_claim_without_evidence_is_caught(self):
+        record = json.loads(json.dumps(self.record))
+        record["candidates"][0].pop("evidence")
+        _, problems = collector.verify_candidates(self.manifest, record)
+        self.assertTrue(any("evidence" in problem for problem in problems), problems)
+
+    def test_an_empty_record_is_caught(self):
+        _, problems = collector.verify_candidates(self.manifest, {"candidates": []})
+        self.assertTrue(problems)
+
+
+class CandidateFindingTests(unittest.TestCase):
+    """The load-bearing claim: the fused attention path is an S5000 story."""
+
+    def setUp(self):
+        self.manifest = _manifest()
+        self.by_id = {
+            candidate["candidate_id"]: candidate
+            for candidate in collector.load_candidate_record(self.manifest)["candidates"]
+        }
+
+    def test_mate_is_s5000_only(self):
+        mate = self.by_id["mate_fmha"]
+        self.assertEqual(mate["requirements"]["gpu"], "S5000")
+        self.assertFalse(any(target.startswith("s4000") for target in mate["targets"]))
+
+    def test_mt_flashmla_targets_compute_capability_3_1(self):
+        self.assertIn("3.1", self.by_id["mt_flashmla"]["requirements"]["gpu"])
+
+    def test_no_fused_library_candidate_serves_an_mp22_target(self):
+        """If this ever fails, the B-tier task's fused_library path became reachable on S4000."""
+        fused = [
+            candidate for candidate in self.by_id.values()
+            if candidate["kind"] == "fused_library"
+        ]
+        for candidate in fused:
+            with self.subTest(candidate=candidate["candidate_id"]):
+                mp22_targets = [target for target in candidate["targets"] if target.startswith("s4000")]
+                if candidate["candidate_id"] != "torch_musa_sdpa":
+                    self.assertEqual(mp22_targets, [])
+
+    def test_the_open_question_about_torch_musa_on_mp22_is_recorded(self):
+        """torch_musa_sdpa is the one candidate whose mp_22 coverage is unproven."""
+        limits = self.by_id["torch_musa_sdpa"]["limits"]
+        self.assertIn("open_question", limits)
+
+    def test_mate_layout_differs_from_the_b_tier_task(self):
+        """The B-tier task is BHSD; MATE is BSHD. A dispatch has to transpose."""
+        self.assertIn("BSHD", self.by_id["mate_fmha"]["limits"]["layout"])
+
+    def test_handwritten_kernels_are_marked_warp_size_sensitive(self):
+        limits = self.by_id["kb_level3_musa_handwritten"]["limits"]
+        self.assertIn("warp_size_sensitivity", limits)
+
+
 class GeneratedIndexTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -233,6 +233,60 @@ def verify_dangling(entries: List[dict]) -> List[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Kernel candidates
+# ---------------------------------------------------------------------------
+
+CANDIDATE_KINDS = ("fused_library", "expert_dispatch_source", "handwritten_kernel", "deprecated_source")
+
+REQUIRED_CANDIDATE_FIELDS = ("candidate_id", "name", "kind", "targets", "why_it_matters")
+
+
+def load_candidate_record(manifest: dict) -> dict:
+    """Load the kernel candidate record the set points at."""
+    return json.loads((REPO_TOP / manifest["kernel_candidates_record"]).read_text(encoding="utf-8"))
+
+
+def verify_candidates(manifest: dict, record: dict) -> Tuple[List[dict], List[str]]:
+    """Check the candidate record and the entry-to-candidate references.
+
+    A candidate that claims a target the set does not define, or an entry that
+    points at a candidate that does not exist, both mean the set and its
+    candidates have drifted apart, which is exactly the state that makes an
+    inventory useless.
+    """
+    problems: List[str] = []
+    candidates = record.get("candidates") or []
+    if not candidates:
+        return [], ["the kernel candidate record lists no candidates"]
+
+    known_targets = {target["target_id"] for target in manifest["targets"]}
+    known_ids = set()
+
+    for candidate in candidates:
+        candidate_id = candidate.get("candidate_id", "<unnamed>")
+        for field in REQUIRED_CANDIDATE_FIELDS:
+            if not candidate.get(field):
+                problems.append(f"candidate {candidate_id}: missing {field!r}")
+        if candidate_id in known_ids:
+            problems.append(f"candidate {candidate_id}: duplicate id")
+        known_ids.add(candidate_id)
+        if candidate.get("kind") and candidate["kind"] not in CANDIDATE_KINDS:
+            problems.append(f"candidate {candidate_id}: unknown kind {candidate['kind']!r}")
+        for target in candidate.get("targets", []):
+            if target not in known_targets:
+                problems.append(f"candidate {candidate_id}: unknown target {target!r}")
+        if record.get("visibility") == "maintainer_only" and not candidate.get("evidence"):
+            problems.append(f"candidate {candidate_id}: a claim with no evidence is not checkable")
+
+    for entry in manifest["entries"]:
+        for candidate_id in entry.get("candidate_kernels", []):
+            if candidate_id not in known_ids:
+                problems.append(f"entry {entry['entry_id']}: unknown candidate kernel {candidate_id!r}")
+
+    return candidates, problems
+
+
+# ---------------------------------------------------------------------------
 # Level 1 A-tier archive: the numbers the B-tier gate needs
 # ---------------------------------------------------------------------------
 
@@ -319,8 +373,10 @@ def _format_speedup(actual: dict) -> str:
     return "-"
 
 
-def render_index(manifest: dict, facts: List[dict], dangling: List[dict], level1: dict) -> str:
+def render_index(manifest: dict, facts: List[dict], dangling: List[dict], level1: dict,
+                 candidates: List[dict], record: dict) -> str:
     facts_by_id = {entry["entry_id"]: entry for entry in facts}
+    record_headline = record.get("headline")
     lines: List[str] = []
 
     lines.append(f"# {manifest['title']}")
@@ -365,6 +421,55 @@ def render_index(manifest: dict, facts: List[dict], dangling: List[dict], level1
             f"`{entry['attention_kind']}` | {a_mark} | {b_mark} | {speedup} |"
         )
     lines.append("")
+
+    lines.append("## 可用 kernel 候选")
+    lines.append("")
+    lines.append(
+        "可用于出题、做 expert dispatch 或作为参考实现的 attention kernel，一条一个实现。"
+        "上游位置、版本与依赖写在溯源记录里"
+        f"（`{manifest['kernel_candidates_record']}`，maintainer-only），这里只列选型需要的信息。"
+    )
+    lines.append("")
+    lines.append("| candidate | 类型 | 覆盖 target | dtype | 服务题目 |")
+    lines.append("|---|---|---|---|---|")
+    entries_by_candidate: Dict[str, List[str]] = {}
+    for entry in manifest["entries"]:
+        for candidate_id in entry.get("candidate_kernels", []):
+            entries_by_candidate.setdefault(candidate_id, []).append(entry["entry_id"])
+    for candidate in candidates:
+        targets = ", ".join(f"`{target}`" for target in candidate.get("targets", []))
+        dtypes = ", ".join(candidate.get("dtypes", [])) or "未记录"
+        serves = ", ".join(f"`{entry_id}`" for entry_id in entries_by_candidate.get(candidate["candidate_id"], [])) or "—"
+        lines.append(
+            f"| `{candidate['candidate_id']}` | `{candidate['kind']}` | {targets} | {dtypes} | {serves} |"
+        )
+    lines.append("")
+
+    headline_candidate = candidates[0].get("targets") if candidates else None
+    if record_headline:
+        lines.append(f"> {record_headline}")
+        lines.append("")
+
+    for candidate in candidates:
+        lines.append(f"### `{candidate['candidate_id']}` — {candidate['name']}")
+        lines.append("")
+        lines.append(f"- 类型：`{candidate['kind']}`")
+        requirements = candidate.get("requirements") or {}
+        if requirements:
+            lines.append("- 运行要求：" + "；".join(f"{key} {value}" for key, value in requirements.items()))
+        limits = candidate.get("limits") or {}
+        if limits:
+            lines.append("- 边界：" + "；".join(f"{key} — {value}" for key, value in limits.items()))
+        lines.append(f"- {candidate['why_it_matters']}")
+        lines.append("")
+
+    record_gaps = record.get("gaps") or []
+    if record_gaps:
+        lines.append("候选清单记录的缺口：")
+        lines.append("")
+        for gap in record_gaps:
+            lines.append(f"- {gap}")
+        lines.append("")
 
     lines.append("## 逐题明细")
     lines.append("")
@@ -513,8 +618,17 @@ def main() -> int:
                 f"{reference['referenced_by']} should be updated"
             )
 
+    candidate_record_path = REPO_TOP / manifest["kernel_candidates_record"]
+    if not candidate_record_path.is_file():
+        problems.append(f"kernel candidate record missing at {manifest['kernel_candidates_record']}")
+        candidates, record = [], {}
+    else:
+        record = load_candidate_record(manifest)
+        candidates, candidate_problems = verify_candidates(manifest, record)
+        problems.extend(candidate_problems)
+
     level1 = summarize_level1_archive()
-    index = render_index(manifest, facts, dangling, level1)
+    index = render_index(manifest, facts, dangling, level1, candidates, record)
 
     if not args.check:
         INDEX.write_text(index, encoding="utf-8")
@@ -528,6 +642,7 @@ def main() -> int:
     print(
         f"attention set OK: {len(manifest['entries'])} entries, "
         f"{sum(len(fact.get('measurements', [])) for fact in facts)} measurements verified, "
+        f"{len(candidates)} kernel candidates, "
         f"{len(dangling)} dangling references still dangling"
     )
     if not args.check:

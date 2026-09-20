@@ -31,9 +31,13 @@
 
   "warp_size_note": "mp_22 (S4000) and mp_21 (S80) use 128-thread warps; mp_31 (S5000) uses 32. Every tuned A-tier kernel in this set was tuned on mp_22, and the tuning record shows the optimum sitting at the 1024-thread CTA ceiling with 32 lanes per query row. Those two facts are warp-size sensitive, so no mp_22 launch configuration should be carried to mp_31 without re-measuring. Source: docs/musa/README.md and docs/musa_attention_tuning_notes.md.",
 
+  "kernel_candidates_record": "musa_operator_eval/sources/attention-kernel-candidates.json",
+  "kernel_candidates_note": "Candidate attention kernel implementations, one record per implementation. The detail, including upstream locations, lives in the sources record because that is where this repository keeps provenance; the index renders only what a reader needs to pick a candidate.",
+
   "entries": [
     {
       "entry_id": "kb_l1_97",
+      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "mutlass_fmha", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 1, "problem_id": 97, "name": "ScaledDotProductAttention"},
       "reference": {"path": "KernelBench/level1/97_ScaledDotProductAttention.py", "entrypoint": "Model"},
       "attention_kind": "dense_mha",
@@ -59,6 +63,7 @@
     },
     {
       "entry_id": "kb_l3_43",
+      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 43, "name": "MinGPTCausalAttention"},
       "reference": {"path": "KernelBench/level3/43_MinGPTCausalAttention.py", "entrypoint": "Model"},
       "attention_kind": "causal_mha",
@@ -83,6 +88,7 @@
     },
     {
       "entry_id": "kb_l3_44",
+      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 44, "name": "MiniGPTBlock"},
       "reference": {"path": "KernelBench/level3/44_MiniGPTBlock.py", "entrypoint": "Model"},
       "attention_kind": "causal_mha",
@@ -104,6 +110,7 @@
     },
     {
       "entry_id": "kb_l3_50",
+      "candidate_kernels": ["kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 50, "name": "ReLUSelfAttention"},
       "reference": {"path": "KernelBench/level3/50_ReLUSelfAttention.py", "entrypoint": "Model"},
       "attention_kind": "causal_relu_attention",
@@ -153,6 +160,7 @@
     },
     {
       "entry_id": "kb_l3_30",
+      "candidate_kernels": ["mate_fmha", "torch_musa_sdpa", "kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 30, "name": "SwinTransformerV2"},
       "reference": {"path": "KernelBench/level3/30_SwinTransformerV2.py", "entrypoint": "Model"},
       "attention_kind": "windowed_mha",
@@ -178,6 +186,7 @@
     },
     {
       "entry_id": "kb_l3_28",
+      "candidate_kernels": ["kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 28, "name": "VisionTransformer"},
       "reference": {"path": "KernelBench/level3/28_VisionTransformer.py", "entrypoint": "Model"},
       "attention_kind": "dense_mha_degenerate",
@@ -197,6 +206,7 @@
     },
     {
       "entry_id": "kb_l3_32",
+      "candidate_kernels": ["kb_level3_musa_handwritten"],
       "kernelbench": {"level": 3, "problem_id": 32, "name": "ConvolutionalVisionTransformer"},
       "reference": {"path": "KernelBench/level3/32_ConvolutionalVisionTransformer.py", "entrypoint": "Model"},
       "attention_kind": "dense_mha_degenerate",

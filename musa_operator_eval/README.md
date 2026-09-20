@@ -22,9 +22,10 @@ source-audit rule set. See `kernel_static_checker.static_audit_kernel`.
   `LIBRARY_POLICY`), a `semantics.json` contract, a `PROMPT.md`, and the case list.
 - `sets/`: curated operator sets, each with a hand-written manifest and a
   generated index. `sets/attention/` covers the attention family and records
-  which A-tier answer and which measurement already exist for every entry.
+  which A-tier answer, which measurement and which candidate kernel already
+  exist for every entry.
 - `agent_reference/`: sanitized, agent-visible capability descriptions.
-- `sources/`: provenance and license records for the upstream snapshots a task derives from.
+- `sources/`: provenance and license records. `attention-source-001.json` covers the upstream snapshots a task derives from; `attention-kernel-candidates.json` inventories candidate attention kernel implementations and which target each can serve.
 - `templates/`: baseline and gap-evidence templates.
 - `tools/`: capability probing, environment capture, case generation, admission gate, task driver, set verification.
 - `tests/`: CPU-only unit tests for the tools above.

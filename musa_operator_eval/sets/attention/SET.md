@@ -31,6 +31,69 @@ The attention family of the MUSA operator evaluation: every KernelBench attentio
 | `kb_l3_28` | L3/28 VisionTransformer | B=10, layers=6, S=197, H=8, D=64 | `dense_mha_degenerate` | 不计分 | 不计分 | 1.0841x |
 | `kb_l3_32` | L3/32 ConvolutionalVisionTransformer | B=10, image=32, C=128, H=4 | `dense_mha_degenerate` | 不计分 | 不计分 | 1.1879x |
 
+## 可用 kernel 候选
+
+可用于出题、做 expert dispatch 或作为参考实现的 attention kernel，一条一个实现。上游位置、版本与依赖写在溯源记录里（`musa_operator_eval/sources/attention-kernel-candidates.json`，maintainer-only），这里只列选型需要的信息。
+
+| candidate | 类型 | 覆盖 target | dtype | 服务题目 |
+|---|---|---|---|---|
+| `mate_fmha` | `fused_library` | `s5000_fp16`, `s5000_bf16` | float16, bfloat16, float8_e4m3fn, float8_e5m2 | `kb_l1_97`, `kb_l3_43`, `kb_l3_44`, `kb_l3_30` |
+| `mt_flashmla` | `fused_library` | `s5000_fp16`, `s5000_bf16` | bfloat16, float16 | — |
+| `mutlass_fmha` | `expert_dispatch_source` | `s5000_fp16`, `s5000_bf16` | undocumented_in_repo_metadata | `kb_l1_97` |
+| `torch_musa_sdpa` | `fused_library` | `s4000_fp32`, `s4000_fp16`, `s4000_bf16`, `s5000_fp16`, `s5000_bf16` | undocumented_in_repo_metadata | `kb_l1_97`, `kb_l3_43`, `kb_l3_44`, `kb_l3_30` |
+| `kb_level3_musa_handwritten` | `handwritten_kernel` | `s4000_fp32` | float32 | `kb_l1_97`, `kb_l3_43`, `kb_l3_44`, `kb_l3_50`, `kb_l3_30`, `kb_l3_28`, `kb_l3_32` |
+| `tilelang_musa_legacy` | `deprecated_source` | `s4000_fp32`, `s5000_fp16`, `s5000_bf16` | undocumented_in_repo_metadata | — |
+
+> The fused attention path is an S5000 story. MATE requires S5000, MT-flashMLA targets compute capability 3.1, and MUTLASS's MP31 work is mp_31 too. mp_31 is S5000; the machine available here is S4000 at mp_22. So the fused-library route the B tier is built around does not exist on the target currently in hand, and the S4000 profile of torch SDPA (five kernels, two assembly SGEMMs plus a softmax) is consistent with a decomposition rather than a fused kernel.
+
+### `mate_fmha` — MATE FMHA forward (mate.mha_interface, and the flash_attn_3 compatibility wrapper)
+
+- 类型：`fused_library`
+- 运行要求：gpu S5000；driver >=3.3.5；musa_sdk >=5.2.0 recommended；torch_musa >=2.7；python 3.10 recommended
+- 边界：head_dim_max — 512；alignment_fp16_bf16_without_qv — Q/K and V head dim must be divisible by 2；alignment_fp8_without_qv — divisible by 4；alignment_with_qv — divisible by 8, and V head dim <= 512；layout — BSHD; the documented tensor shapes are (batch, seqlen, nheads, headdim)
+- This is the only candidate that provides a genuine fused forward attention path, and its argument list maps onto the B-tier SDPA task contract almost field for field: window_size (-1, -1) for unbounded, causal, softmax_scale, return_softmax_lse, pack_gqa. It is also BSHD-native while the B-tier task is BHSD, so a MATE-based dispatch has to transpose, which is itself a dispatch-cost question worth grading.
+
+### `mt_flashmla` — MT-flashMLA
+
+- 类型：`fused_library`
+- 运行要求：gpu MooreThreads GPU, compute capability 3.1；musa >=4.0.0；torch_musa >=2.5.0
+- 边界：scope — decoding only, not a general forward attention kernel
+- Narrower than MATE and superseded by it for general forward attention, but it is a second, independent mp_31 attention implementation. Useful as a cross-check that a MATE result is not an artifact of one kernel family. Not usable for any entry in the attention set, all of which are forward.
+
+### `mutlass_fmha` — MUTLASS experimental/fmha (source-level)
+
+- 类型：`expert_dispatch_source`
+- 运行要求：gpu MP31-oriented；note source only; no documented wheel-level entry point
+- 边界：usability — individual .mu files do not compile standalone; they depend on sibling headers, build configuration and a matching MUSA SDK
+- This is the kind of source a maintainer reads when writing the expert dispatch or an A-tier kernel, not something to call at runtime. It is the honest answer to 'where does the expert knowledge come from' for mp_31.
+
+### `torch_musa_sdpa` — torch_musa SDPA and the muDNN SDP integration
+
+- 类型：`fused_library`
+- 运行要求：gpu not documented as arch-limited in the sources consulted；note the only candidate that plausibly covers mp_22 as well as mp_31
+- 边界：open_question — whether the fused muDNN SDP path is selected on mp_22 at all, and for which shapes
+- This is the route the existing B-tier SDPA task assumes for its fused_library path. The S4000 profile of problem 97 shows five device kernels, two assembly SGEMMs plus a softmax, which is a decomposition rather than a fused kernel. That is one shape at one dtype and does not settle whether the fused path exists on mp_22; it does mean the fused route must be probed per configuration rather than assumed. Resolving this is the first thing probe_sdpa.py should do on the real machine.
+
+### `kb_level3_musa_handwritten` — The hand-written MUSA attention kernels already in this repository
+
+- 类型：`handwritten_kernel`
+- 运行要求：gpu MTT S4000, tuned for mp_22；dtype float32
+- 边界：warp_size_sensitivity — tuned on mp_22 at 128-thread warps with the optimum at 1024 threads per CTA; not transferable to mp_31 at 32-thread warps without re-measuring；dtype — float32 only；shared_memory — launch configurations are valid only for the head_dim they were measured on
+- These are the only attention kernels in hand that actually run on the machine available. They are A-tier answers, and they are also the naive-side data the B-tier admission gate needs. They are not candidates for the S5000 fused path.
+
+### `tilelang_musa_legacy` — TileLang MUSA legacy snapshot
+
+- 类型：`deprecated_source`
+- 运行要求：note snapshot not present locally; see the dangling references in the attention set
+- 边界：status — deprecated upstream; the revision record calls it the final snapshot
+- Recorded because the project's own source record lists it as an S4000/S5000 kernel reference candidate. Nothing can be said about its actual coverage from here: the snapshot is not in the repository and the revision is deprecated. Treat the claim in the source record as unverified until someone looks at the tree.
+
+候选清单记录的缺口：
+
+- No candidate provides a fused forward attention path on mp_22. If the B-tier attention task is to be graded on S4000, either a fused path must be established there (probe first) or the task's library_policy must be rewritten so that fused_library is not the expected path.
+- Nothing here has been executed. Every dtypes, limits and alignment field above is transcribed from upstream documentation, not measured on hardware.
+- MT-flashMLA and MUTLASS fmha are mp_31 decode/source-level artifacts; the attention set is entirely forward attention, so neither maps onto a current entry.
+
 ## 逐题明细
 
 ### kb_l1_97 — L1/97 ScaledDotProductAttention
