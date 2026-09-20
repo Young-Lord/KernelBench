@@ -104,7 +104,12 @@ python musa_operator_eval/tools/make_private_manifest.py \
 
 # Measure the B-tier baselines in the gate's own shape (needs the device)
 python musa_operator_eval/tools/measure_baseline.py \
-  --task-dir <task> --expert <model_new.py> --output <baseline.json>
+  --task-dir musa_operator_eval/tasks/kb_l3_43_b \
+  --naive  musa_operator_eval/private/<task-id>/naive/model_new.py \
+  --expert musa_operator_eval/private/<task-id>/expert/model_new.py \
+  --blind  musa_operator_eval/private/<task-id>/blind/model_new.py \
+  --unavailable musa_operator_eval/private/<task-id>/unavailable.json \
+  --output musa_operator_eval/private/<task-id>/baseline.json
 
 # Apply the B-tier naive/expert admission gate
 python musa_operator_eval/tools/candidate_gate.py <baseline.json>
@@ -134,6 +139,17 @@ its own `PROTOCOL` and writes the shape `candidate_gate.py` reads. Both live on
 the device side: they check correctness before timing anything, and they record
 an implementation it cannot honestly build as `unavailable` with a reason rather
 than substituting a lookalike.
+
+Every implementation is passed in as a module path rather than named in the
+tool's source, because reaching a task's attention core is the task's business:
+`kb_l3_43_b` takes one input and five init inputs and computes the core behind its
+own projections, while the family-scoped pilot takes `q, k, v` directly. The
+tool's own contribution is to reproduce the harness's three measurement facts
+rather than paraphrase them — weights are aligned by re-seeding and rebuilding as
+`kernelbench.eval` does, inputs and parameters are cast by its
+`_process_input_tensor`, and correctness is judged by its
+`get_tolerance_for_precision`. A baseline measured under a different protocol from
+the submissions it is the denominator for would admit a task for the wrong reason.
 
 `collect_attention_set.py` reads `sets/attention/attention_set.json`, which is
 curated by hand, and verifies every claim it makes against the repository: the

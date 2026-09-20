@@ -5,12 +5,38 @@ and takes the geometric mean, so both have to be measured with the same protocol
 on the same environment, and both have to actually pass correctness -- a ratio
 against a wrong answer would admit a task for the wrong reason.
 
+Three things are inherited from `kernelbench.eval` rather than re-derived, because
+the submissions these baselines are measured against are driven by that module and
+a denominator measured under a different protocol admits a task for the wrong
+reason:
+
+  * weight alignment. The framework builds `Model` and `ModelNew` from the same
+    seed with the same init inputs and lets construction reproduce the weights. It
+    does not copy a state dict, so neither does this: a state dict is stricter than
+    the harness, and a baseline that passed one would be measuring a model the
+    harness never builds.
+  * input and parameter casting, via `_process_input_tensor`.
+  * the correctness tolerance, via `get_tolerance_for_precision`. Using the task's
+    own `tolerances` block instead would let a task grade its own baseline.
+
+Every implementation is supplied as a module path. The pilot's tooling named three
+implementations in its own source, which meant it could only ever drive a problem
+whose inputs are already `q, k, v` and whose init inputs are already `scale,
+causal, window_left, window_right`. No entry-scoped package is shaped like that:
+`kb_l3_43_b` takes one input and five init inputs, and reaches the attention core
+through its own projections. So each implementation is a model-level `nn.Module`
+here, and reaching the attention core is the model's business.
+
 Implementations that cannot be honestly built on this checkout are recorded as
-`unavailable` with the reason rather than being approximated by something else.
-An approximation under a real implementation's name is worse than a gap.
+`unavailable` with a reason rather than being approximated by something else. An
+approximation under a real implementation's name is worse than a gap.
 
     python musa_operator_eval/tools/measure_baseline.py \
-        --task-dir <task> --expert <model_new.py> --output baseline.json
+        --task-dir musa_operator_eval/tasks/kb_l3_43_b \
+        --naive  musa_operator_eval/private/mingpt_causal_attention_b_v0/naive/model_new.py \
+        --expert musa_operator_eval/private/mingpt_causal_attention_b_v0/expert/model_new.py \
+        --unavailable musa_operator_eval/private/mingpt_causal_attention_b_v0/unavailable.json \
+        --output musa_operator_eval/private/mingpt_causal_attention_b_v0/baseline.json
 """
 
 from __future__ import annotations
@@ -19,6 +45,7 @@ import argparse
 import importlib.util
 import json
 import os
+import sys
 from pathlib import Path
 
 import torch
@@ -28,124 +55,81 @@ from run_task import case_source, load_task
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_TOP = ROOT.parent
-DEFAULT_TASK_DIR = ROOT / "tasks" / "sdpa_forward_pilot"
-DEFAULT_EXPERT = ROOT / "private" / "sdpa_forward_b_v0" / "expert" / "model_new.py"
+
+sys.path.insert(0, str(REPO_TOP / "src"))
+from kernelbench.eval import (  # noqa: E402
+    _process_input_tensor,
+    get_tolerance_for_precision,
+    set_seed,
+)
 
 PROTOCOL = {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median", "timer": "musa_event"}
 
 DTYPES = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}
+DEVICE = torch.device("musa")
+BACKEND = "musa"
+
+# The roster the baseline template publishes. Two of these are supplied as module
+# paths and two are usually absent; keeping the names here is what lets a reader
+# line the two files up.
+REFERENCE_ROLE = "reference_model"
+NAIVE_ROLE = "naive_library_composition"
+BLIND_ROLE = "torch_musa_sdpa"
+EXPERT_ROLE = "expert_dispatch"
 
 
 # ----------------------------------------------------------------------------
-# Cases
+# Construction
 # ----------------------------------------------------------------------------
 
 
 def load_case(task: dict, case: dict, problem_source: str):
-    """Instantiate the reference and its inputs for one case."""
+    """Build the reference and its inputs the way `eval_kernel_against_ref` does.
+
+    Returned separately because every implementation is rebuilt from the same seed
+    and the same init inputs, which is how the framework aligns their weights.
+    """
     namespace: dict = {}
     exec(case_source(problem_source, case, task["case_parameters"]), namespace)
 
-    torch.manual_seed(case["seed"])
     dtype = DTYPES[case["dtype"]]
-    device = torch.device("musa")
-    inputs = [tensor.to(device=device, dtype=dtype) for tensor in namespace["get_inputs"]()]
 
-    torch.manual_seed(case["seed"])
-    reference = namespace["Model"](*namespace["get_init_inputs"]()).to(device=device, dtype=dtype)
-    return reference, inputs, dtype
+    set_seed(case["seed"])
+    init_inputs = [
+        _process_input_tensor(value, DEVICE, BACKEND, dtype) for value in namespace["get_init_inputs"]()
+    ]
 
+    with torch.no_grad():
+        set_seed(case["seed"])
+        reference = namespace["Model"](*init_inputs)
+        reference = reference.to(device=DEVICE, dtype=dtype)
 
-def attention_mask(shape, attributes, device):
-    """The contract's mask: top-left causal, window [q-left, q+right], -1 unbounded."""
-    s_q, s_kv = shape["S_q"], shape["S_kv"]
-    query_index = torch.arange(s_q, device=device).unsqueeze(1)
-    key_index = torch.arange(s_kv, device=device).unsqueeze(0)
-    allowed = torch.ones(s_q, s_kv, dtype=torch.bool, device=device)
-    if attributes["causal"]:
-        allowed = allowed & (key_index <= query_index)
-    if attributes["window_left"] >= 0:
-        allowed = allowed & (key_index >= query_index - attributes["window_left"])
-    if attributes["window_right"] >= 0:
-        allowed = allowed & (key_index <= query_index + attributes["window_right"])
-    return allowed
+    set_seed(case["seed"])
+    inputs = [_process_input_tensor(value, DEVICE, BACKEND, dtype) for value in namespace["get_inputs"]()]
+    return reference, init_inputs, inputs, dtype
 
 
-# ----------------------------------------------------------------------------
-# Implementations
-#
-# Each takes the case context and returns the output tensor for the same inputs
-# the reference was given.
-# ----------------------------------------------------------------------------
+def build_model(model_class, init_inputs, dtype: torch.dtype, seed: int):
+    """Instantiate an implementation under the same seed the reference had."""
+    with torch.no_grad():
+        set_seed(seed)
+        model = model_class(*init_inputs)
+        return model.to(device=DEVICE, dtype=dtype)
 
 
-def _expand_kv(q, k, v):
-    heads_q, heads_kv = q.shape[1], k.shape[1]
-    if heads_q == heads_kv:
-        return k, v
-    repeats = heads_q // heads_kv
-    return k.repeat_interleave(repeats, dim=1), v.repeat_interleave(repeats, dim=1)
-
-
-def naive_library_composition(q, k, v, context):
-    """Compose the library's own primitives, with no capability probing at all.
-
-    This is the baseline the gate compares against: what a submission produces
-    when it reaches for the obvious matmul/softmax/matmul and never asks whether
-    a fused kernel exists. Accumulation stays in float32, which the contract
-    requires, so this is slow-but-correct rather than a strawman.
-    """
-    k, v = _expand_kv(q, k, v)
-    scores = torch.matmul(q.float(), k.float().transpose(-1, -2)) * context["scale"]
-    mask = context["mask"]
-    scores = scores.masked_fill(~mask, float("-inf"))
-    row_max = scores.amax(dim=-1, keepdim=True)
-    finite = torch.where(torch.isfinite(row_max), row_max, torch.zeros_like(row_max))
-    shifted = torch.where(mask, scores - finite, torch.full_like(scores, float("-inf")))
-    weights = torch.exp(shifted)
-    denominator = weights.sum(dim=-1, keepdim=True).clamp_min(torch.finfo(torch.float32).tiny)
-    return (torch.matmul(weights, v.float()) / denominator).to(q.dtype)
-
-
-def torch_musa_sdpa_blind(q, k, v, context):
-    """Call the library's SDPA and assume it is a fused kernel.
-
-    Likely the most common submission shape, and worth measuring separately: it
-    is fast wherever the fused path happens to apply and silently slow
-    everywhere it does not, with nothing in the trace to say which happened.
-    """
-    k, v = _expand_kv(q, k, v)
-    return torch.nn.functional.scaled_dot_product_attention(
-        q, k, v, attn_mask=context["mask"], is_causal=False
-    )
-
-
-def reference_model(q, k, v, context):
-    """The task's own reference, for scale."""
-    return context["reference"](q, k, v)
-
-
-IMPLEMENTATIONS = {
-    "reference_model": reference_model,
-    "naive_library_composition": naive_library_composition,
-    "torch_musa_sdpa_blind": torch_musa_sdpa_blind,
-}
-
-# Named in the template but not constructible here. Recorded with a reason so the
-# gate sees an honest gap instead of a number borrowed from something else.
-UNAVAILABLE = {
-    "upstream_musa": "no upstream MUSA SDPA implementation is present in this checkout; the archived one lives on the unmerged source branch",
-    "mudnn_fused": "requires calling the muDNN attention op directly rather than through torch_musa, which is a separate adapter that has not been written",
-    "torch_musa_eager": "no distinct eager SDPA entry point exists on this build; torch_musa exposes SDPA only through the aten op that torch_musa_sdpa_blind already measures",
-}
-
-
-def load_expert(path: Path):
-    spec = importlib.util.spec_from_file_location("expert_model_new", path)
-    assert spec is not None and spec.loader is not None
+def load_model_class(path: Path):
+    spec = importlib.util.spec_from_file_location("baseline_implementation", path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"cannot load an implementation from {path}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.ModelNew
+
+
+def load_unavailable(path):
+    if path is None:
+        return {}
+    return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
 # ----------------------------------------------------------------------------
@@ -172,46 +156,12 @@ def time_median(fn, warmup=PROTOCOL["warmup"], measurements=PROTOCOL["measuremen
     return sorted(samples)[len(samples) // 2]
 
 
-def measure_case(case, task, problem_source, expert_class, trace_dir: Path):
-    reference, inputs, dtype = load_case(task, case, problem_source)
-    device = inputs[0].device
-    q, k, v = inputs
-
-    os.environ["KB_DISPATCH_CASE_ID"] = case["case_id"]
-    os.environ["KB_DISPATCH_TRACE"] = str(trace_dir / f"{case['case_id']}.jsonl")
-
-    with torch.no_grad():
-        expected = reference(q, k, v)
-
-    context = {
-        "scale": case["attributes"]["scale"],
-        "mask": attention_mask(case["shape"], case["attributes"], device),
-        "reference": reference,
-    }
-
-    rows = []
-    for name, implementation in IMPLEMENTATIONS.items():
-        rows.append(_measure(name, lambda: implementation(q, k, v, context), expected, dtype))
-
-    expert = expert_class(
-        case["attributes"]["scale"], case["attributes"]["causal"],
-        case["attributes"]["window_left"], case["attributes"]["window_right"],
-    ).to(device=device, dtype=dtype)
-    rows.append(_measure("expert_dispatch", lambda: expert(q, k, v), expected, dtype))
-
-    for name, reason in UNAVAILABLE.items():
-        rows.append({"case_id": case["case_id"], "implementation": name, "status": "unavailable", "latency_ms": None, "reason": reason})
-
-    return rows
-
-
-def _measure(name, call, expected, dtype):
+def _measure(name, call, expected, tolerance):
     row = {"case_id": None, "implementation": name, "status": "pass", "latency_ms": None}
     try:
         with torch.no_grad():
             actual = call()
         torch.musa.synchronize()
-        tolerance = 1e-2 if dtype != torch.float32 else 1e-4
         if tuple(actual.shape) != tuple(expected.shape):
             row.update(status="fail", reason=f"shape {tuple(actual.shape)} != {tuple(expected.shape)}")
             return row
@@ -226,25 +176,79 @@ def _measure(name, call, expected, dtype):
     return row
 
 
+def measure_case(case, task, problem_source, implementations: dict, unavailable: dict, trace_dir: Path):
+    reference, init_inputs, inputs, dtype = load_case(task, case, problem_source)
+    tolerance = get_tolerance_for_precision(dtype)
+
+    # The dispatch contract asks a submission to record the path it took per case,
+    # and the expert dispatch is a submission. Without these the expert raises on
+    # the missing variable; with them the baseline carries the same trace the
+    # grading run will, so the two can be compared.
+    #
+    # The file is removed rather than appended to: a submission records once per
+    # process, so a second run of the same case would otherwise leave the first
+    # run's record behind it and a reader could not tell which run the file
+    # describes.
+    trace_path = trace_dir / f"{case['case_id']}.jsonl"
+    trace_path.unlink(missing_ok=True)
+    os.environ["KB_DISPATCH_CASE_ID"] = case["case_id"]
+    os.environ["KB_DISPATCH_TRACE"] = str(trace_path)
+
+    with torch.no_grad():
+        expected = reference(*inputs)
+
+    # The reference is rebuilt per case by `load_case`, so its own cost is the
+    # cost of a fresh model at this case's shapes. Measured for scale: it is the
+    # number a submission is being asked to beat by a library call.
+    rows = [_measure_existing(REFERENCE_ROLE, reference, inputs, expected, tolerance)]
+    for name, model_class in implementations.items():
+        model = build_model(model_class, init_inputs, dtype, case["seed"])
+        rows.append(_measure(name, lambda model=model: model(*inputs), expected, tolerance))
+
+    for name, reason in unavailable.items():
+        rows.append({"case_id": case["case_id"], "implementation": name, "status": "unavailable",
+                     "latency_ms": None, "reason": reason})
+    return rows
+
+
+def _measure_existing(name, model, inputs, expected, tolerance):
+    return _measure(name, lambda: model(*inputs), expected, tolerance)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--task-dir", type=Path, default=DEFAULT_TASK_DIR)
-    parser.add_argument("--expert", type=Path, default=DEFAULT_EXPERT)
-    parser.add_argument("--snapshot-id", default="REPLACE_WITH_SNAPSHOT_ID")
+    parser.add_argument("--task-dir", type=Path, required=True)
+    parser.add_argument("--naive", type=Path, required=True,
+                        help="the task's naive library composition; the gate's numerator")
+    parser.add_argument("--expert", type=Path, required=True,
+                        help="the task's expert dispatch; the speedup denominator")
+    parser.add_argument("--blind", type=Path, default=None,
+                        help="a submission that calls the library's SDPA and assumes it is fused")
+    parser.add_argument("--unavailable", type=Path, default=None,
+                        help="JSON mapping an implementation name to why it cannot be built here")
+    parser.add_argument("--snapshot-id", default=None,
+                        help="defaults to the snapshot the task declares it was measured in")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
     task, cases_manifest, problem_source = load_task(args.task_dir)
-    expert_class = load_expert(args.expert)
+
+    implementations = {NAIVE_ROLE: load_model_class(args.naive), EXPERT_ROLE: load_model_class(args.expert)}
+    if args.blind is not None:
+        implementations[BLIND_ROLE] = load_model_class(args.blind)
+    unavailable = load_unavailable(args.unavailable)
+
+    snapshot_id = args.snapshot_id or task["target_environment"]["snapshot_id"]
 
     trace_dir = args.output.parent / "baseline_traces"
     trace_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
     for case in cases_manifest["cases"]:
-        print(f"[baseline] {case['case_id']}", flush=True)
-        for row in measure_case(case, task, problem_source, expert_class, trace_dir):
+        print(f"[baseline] {case['case_id']}  {case['dtype']}", flush=True)
+        for row in measure_case(case, task, problem_source, implementations, unavailable, trace_dir):
             row["case_id"] = case["case_id"]
+            row["dtype"] = case["dtype"]
             results.append(row)
             latency = f"{row['latency_ms']:.4f}" if row.get("latency_ms") else "-"
             print(f"    {row['implementation']:<28}{row['status']:<12}{latency}", flush=True)
@@ -253,13 +257,15 @@ def main() -> int:
         "schema_version": "1.0.0",
         "task_id": task.get("id"),
         "tier": task.get("tier"),
-        "environment_snapshot": args.snapshot_id,
+        "environment_snapshot": snapshot_id,
         "measurement_protocol": PROTOCOL,
+        "weight_alignment": "re-seed and rebuild, as kernelbench.eval does; no state dict is copied",
+        "tolerance_source": "kernelbench.eval.get_tolerance_for_precision",
         "implementations": sorted({row["implementation"] for row in results}),
         "results": results,
         "scoring": {
-            "speedup_denominator": "expert_dispatch",
-            "reference_implementation": "naive_library_composition",
+            "speedup_denominator": EXPERT_ROLE,
+            "reference_implementation": NAIVE_ROLE,
             "correctness_gate": "all_hidden_cases",
             "minimum_naive_to_expert_ratio": 1.3,
         },
