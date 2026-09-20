@@ -16,8 +16,11 @@ reason:
     the harness, and a baseline that passed one would be measuring a model the
     harness never builds.
   * input and parameter casting, via `_process_input_tensor`.
-  * the correctness tolerance, via `get_tolerance_for_precision`. Using the task's
-    own `tolerances` block instead would let a task grade its own baseline.
+  * the correctness tolerance, resolved by `kernelbench.eval.resolve_tolerance`.
+    The framework's per-dtype value is the floor and the task's `tolerances` block
+    can only loosen it, so a task cannot grade itself leniently without bound; what
+    matters more is that this resolves to the same number the grader will use, so
+    the gate is not measured at a bar nobody is scored against.
 
 Every implementation is supplied as a module path. The pilot's tooling named three
 implementations in its own source, which meant it could only ever drive a problem
@@ -59,7 +62,7 @@ REPO_TOP = ROOT.parent
 sys.path.insert(0, str(REPO_TOP / "src"))
 from kernelbench.eval import (  # noqa: E402
     _process_input_tensor,
-    get_tolerance_for_precision,
+    resolve_tolerance,
     set_seed,
 )
 
@@ -178,7 +181,9 @@ def _measure(name, call, expected, tolerance):
 
 def measure_case(case, task, problem_source, implementations: dict, unavailable: dict, trace_dir: Path):
     reference, init_inputs, inputs, dtype = load_case(task, case, problem_source)
-    tolerance = get_tolerance_for_precision(dtype)
+    # Resolved through the same helper the grader uses, so the admission gate is
+    # measured at the tolerance submissions are actually scored against.
+    tolerance = resolve_tolerance(dtype, (task.get("tolerances") or {}).get("max_abs_error"))
 
     # The dispatch contract asks a submission to record the path it took per case,
     # and the expert dispatch is a submission. Without these the expert raises on
@@ -264,7 +269,20 @@ def main() -> int:
         "environment_snapshot": snapshot_id,
         "measurement_protocol": PROTOCOL,
         "weight_alignment": "re-seed and rebuild, as kernelbench.eval does; no state dict is copied",
-        "tolerance_source": "kernelbench.eval.get_tolerance_for_precision",
+        "tolerance_source": "kernelbench.eval.resolve_tolerance",
+        # The block above names the resolver; these two record what it resolved to
+        # for this run, which is the part a reader needs in order to judge a
+        # `max_abs_diff ... exceeds ...` row. The declared value is the task's own
+        # `tolerances.max_abs_error`, and the resolver takes the larger of it and
+        # the framework's per-dtype value, so a task can loosen grading and not
+        # tighten it.
+        "declared_tolerance": (task.get("tolerances") or {}).get("max_abs_error"),
+        "resolved_tolerances": {
+            dtype: resolve_tolerance(
+                dtype, (task.get("tolerances") or {}).get("max_abs_error")
+            )
+            for dtype in sorted({case["dtype"] for case in cases_manifest["cases"]})
+        },
         "implementations": sorted({row["implementation"] for row in results}),
         "results": results,
         "scoring": {

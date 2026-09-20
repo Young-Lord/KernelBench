@@ -114,6 +114,30 @@ def get_tolerance_for_precision(precision: str | torch.dtype) -> float:
     }
     assert precision in PRECISION_TOLERANCES, f"Invalid precision not supported: {precision}"
     return PRECISION_TOLERANCES[precision]
+
+
+def resolve_tolerance(precision: str | torch.dtype, declared: float | None = None) -> float:
+    """The tolerance a case is actually graded at.
+
+    `get_tolerance_for_precision` answers what the framework can support at a
+    precision; this answers what this particular case is graded against, which is
+    that same value unless the task's contract declares a *looser* one. The
+    direction is the point. A task may loosen, because a task is the only party
+    that knows its own reference's numerical floor -- a bfloat16 reference whose
+    outputs sit near magnitude 4 differs from an equivalent computation by whole
+    bfloat16 steps, and no per-dtype constant can anticipate that. A task may not
+    tighten, because a bar below what the framework can reproduce is not a bar
+    anything can meet, and declaring one would read as an achievable target.
+
+    Both the grader and the baseline resolve through here so that the measured
+    gate and the graded submission are held to the same number. A baseline taken
+    at one tolerance while submissions are graded at another would let the gate
+    admit an entry on a standard nobody is scored by.
+    """
+    framework = get_tolerance_for_precision(precision)
+    if declared is None:
+        return framework
+    return max(framework, float(declared))
     
 
 class KernelExecResult(BaseModel):
@@ -426,6 +450,10 @@ def eval_kernel_against_ref(
     ),  # have to run on GPU
     backend: str = "cuda",  # can be 'cuda', 'musa', 'hip', 'triton', 'tilelang', or 'cute'
     precision: torch.dtype = torch.float32,
+
+    # Optional loosen-only override. See resolve_tolerance for why the direction
+    # is enforced rather than merely documented.
+    tolerance: float | None = None,
 
     # Guard against potential reward hacking [optional but ongoing enhancement]
     check_for_excessive_speedup: bool = True,
@@ -941,7 +969,7 @@ def run_and_check_correctness(
                 # in torchbench, they use both precisions for atol and rtol
                 # kernelbench v0 and v0.1 uses fp32, atol = rtol = 1e-02
                 # now we will return the tolerance from get_tolerance_for_precision
-                tolerance = get_tolerance_for_precision(precision)
+                tolerance = resolve_tolerance(precision, tolerance)
                 # check output value difference
                 if not torch.allclose(
                     output, output_new, atol=tolerance, rtol=tolerance

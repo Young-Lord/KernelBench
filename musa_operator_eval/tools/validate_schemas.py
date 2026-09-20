@@ -59,6 +59,17 @@ SCHEMAS = {
 }
 
 
+# kernelbench.eval.get_tolerance_for_precision is the grading authority, and it is
+# mirrored here rather than imported because that module needs torch and this tool
+# has to run on a machine with nothing but the standard library. If the framework's
+# table changes, this copy has to change with it.
+FRAMEWORK_TOLERANCE = {
+    "float32": 1e-4,
+    "float16": 1e-2,
+    "bfloat16": 1e-2,
+}
+
+
 class SchemaError(ValueError):
     """Raised for a malformed schema, which is a bug in this repository."""
 
@@ -244,6 +255,30 @@ def business_errors(instance: dict, kind: str) -> List[str]:
     # category is allowed one, if its contract records why -- and a validator that
     # sees one document at a time cannot tell the two apart. It is enforced where
     # both are in scope, in `make_private_manifest.py`.
+
+    if kind == "task_contract":
+        # A task's `tolerances` block is a declaration, not the grading authority:
+        # kernelbench.eval.get_tolerance_for_precision decides what a submission is
+        # actually graded at, and tools/measure_baseline.py deliberately refuses to
+        # read the task's own numbers, on the grounds that a task grading its own
+        # baseline is not a measurement. What the block can still do is *loosen*,
+        # which a task legitimately needs when its reference is the numerically
+        # unstable side, as kb_l3_31's does at bfloat16 over a long sequence. So the
+        # rule enforced here is the direction that matters: a task may not declare a
+        # tolerance tighter than the framework can support at its own dtypes, because
+        # that reads as an achievable bar and is not one.
+        tolerances = instance.get("tolerances") or {}
+        dtypes = (instance.get("tensor_contract") or {}).get("input_dtypes") or []
+        floors = [FRAMEWORK_TOLERANCE[dtype] for dtype in dtypes if dtype in FRAMEWORK_TOLERANCE]
+        if floors:
+            floor = max(floors)
+            for field in ("atol", "rtol"):
+                declared = tolerances.get(field)
+                if isinstance(declared, (int, float)) and declared < floor:
+                    errors.append(
+                        f"tolerances.{field}: {declared} is tighter than the framework's {floor} "
+                        f"for dtypes {dtypes}; a task may loosen the framework tolerance, not tighten it"
+                    )
 
     if kind == "baseline":
         declared = set(instance.get("implementations", []))

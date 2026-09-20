@@ -735,6 +735,11 @@ def run_case(
         expected_dispatch_path=case.get("expected_path"),
         dispatch_case_id=case.get("case_id"),
         required_trace_fields=policy.get("required_trace_fields"),
+        # The contract's tolerance block is the task's one lever on grading, and it
+        # only loosens. Without this the field was declared by every package and
+        # read by nothing, so a task could state a bar its own cases were graded
+        # below without anything noticing.
+        tolerance=(task.get("tolerances") or {}).get("max_abs_error"),
         backend=backend,
         precision=get_torch_dtype_from_string(precision),
         num_correct_trials=num_correct_trials,

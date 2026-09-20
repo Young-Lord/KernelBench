@@ -262,6 +262,50 @@ class TierRuleTests(unittest.TestCase):
         self.assertEqual(validator.validate_instance_stdlib(document, "task_contract"), [])
 
 
+class ToleranceAuthorityTests(unittest.TestCase):
+    """A task's `tolerances` block may loosen grading and may not tighten it.
+
+    The field was declared by every package and read by nothing, so a task could
+    state a bar its own cases were graded below with nothing noticing, in either
+    direction. `kernelbench.eval.resolve_tolerance` now takes the larger of the
+    framework's per-dtype value and the task's `max_abs_error`, and these are the
+    contract-side half of that rule.
+    """
+
+    def test_a_tolerance_tighter_than_the_framework_is_rejected(self):
+        document = task_document("A_kernel")
+        document["tolerances"] = {"atol": 1e-6, "rtol": 1e-6, "max_abs_error": 1e-6}
+        errors = validator.validate_instance(document, "task_contract", engine="stdlib")
+        self.assertTrue(any("tighter than the framework" in error for error in errors), errors)
+
+    def test_a_task_may_loosen_the_framework_tolerance(self):
+        """kb_l3_31 needs this: at bfloat16 its reference is the unstable side."""
+        document = task_document("A_kernel")
+        document["tolerances"] = {"atol": 0.05, "rtol": 0.05, "max_abs_error": 0.05}
+        self.assertEqual(validator.validate_instance(document, "task_contract", engine="stdlib"), [])
+
+    def test_the_floor_follows_the_dtypes_the_task_declares(self):
+        """The same 0.01 is loose at float32 and exactly at the line at float16."""
+        float32 = task_document("A_kernel")
+        float32["tensor_contract"] = {"input_dtypes": ["float32"], "accumulation_dtype": "float32"}
+        float32["tolerances"] = {"atol": 0.01, "rtol": 0.01, "max_abs_error": 0.01}
+        self.assertEqual(validator.validate_instance(float32, "task_contract", engine="stdlib"), [])
+
+        float16 = task_document("A_kernel")
+        float16["tolerances"] = {"atol": 0.001, "rtol": 0.001, "max_abs_error": 0.001}
+        errors = validator.validate_instance(float16, "task_contract", engine="stdlib")
+        self.assertTrue(any("tighter than the framework" in error for error in errors), errors)
+
+    def test_the_rejection_names_both_the_declaration_and_the_floor(self):
+        """An error that says only 'invalid' makes the reader go and find the table."""
+        document = task_document("A_kernel")
+        document["tolerances"] = {"atol": 1e-5, "rtol": 1e-5, "max_abs_error": 1e-5}
+        errors = validator.validate_instance(document, "task_contract", engine="stdlib")
+        message = next(error for error in errors if "tighter than the framework" in error)
+        self.assertIn("1e-05", message)
+        self.assertIn("0.01", message)
+
+
 class CaseManifestRuleTests(unittest.TestCase):
     """Guide §4.3: the tier and the visibility decide which case fields are legal."""
 
