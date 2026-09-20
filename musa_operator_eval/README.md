@@ -11,6 +11,10 @@ implemented here. It runs on the KernelBench framework in `src/kernelbench/`:
 `scripts/generate_baseline_time.py`. This directory only carries what the
 framework has no notion of.
 
+The one framework change that lives with this work: a problem file may declare
+`TIER` and `LIBRARY_POLICY`, and `eval.py` reads them to pick the matching
+source-audit rule set. See `kernel_static_checker.static_audit_kernel`.
+
 ## Layout
 
 - `tasks/`: agent-visible task packages. Each carries a KernelBench-format

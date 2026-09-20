@@ -239,16 +239,27 @@ def main(config: EvalConfig):
 
     # Optional: static code checker for kernel code using regex matching
     # NOTE: by no means is this checker complete, but it could help catch some potential hacks
+    # The audit is tier-aware: the reference source may declare TIER / LIBRARY_POLICY,
+    # and the B_library tier is audited with its own inverted rule set.
     if config.check_kernel:
-        from kernelbench.kernel_static_checker import validate_kernel_static
-        static_check_status, errors, warnings = validate_kernel_static(
+        from kernelbench.eval import load_original_model_and_inputs
+        from kernelbench.kernel_static_checker import (
+            resolve_tier_and_library_policy,
+            static_audit_kernel,
+        )
+        reference_context: dict = {}
+        load_original_model_and_inputs(ref_arch_src, reference_context)
+        tier, library_policy = resolve_tier_and_library_policy(reference_context)
+        static_check_status, errors, warnings = static_audit_kernel(
             custom_kernel,
+            tier=tier,
+            library_policy=library_policy,
             backend=config.backend,
             precision=config.precision,
         )
-        assert static_check_status, f"Static check failed for level {config.level} problem {config.problem_id}. Errors: {errors}. Warnings: {warnings}"
+        assert static_check_status, f"Static check failed for level {config.level} problem {config.problem_id} (tier {tier}). Errors: {errors}. Warnings: {warnings}"
         if warnings:
-            print(f"Static check warnings for level {config.level} problem {config.problem_id}: {warnings}")
+            print(f"Static check warnings for level {config.level} problem {config.problem_id} (tier {tier}): {warnings}")
 
     # this should be optional
     if config.log:

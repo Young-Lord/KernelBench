@@ -907,3 +907,89 @@ def validate_library_kernel_static(
                 errors.append(message)
 
     return len(errors) == 0, errors, warnings_list
+
+
+# =============================================================================
+# TIER DISPATCH
+#
+# A task declares its tier next to its reference model: a problem file may define
+# module-level `TIER` and `LIBRARY_POLICY`. KernelBench executes the problem
+# source into a namespace, so both end up in that namespace and the evaluator can
+# read them from there. Absent metadata means the A tier, which is what every
+# pre-existing problem is.
+# =============================================================================
+
+KNOWN_TIERS = ("A_kernel", "B_library")
+
+
+def resolve_tier_and_library_policy(namespace: dict) -> Tuple[str, Optional[dict]]:
+    """Read the tier and library policy out of an executed problem namespace.
+
+    Args:
+        namespace: the namespace the problem source was executed into
+
+    Returns:
+        (tier, library_policy), with `library_policy` None for the A tier.
+
+    Raises:
+        ValueError: unknown tier, or a B-tier problem that declares no policy.
+            A B-tier task without a whitelist cannot be graded, so failing loudly
+            beats silently grading it as A.
+    """
+    tier = namespace.get("TIER", "A_kernel")
+    if tier not in KNOWN_TIERS:
+        raise ValueError(f"unknown tier {tier!r}; expected one of {KNOWN_TIERS}")
+
+    library_policy = namespace.get("LIBRARY_POLICY")
+    if tier == "B_library" and not isinstance(library_policy, dict):
+        raise ValueError("a B_library problem must define a LIBRARY_POLICY dict")
+    return tier, library_policy
+
+
+def static_audit_kernel(
+    code: str,
+    tier: str = "A_kernel",
+    library_policy: Optional[dict] = None,
+    backend: str = "cuda",
+    precision: str = "fp16",
+    forbidden: Optional[List[str]] = None,
+    warnings: Optional[List[str]] = None,
+) -> Tuple[bool, List[str], List[str]]:
+    """Run the static audit appropriate to the task's tier.
+
+    Single entry point so callers do not have to remember that the two tiers
+    check opposite things: the A tier polices library use, the B tier requires it.
+
+    Args:
+        code: submission source
+        tier: "A_kernel" or "B_library"
+        library_policy: required for the B tier
+        backend: backend name, used by the A-tier implementation check
+        precision: "fp16", "fp32" or "bf16", for the precision-dependent checks
+        forbidden / warnings: forwarded check-set overrides
+
+    Returns:
+        (valid, errors, warnings)
+    """
+    if tier == "B_library":
+        if not isinstance(library_policy, dict):
+            raise ValueError("the B_library tier requires a library_policy")
+        return validate_library_kernel_static(
+            code,
+            library_policy,
+            backend=backend,
+            precision=precision,
+            forbidden=forbidden,
+            warnings=warnings,
+        )
+
+    if tier != "A_kernel":
+        raise ValueError(f"unknown tier {tier!r}; expected one of {KNOWN_TIERS}")
+
+    return validate_kernel_static(
+        code,
+        backend=backend,
+        precision=precision,
+        forbidden=forbidden,
+        warnings=warnings,
+    )

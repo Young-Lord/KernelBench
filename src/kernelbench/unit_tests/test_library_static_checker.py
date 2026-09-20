@@ -28,6 +28,8 @@ _spec.loader.exec_module(_checker)
 check_dispatch_trace_emission = _checker.check_dispatch_trace_emission
 check_library_whitelist = _checker.check_library_whitelist
 check_version_string_dispatch = _checker.check_version_string_dispatch
+resolve_tier_and_library_policy = _checker.resolve_tier_and_library_policy
+static_audit_kernel = _checker.static_audit_kernel
 validate_kernel_static = _checker.validate_kernel_static
 validate_library_kernel_static = _checker.validate_library_kernel_static
 
@@ -198,6 +200,71 @@ class OverrideTests(unittest.TestCase):
         )
         self.assertFalse(valid)
         self.assertTrue(any("triton" in message for message in errors), errors)
+
+
+class TierResolutionTests(unittest.TestCase):
+    """TIER / LIBRARY_POLICY come from the executed problem namespace."""
+
+    def test_absent_metadata_is_the_a_tier(self):
+        self.assertEqual(resolve_tier_and_library_policy({}), ("A_kernel", None))
+
+    def test_explicit_a_tier(self):
+        self.assertEqual(resolve_tier_and_library_policy({"TIER": "A_kernel"}), ("A_kernel", None))
+
+    def test_b_tier_returns_the_policy(self):
+        tier, policy = resolve_tier_and_library_policy({"TIER": "B_library", "LIBRARY_POLICY": POLICY})
+        self.assertEqual(tier, "B_library")
+        self.assertIs(policy, POLICY)
+
+    def test_b_tier_without_a_policy_is_a_contract_error(self):
+        """A B-tier task with no whitelist cannot be graded, so it must not fall back to A."""
+        with self.assertRaises(ValueError):
+            resolve_tier_and_library_policy({"TIER": "B_library"})
+
+    def test_unknown_tier_is_rejected(self):
+        with self.assertRaises(ValueError):
+            resolve_tier_and_library_policy({"TIER": "C_something"})
+
+
+class TierDispatchTests(unittest.TestCase):
+    """static_audit_kernel must route to the rule set the tier asks for."""
+
+    def test_same_submission_fails_the_a_tier_and_passes_the_b_tier(self):
+        """The whole point of the dispatch: one source, two verdicts."""
+        a_valid, a_errors, _ = static_audit_kernel(
+            GOOD_SUBMISSION, tier="A_kernel", backend="musa"
+        )
+        b_valid, b_errors, _ = static_audit_kernel(
+            GOOD_SUBMISSION, tier="B_library", library_policy=POLICY, backend="musa"
+        )
+
+        self.assertFalse(a_valid, "an A-tier submission with no device kernel must fail")
+        self.assertTrue(any("__global__" in message for message in a_errors), a_errors)
+        self.assertTrue(b_valid, f"the same source is a valid B-tier submission: {b_errors}")
+        self.assertEqual(b_errors, [])
+
+    def test_a_tier_keeps_its_own_rules(self):
+        code = "import torch\ndef f(x):\n    return torch.softmax(x, dim=-1)\n"
+        valid, errors, _ = static_audit_kernel(
+            code, tier="A_kernel", backend="", forbidden=["torch_computation_ops"]
+        )
+        self.assertFalse(valid)
+        self.assertTrue(any("softmax" in message for message in errors), errors)
+
+    def test_b_tier_uses_the_whitelist_instead(self):
+        valid, errors, _ = static_audit_kernel(
+            "import triton\n" + GOOD_SUBMISSION, tier="B_library", library_policy=POLICY
+        )
+        self.assertFalse(valid)
+        self.assertTrue(any("triton" in message for message in errors), errors)
+
+    def test_b_tier_audit_requires_a_policy(self):
+        with self.assertRaises(ValueError):
+            static_audit_kernel("x = 1", tier="B_library")
+
+    def test_unknown_tier_is_rejected_by_the_audit(self):
+        with self.assertRaises(ValueError):
+            static_audit_kernel("x = 1", tier="C_something")
 
 
 if __name__ == "__main__":

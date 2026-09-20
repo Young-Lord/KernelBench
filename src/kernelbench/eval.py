@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from . import timing, dataset
 from . import gpu as kb_gpu
+from .kernel_static_checker import resolve_tier_and_library_policy, static_audit_kernel
 
 REPO_TOP_PATH = os.path.abspath(
     os.path.join(
@@ -80,6 +81,17 @@ def get_torch_dtype_from_string(precision: str) -> torch.dtype:
         return torch.bfloat16
     else: # future, FP8, FP4, etc. support?
         raise ValueError(f"Invalid precision not supported: {precision}")
+
+def get_torch_dtype_string(dtype: torch.dtype) -> str:
+    """
+    Inverse of get_torch_dtype_from_string, so the static checker can be handed
+    the same precision vocabulary the caller used.
+    """
+    for name in ("fp32", "fp16", "bf16"):
+        if get_torch_dtype_from_string(name) == dtype:
+            return name
+    return str(dtype)
+
 
 def get_tolerance_for_precision(precision: str | torch.dtype) -> float:
     """
@@ -413,6 +425,7 @@ def eval_kernel_against_ref(
     # Guard against potential reward hacking [optional but ongoing enhancement]
     check_for_excessive_speedup: bool = True,
     excessive_speedup_threshold: float = 10, # flag if the kernel is more than <excessive_speedup_threshold>x faster than the reference
+    static_check: bool = False, # run the tier-aware source audit before compiling
 ) -> KernelExecResult:
     """
     Evaluate the custom kernel against the original model
@@ -426,6 +439,11 @@ def eval_kernel_against_ref(
     backend: str, one of 'cuda', 'triton', 'tilelang', or 'cute'
     precision: torch.dtype for computation (note: tilelang only supports fp16)
     timing_method: str, method to time kernel, see timing.py for more details 
+
+    static_check: run the static source audit before compiling. The audit is
+        tier-aware: the problem source may declare TIER and LIBRARY_POLICY, and
+        the B_library tier is audited with its own inverted rule set. A failed
+        audit short-circuits without compiling.
 
     ONGOING EFFORT to refactor and modularize this, and adding more tests for eval.
     """
@@ -501,6 +519,31 @@ def eval_kernel_against_ref(
     Model, get_init_inputs, get_inputs = load_original_model_and_inputs(
         original_model_src, context
     )
+
+    # The tier travels with the problem source, so it is known as soon as the
+    # reference has been executed. Auditing before compiling keeps a rejected
+    # submission from ever reaching the device. resolve_* raises on a bogus tier,
+    # which is a task-definition bug that must be fixed rather than graded.
+    tier, library_policy = resolve_tier_and_library_policy(context)
+    metadata["tier"] = tier
+    if static_check:
+        audit_ok, audit_errors, audit_warnings = static_audit_kernel(
+            custom_model_src,
+            tier=tier,
+            library_policy=library_policy,
+            backend=backend,
+            precision=get_torch_dtype_string(precision),
+        )
+        metadata["static_audit_errors"] = audit_errors
+        metadata["static_audit_warnings"] = audit_warnings
+        if audit_warnings:
+            print(f"[Eval] Static audit warnings for tier {tier}: {audit_warnings}")
+        if not audit_ok:
+            print(f"[Eval] Static audit failed for tier {tier}: {audit_errors}")
+            return KernelExecResult(
+                compiled=False, correctness=False, metadata=metadata
+            )  # skip compilation and everything after it
+
     set_seed(seed_num)  # set seed for reproducible input
     init_inputs = get_init_inputs()
     

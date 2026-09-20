@@ -82,6 +82,13 @@ speedup run through the KernelBench framework:
 - `src/kernelbench/kernel_static_checker.py` supplies the source audit;
 - `scripts/generate_baseline_time.py` supplies the baseline measurement path.
 
+Pass `static_check=True` to `eval_kernel_against_ref` to run the source audit
+before compiling. The audit is tier-aware: the tier and policy are read from the
+`TIER` / `LIBRARY_POLICY` names in the problem source, and a B-tier task is
+audited with the inverted rule set. A failed audit short-circuits the run and
+lands in `metadata["static_audit_errors"]`, so a rejected submission never
+reaches the device. Every result also carries `metadata["tier"]`.
+
 The release gate is:
 
 - all source audits pass;
