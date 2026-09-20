@@ -37,7 +37,7 @@
     "required_trace_fields": ["case_id", "selected_path", "probe_status"],
     "trace_env_var": "KB_DISPATCH_TRACE",
     "case_id_env_var": "KB_DISPATCH_CASE_ID",
-    "failure_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
+    "failure_reasons": ["unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
   },
   "semantic_summary": {
     "layout": "BHSD",

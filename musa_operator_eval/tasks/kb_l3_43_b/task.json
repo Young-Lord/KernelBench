@@ -87,9 +87,7 @@
     ],
     "minimum_gap_cases": 3,
     "required_gap_reasons": [
-      "unsupported_dtype",
-      "unsupported_shape",
-      "semantic_mismatch"
+      "unsupported_shape"
     ]
   },
   "scoring": {
@@ -101,6 +99,12 @@
     "status": "pending_device_measurement",
     "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
     "dispatch_note": "the attention core is a single causal SDPA over (B, H, S, D), which is the shape a fused library answers",
+    "gap_reason_coverage": {
+      "state": "open",
+      "reachable": ["unsupported_shape"],
+      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is n_embd / n_head rather than a free parameter, and the fused path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path. semantic_mismatch is unreachable because the scale is hard-coded to 1/sqrt(D) (the only value the fused path accepts) and there is no window, so every query row sees j <= i and no row can be fully masked. layout_mismatch is unreachable because the contract layout is contiguous BHSD, which the measurement showed still dispatches fused. multi_operator_required is unreachable because the attention core is one SDPA call. Either a second measured category has to be found on the device or this entry needs a wider contract before it can meet the floor."
+    },
     "route_probe": {
       "state": "measured",
       "evidence": "private/mingpt_causal_attention_b_v0/route_probe.json",

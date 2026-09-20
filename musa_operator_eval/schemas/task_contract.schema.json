@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/task-contract-1.0.0.json",
+  "title": "MUSA operator task contract (tasks/*/task.json)",
+  "description": "Guide §4.8: `tier` is an enum and the validator tightens or loosens the fields by its value. An A_kernel contract that carries a library policy is an error (that is a B-tier concept leaking into the tier that forbids libraries), and a B_library contract that does not define its library gap requirement is an error. The machine-readable form of the hand-written assertions in tests/test_task_packages.py.",
+  "$defs": {
+    "gap_reason": {
+      "enum": ["unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
+    },
+    "identifier": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"}
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "tier", "id", "name", "family", "source", "target_environment",
+    "problem_file", "reference", "case_parameters", "tolerances", "tensor_contract",
+    "prohibited", "submission", "attempt_budget", "outputs"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "tier": {"enum": ["A_kernel", "B_library"]},
+    "id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"},
+    "name": {"type": "string", "minLength": 3},
+    "family": {"type": "string", "minLength": 2},
+    "scope": {"enum": ["entry", "family"]},
+    "set_entry": {"type": "string", "minLength": 2},
+    "covers": {
+      "description": "Family-scoped packages name the entries they cover instead of claiming one.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entries"],
+      "properties": {
+        "entries": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "note": {"type": "string"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project", "record"],
+      "properties": {
+        "project": {"type": "string", "minLength": 1},
+        "problem": {"type": "string", "minLength": 3},
+        "record": {"type": "string", "minLength": 3},
+        "revision": {"type": "string"},
+        "license": {"type": "string"},
+        "snapshot_location": {"type": "string"},
+        "snapshot_revision": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
+    "target_environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot_id", "record", "backend"],
+      "properties": {
+        "snapshot_id": {"type": "string", "minLength": 3},
+        "record": {"type": "string", "pattern": "^environments/.+\\.public\\.json$"},
+        "backend": {"enum": ["musa"]},
+        "note": {"type": "string"}
+      }
+    },
+    "problem_file": {"type": "string", "pattern": "\\.py$"},
+    "reference": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.py:[A-Za-z_][A-Za-z0-9_]*$"},
+    "capability_reference": {"type": "string", "pattern": "^agent_reference/.+_capabilities\\.json$"},
+    "case_parameters": {
+      "description": "Dotted path inside a case entry -> module-level name in problem.py.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/identifier"}
+    },
+    "tolerances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["atol", "rtol", "max_abs_error"],
+      "properties": {
+        "atol": {"type": "number", "minimum": 0},
+        "rtol": {"type": "number", "minimum": 0},
+        "max_abs_error": {"type": "number", "minimum": 0}
+      }
+    },
+    "tensor_contract": {
+      "description": "Guide §4.1. The precision a task is graded at is part of the contract, not a CLI default.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_dtypes", "accumulation_dtype"],
+      "properties": {
+        "input_dtypes": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"enum": ["float16", "bfloat16", "float32"]}
+        },
+        "accumulation_dtype": {"enum": ["float32", "float64"]},
+        "layouts": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "dynamic_axes": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "note": {"type": "string"}
+      }
+    },
+    "hyperparameters": {"type": "object"},
+    "prohibited": {
+      "type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}
+    },
+    "submission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entrypoint"],
+      "properties": {
+        "entrypoint": {"type": "string", "minLength": 1},
+        "language": {"type": "string"},
+        "fallback_kernel": {"type": "string"},
+        "note": {"type": "string"}
+      }
+    },
+    "attempt_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_attempts", "wall_time_seconds"],
+      "properties": {
+        "max_attempts": {"type": "integer", "minimum": 1},
+        "wall_time_seconds": {"type": "integer", "minimum": 1}
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required"],
+      "properties": {
+        "required": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "optional": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "kernel_scope": {
+      "description": "A-tier only: what must stay in the kernel versus what may remain a library call.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "enforced_by", "must_be_in_kernel", "may_stay_library"],
+      "properties": {
+        "level": {"enum": ["attention_core", "whole_problem"]},
+        "enforced_by": {"type": "string", "minLength": 1},
+        "enforced_note": {"type": "string"},
+        "must_be_in_kernel": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "may_stay_library": {"type": "array", "items": {"type": "string"}},
+        "note": {"type": "string"}
+      }
+    },
+    "scoring": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["speedup", "ranking"],
+      "properties": {
+        "speedup": {"type": "string", "minLength": 3},
+        "ranking": {"type": "string", "minLength": 3},
+        "gate": {"type": "string"}
+      }
+    },
+    "admission": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["measured", "pending_device_measurement"]},
+        "decision": {"enum": ["admit", "reject"]},
+        "reason": {"type": "string"},
+        "gate": {"type": "string"},
+        "threshold": {"type": "number"},
+        "evidence": {"type": "string"},
+        "note": {"type": "string"},
+        "dispatch_note": {"type": "string"},
+        "gap_reason_coverage": {
+          "description": "Guide §4.3 asks for at least two gap-reason categories. A package that cannot reach two records which it reaches, which it does not, and why, so the shortfall is a decision rather than an oversight.",
+          "type": "object",
+          "required": ["state", "reachable", "unreachable", "basis"],
+          "properties": {
+            "state": {"enum": ["open", "covered"]},
+            "reachable": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/gap_reason"}},
+            "unreachable": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/gap_reason"}},
+            "basis": {"type": "string", "minLength": 10}
+          }
+        },
+        "route_probe": {"type": "object"},
+        "public_case_baseline": {"type": "object"}
+      }
+    },
+    "library_policy": {
+      "description": "B-tier only. Guide §4.1: allowed libraries and symbol prefixes, the dispatch file, the required dispatch trace, and the library gap requirement.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_libraries", "allowed_symbol_prefixes", "required_trace_fields",
+        "trace_env_var", "case_id_env_var", "minimum_gap_cases", "required_gap_reasons"
+      ],
+      "properties": {
+        "allowed_libraries": {
+          "type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}
+        },
+        "allowed_symbol_prefixes": {
+          "type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}
+        },
+        "dispatch_order": {
+          "type": "array",
+          "items": {"enum": ["fused_library", "library_composition", "custom_fallback"]}
+        },
+        "dispatch_file": {"type": "string", "minLength": 1},
+        "required_trace_fields": {
+          "type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}
+        },
+        "trace_env_var": {"type": "string", "minLength": 1},
+        "case_id_env_var": {"type": "string", "minLength": 1},
+        "minimum_gap_cases": {"type": "integer", "minimum": 3},
+        "required_gap_reasons": {
+          "description": "Every reason must be one of Guide §4.3's four concepts, spelled exactly as in the family capability reference.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/gap_reason"}
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"required": ["tier"], "properties": {"tier": {"const": "A_kernel"}}},
+      "then": {"not": {"required": ["library_policy"]}}
+    },
+    {
+      "if": {"required": ["tier"], "properties": {"tier": {"const": "B_library"}}},
+      "then": {
+        "required": ["library_policy"],
+        "properties": {"library_policy": {"required": ["minimum_gap_cases", "required_gap_reasons"]}}
+      }
+    },
+    {
+      "if": {
+        "required": ["tier", "library_policy"],
+        "properties": {
+          "tier": {"const": "B_library"},
+          "library_policy": {
+            "required": ["required_gap_reasons"],
+            "properties": {"required_gap_reasons": {"maxItems": 1}}
+          }
+        }
+      },
+      "then": {
+        "required": ["admission"],
+        "properties": {"admission": {"required": ["gap_reason_coverage"]}}
+      }
+    }
+  ]
+}

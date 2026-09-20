@@ -109,9 +109,16 @@ LIBRARY_POLICY = {
         "custom_fallback"
     ],
     "minimum_gap_cases": 3,
+    # Only the reasons a hidden case of this task can reach; each is one of the
+    # canonical failure_reasons in agent_reference/sdpa_forward_capabilities.json.
+    # The scale is hard-coded to 1/sqrt(D) and there is no window, so no row is
+    # ever fully masked and `semantic_mismatch` is unreachable; the layout is
+    # contiguous BHSD and the core is one SDPA op, so neither `layout_mismatch`
+    # nor `multi_operator_required` applies. `unsupported_shape` is reachable
+    # because D = n_embd / n_head is derived and the fused path's head-dimension
+    # window ends at 128. This is below the two-category floor §4.3 asks for; see
+    # `admission.gap_reason_coverage` in task.json.
     "required_gap_reasons": [
-        "unsupported_dtype",
-        "unsupported_shape",
-        "semantic_mismatch"
+        "unsupported_shape"
     ]
 }

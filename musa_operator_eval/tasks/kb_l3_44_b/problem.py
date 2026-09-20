@@ -142,9 +142,17 @@ LIBRARY_POLICY = {
         "custom_fallback"
     ],
     "minimum_gap_cases": 3,
+    # Only the reasons a hidden case of this task can reach; each is one of the
+    # canonical failure_reasons in agent_reference/transformer_block_capabilities.json.
+    # `multi_operator_required`: the reference is a whole block, so no single fused
+    # call serves it — the fused attention covers the core and the LayerNorms, MLP
+    # projections, GELU and residuals have to be composed around it.
+    # `unsupported_shape`: head_dim is n_embd / n_head, so the fused path's
+    # head-dimension window can be stepped past. `semantic_mismatch` and
+    # `layout_mismatch` do not apply: the scale is hard-coded to 1/sqrt(D), the mask
+    # is plain causal so no row is empty, and the attention layout is contiguous BHSD.
     "required_gap_reasons": [
-        "unsupported_dtype",
         "unsupported_shape",
-        "semantic_mismatch"
+        "multi_operator_required"
     ]
 }

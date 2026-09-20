@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/environment-snapshot-2.0.0.json",
+  "title": "MUSA environment snapshot (environments/*.public.json, private/**/*.full.json)",
+  "description": "Produced by tools/collect_environment.py, which is why the document version is 2.0.0 and not 1.0.0. The one rule that matters here is the redaction: a `redacted` record must not carry the identity of the physical machine (device instance, host, container identity, raw probe output). That separation is what lets the public record be committed while the full one stays private, and it is a claim about the artifact, so it is enforced rather than described.",
+  "$defs": {
+    "nullable_string": {"type": ["string", "null"]},
+    "component": {
+      "type": "object",
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["ok", "unparsed", "unavailable", "timeout", "error"]},
+        "version": {"type": "string"},
+        "reason": {"type": "string"},
+        "output": {"type": "string"}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "snapshot_id", "visibility", "captured_at", "hardware", "software"],
+  "properties": {
+    "schema_version": {"const": "2.0.0"},
+    "status": {"enum": ["complete", "incomplete"]},
+    "missing_required_fields": {"type": "array", "items": {"type": "string"}},
+    "snapshot_id": {"type": "string", "pattern": "^musa-[0-9a-f]{8,}$"},
+    "device_instance_id": {"type": ["string", "null"]},
+    "visibility": {"enum": ["full", "redacted"]},
+    "captured_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "hardware": {
+      "type": "object",
+      "required": ["device_name", "architecture", "device_count"],
+      "properties": {
+        "device_name": {"$ref": "#/$defs/nullable_string"},
+        "architecture": {"type": ["string", "null"], "pattern": "^mp_[0-9]{2}$"},
+        "architecture_source": {"$ref": "#/$defs/nullable_string"},
+        "device_count": {"type": ["integer", "null"], "minimum": 1}
+      }
+    },
+    "software": {
+      "type": "object",
+      "required": ["driver", "musa_toolkit", "mudnn", "mublas"],
+      "properties": {
+        "driver": {"$ref": "#/$defs/nullable_string"},
+        "driver_release": {"$ref": "#/$defs/nullable_string"},
+        "driver_commit": {"$ref": "#/$defs/nullable_string"},
+        "musa_toolkit": {"$ref": "#/$defs/nullable_string"},
+        "mudnn": {"$ref": "#/$defs/nullable_string"},
+        "mublas": {"$ref": "#/$defs/nullable_string"}
+      }
+    },
+    "toolkit_components": {"type": "object"},
+    "device_instance": {"type": ["object", "null"]},
+    "device_properties_via_torch": {"type": "object"},
+    "host": {"type": "object"},
+    "cgroup_limits": {"type": "object"},
+    "python_stack": {"type": "object"},
+    "container": {"type": "object"},
+    "build": {
+      "type": "object",
+      "required": ["flags", "fast_math"],
+      "properties": {
+        "flags": {"type": "array", "items": {"type": "string"}},
+        "fast_math": {"type": "boolean"}
+      }
+    },
+    "raw_probes": {"type": "object"}
+  },
+  "allOf": [
+    {
+      "if": {"required": ["visibility"], "properties": {"visibility": {"const": "redacted"}}},
+      "then": {
+        "description": "The redacted record keeps the configuration and drops the machine identity.",
+        "not": {
+          "anyOf": [
+            {"required": ["device_instance_id"]},
+            {"required": ["device_instance"]},
+            {"required": ["host"]},
+            {"required": ["raw_probes"]},
+            {"required": ["container"]}
+          ]
+        }
+      }
+    }
+  ]
+}

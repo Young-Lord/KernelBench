@@ -85,9 +85,7 @@
     ],
     "minimum_gap_cases": 3,
     "required_gap_reasons": [
-      "unsupported_dtype",
-      "unsupported_shape",
-      "semantic_mismatch"
+      "layout_mismatch"
     ]
   },
   "scoring": {
@@ -98,6 +96,12 @@
   "admission": {
     "status": "pending_device_measurement",
     "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
-    "dispatch_note": "the problem is already written against a framework attention module, so the library path is the reference's own route"
+    "dispatch_note": "the problem is already written against a framework attention module, so the library path is the reference's own route",
+    "gap_reason_coverage": {
+      "state": "open",
+      "reachable": ["layout_mismatch"],
+      "unreachable": ["unsupported_shape", "semantic_mismatch", "multi_operator_required"],
+      "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. layout_mismatch: the reference reshapes the image to (B, C, H*W) and permutes to (H*W, B, C) before attending, so the tensor the attention core consumes is sequence-major, not the BHSD the fused path is written for. The library cannot serve the task's own layout without a conversion, which is the dispatch decision. This is a structural judgement, not a measurement: the family probe only covered a non-contiguous tensor in the BHSD layout, which is a different case, so this reason must be confirmed on the device before the hidden set relies on it. unsupported_shape is unreachable because head_dim = embed_dim / num_heads is fixed at 32 by the problem defaults, and a non-aligned sequence length was measured to still dispatch fused. semantic_mismatch is unreachable: the scale is the framework default 1/sqrt(D) and there is no mask, so no row can be fully masked. multi_operator_required is unreachable: one attention op. This entry needs a second measurable category before it can meet the floor."
+    }
   }
 }

@@ -334,6 +334,79 @@ class LibraryPolicyTests(unittest.TestCase):
                     json.loads(reference.read_text(encoding="utf-8"))["family"], task["family"])
 
 
+CANONICAL_GAP_REASONS = (
+    "unsupported_shape",
+    "semantic_mismatch",
+    "layout_mismatch",
+    "multi_operator_required",
+)
+
+
+class GapReasonVocabularyTests(unittest.TestCase):
+    """One vocabulary for library gaps, shared by every surface that names them.
+
+    §4.3 fixes the four reasons a library gap can have. The reasons are restated
+    in three places -- the agent-visible capability references, each B package's
+    `task.json`, and each B package's `problem.py` -- and the evaluator counts
+    gaps by value, so a reason spelled differently in one of them is a gap that
+    silently stops being counted. `unsupported_dtype` was removed from the
+    vocabulary: a gap is a configuration the library cannot serve that the task
+    actually asks for, and the tasks in this set never ask for a dtype the
+    libraries reject, so no measured gap ever had that reason.
+    """
+
+    def b_tier(self):
+        return [(directory, task) for directory, task in all_packages() if task["tier"] == "B_library"]
+
+    def test_every_capability_reference_declares_the_same_four_reasons(self):
+        """The reference is what a submission reads, so it cannot drift either."""
+        for _, task in self.b_tier():
+            reference = ROOT / task["capability_reference"]
+            with self.subTest(task=task["id"]):
+                declared = json.loads(reference.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    declared["dispatch_contract"]["failure_reasons"],
+                    list(CANONICAL_GAP_REASONS),
+                )
+
+    def test_every_declared_gap_reason_is_canonical(self):
+        for _, task in self.b_tier():
+            with self.subTest(task=task["id"]):
+                for reason in task["library_policy"]["required_gap_reasons"]:
+                    self.assertIn(reason, CANONICAL_GAP_REASONS)
+
+    def test_every_declared_gap_reason_is_in_the_family_vocabulary(self):
+        """A reason the family reference does not list cannot be reported by it."""
+        for _, task in self.b_tier():
+            reference = ROOT / task["capability_reference"]
+            vocabulary = set(
+                json.loads(reference.read_text(encoding="utf-8"))["dispatch_contract"]["failure_reasons"]
+            )
+            with self.subTest(task=task["id"]):
+                self.assertLessEqual(set(task["library_policy"]["required_gap_reasons"]), vocabulary)
+
+    def test_a_package_below_the_two_category_floor_says_so(self):
+        """§4.3 asks a hidden gap set to cover at least two reason categories.
+
+        A problem that genuinely cannot reach two is allowed to declare fewer
+        only if `admission.gap_reason_coverage` records which categories are
+        reachable and why the rest are not. The shortfall then reads as a
+        recorded decision rather than an oversight.
+        """
+        for _, task in self.b_tier():
+            reasons = task["library_policy"]["required_gap_reasons"]
+            if len(reasons) >= 2:
+                continue
+            with self.subTest(task=task["id"]):
+                coverage = task["admission"].get("gap_reason_coverage")
+                self.assertIsNotNone(
+                    coverage, f"{task['id']} declares {len(reasons)} category without saying why"
+                )
+                self.assertEqual(coverage["state"], "open")
+                self.assertEqual(set(coverage["reachable"]), set(reasons))
+                self.assertTrue(coverage["basis"])
+
+
 class TensorContractTests(unittest.TestCase):
     """The precision a task is graded at is part of its contract, not a CLI default.
 

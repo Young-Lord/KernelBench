@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/evaluation-report-1.0.0.json",
+  "title": "MUSA evaluation report (tools/run_task.py --output)",
+  "description": "Guide §4.7/§4.8. run_task.py emits two report shapes from one entry point: `static` (audit, case-override and golden checks, no device) and `full` (every case evaluated). The mode decides which stage blocks are present, so it is validated by value the same way the task tier is. The report is a derived artifact produced by a tool this schema does not own, so the properties are permissive: the invariants pinned here are the mode, the tier, and the fact that `summary.passed_overall` is always present and always agrees with `summary.exit_code`.",
+  "$defs": {
+    "case_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_id"],
+      "properties": {
+        "case_id": {"type": "string", "minLength": 1},
+        "tag": {"type": ["string", "null"]},
+        "stage": {"type": ["string", "null"]},
+        "skipped": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "expected_path": {"enum": ["fused_library", "library_composition", "custom_fallback", null]},
+        "compiled": {"type": ["boolean", "null"]},
+        "correctness": {"type": ["boolean", "null"]},
+        "dispatch_trace_passed": {"type": ["boolean", "null"]},
+        "runtime": {"type": ["number", "null"]},
+        "ref_runtime": {"type": ["number", "null"]},
+        "tier": {"type": ["string", "null"]},
+        "dispatch_trace_summary": {"type": ["object", "null"]},
+        "golden": {"type": ["object", "null"]},
+        "static_audit_errors": {"type": "array", "items": {"type": "string"}},
+        "dispatch_trace_errors": {"type": "array", "items": {"type": "string"}},
+        "passed": {"type": "boolean"},
+        "errors": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "stage_messages": {
+      "type": "object",
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "errors": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["mode", "task_id", "tier", "summary"],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "mode": {"enum": ["static", "full"]},
+    "task_id": {"type": "string", "minLength": 1},
+    "tier": {"enum": ["A_kernel", "B_library"]},
+    "backend": {"type": "string", "minLength": 1},
+    "precision": {"enum": ["fp32", "fp16", "bf16"]},
+    "submission": {"type": "string", "minLength": 1},
+    "stages": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "contract": {"type": "object"},
+    "case_generation": {"type": "object"},
+    "golden": {"type": "object"},
+    "cases": {"type": "array", "items": {"$ref": "#/$defs/case_row"}},
+    "static_audit": {
+      "type": "object",
+      "properties": {
+        "ran": {"type": "boolean"},
+        "passed": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "warnings": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "case_parameters": {"$ref": "#/$defs/stage_messages"},
+    "case_sources": {"$ref": "#/$defs/stage_messages"},
+    "summary": {
+      "type": "object",
+      "required": ["passed_overall"],
+      "properties": {
+        "cases": {"type": "integer", "minimum": 0},
+        "passed": {"type": "integer", "minimum": 0},
+        "failed": {"type": "integer", "minimum": 0},
+        "skipped": {"type": "integer", "minimum": 0},
+        "errors": {"type": "array", "items": {"type": "string"}},
+        "passed_overall": {"type": "boolean"},
+        "exit_code": {"type": "integer", "minimum": 0, "maximum": 127},
+        "exit_code_description": {"type": "string"}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"required": ["mode"], "properties": {"mode": {"const": "static"}}},
+      "then": {"required": ["static_audit", "case_parameters", "case_sources"]}
+    },
+    {
+      "if": {"required": ["mode"], "properties": {"mode": {"const": "full"}}},
+      "then": {"required": ["backend", "precision", "cases"]}
+    }
+  ]
+}

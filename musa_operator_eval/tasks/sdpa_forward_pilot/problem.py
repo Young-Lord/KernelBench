@@ -147,8 +147,28 @@ LIBRARY_POLICY = {
     "case_id_env_var": "KB_DISPATCH_CASE_ID",
     "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
     "minimum_gap_cases": 3,
-    # `unsupported_dtype` was added after measuring that float16 and bfloat16
-    # reach the fused path while float32 and float64 do not. Keep this list
-    # identical to `library_policy.required_gap_reasons` in task.json.
-    "required_gap_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch"],
+    # Every entry here is one of the four canonical `dispatch_contract.failure_reasons`
+    # in agent_reference/sdpa_forward_capabilities.json, and lists only the reasons a
+    # hidden case of *this* task can actually reach.
+    #
+    # `unsupported_dtype` used to be in this list, justified by "float16 and bfloat16
+    # reach the fused path, float32 and float64 do not". That is a fact about the
+    # task's tensor_contract, not about the library: a gap is a configuration the
+    # library cannot serve that the task actually asks for, and the contract never
+    # asks for float32. The device measurement found no dtype gap, so the reason was
+    # removed rather than kept as decoration.
+    #
+    # What the measurement did find, and why these two remain:
+    #   unsupported_shape  - head dimensions 192 and 256 fall off the flash path onto
+    #                        the math path, i.e. the fused path does not serve them.
+    #   semantic_mismatch  - the fused path rejects any explicit scale other than
+    #                        1/sqrt(D), and it returns non-zero garbage (not the
+    #                        contract's zeros) for a window that leaves a query row
+    #                        with no visible key.
+    # `layout_mismatch` and `multi_operator_required` are canonical but not reachable
+    # here: a non-contiguous BHSD layout still dispatches fused, and SDPA is one operator.
+    #
+    # Keep this list identical to `library_policy.required_gap_reasons` in task.json;
+    # tests/test_task_packages.py fails if the two drift.
+    "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"],
 }

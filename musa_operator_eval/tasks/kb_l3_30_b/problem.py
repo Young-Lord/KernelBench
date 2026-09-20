@@ -584,9 +584,20 @@ LIBRARY_POLICY = {
         "custom_fallback"
     ],
     "minimum_gap_cases": 3,
+    # Only the reasons a hidden case of this task can reach; each is one of the
+    # canonical failure_reasons in agent_reference/windowed_attention_capabilities.json.
+    # This window attention is not standard scaled dot product: q and k are
+    # L2-normalised and the scores are scaled by a clamped learnable logit scale,
+    # a continuous relative position bias is added to the scores, and the shifted
+    # windows use a -100 additive mask instead of -inf, so `semantic_mismatch`
+    # applies. `layout_mismatch`: the attention consumes window-partitioned
+    # (nW*B, Wh*Ww, C) tensors, not BHSD. `multi_operator_required`: window
+    # partition/shift/reverse, the bias MLP and the classifier cannot come from one
+    # fused call. `unsupported_shape` does not apply: head_dim is fixed at 32 and a
+    # non-aligned token count was measured to still dispatch fused.
     "required_gap_reasons": [
-        "unsupported_dtype",
-        "unsupported_shape",
-        "semantic_mismatch"
+        "layout_mismatch",
+        "semantic_mismatch",
+        "multi_operator_required"
     ]
 }

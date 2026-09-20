@@ -86,9 +86,7 @@
     ],
     "minimum_gap_cases": 3,
     "required_gap_reasons": [
-      "unsupported_dtype",
-      "unsupported_shape",
-      "semantic_mismatch"
+      "unsupported_shape"
     ]
   },
   "scoring": {
@@ -99,6 +97,12 @@
   "admission": {
     "status": "pending_device_measurement",
     "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
-    "dispatch_note": "a plain unmasked attention over already-split Q/K/V is the shape a fused library answers most directly, so the dispatch question here is only whether the library's dtype and head-dimension window covers the case"
+    "dispatch_note": "a plain unmasked attention over already-split Q/K/V is the shape a fused library answers most directly, so the dispatch question here is only whether the library's dtype and head-dimension window covers the case",
+    "gap_reason_coverage": {
+      "state": "open",
+      "reachable": ["unsupported_shape"],
+      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: D (embedding_dimension) is a case parameter and the fused path's head-dimension window ends at 128, so 192/256 leave the flash path for the math path. semantic_mismatch is unreachable because the reference calls the attention entry point with no scale argument and no mask: the scale is always the library's own 1/sqrt(D) and no row can be fully masked. layout_mismatch is unreachable because the contract layout is contiguous BHSD, which the family measurement showed still dispatches fused. multi_operator_required is unreachable because the task is a single SDPA call. This entry needs a second measurable category before it can meet the floor."
+    }
   }
 }

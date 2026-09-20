@@ -75,6 +75,6 @@
     "case_id_env_var": "KB_DISPATCH_CASE_ID",
     "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
     "minimum_gap_cases": 3,
-    "required_gap_reasons": ["unsupported_dtype", "unsupported_shape", "semantic_mismatch"]
+    "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"]
   }
 }

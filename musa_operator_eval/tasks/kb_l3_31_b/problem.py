@@ -85,9 +85,19 @@ LIBRARY_POLICY = {
         "custom_fallback"
     ],
     "minimum_gap_cases": 3,
+    # Only the reasons a hidden case of this task can reach; each is one of the
+    # canonical failure_reasons in agent_reference/sdpa_forward_capabilities.json.
+    # `layout_mismatch` is the one that applies: the contract attends the
+    # (H*W, B, C) view of a (B, C, H, W) image, so the library cannot be called on
+    # the task's own tensor without a layout conversion, and that conversion is the
+    # dispatch decision. `unsupported_shape` is unreachable because head_dim is
+    # fixed at 32 (embed_dim and num_heads are not case parameters) and a
+    # non-aligned sequence length was measured to still dispatch fused.
+    # `semantic_mismatch` is unreachable: the scale is the default 1/sqrt(D) and
+    # there is no mask. `multi_operator_required` is unreachable: one attention op.
+    # This is below the two-category floor §4.3 asks for; see
+    # `admission.gap_reason_coverage` in task.json.
     "required_gap_reasons": [
-        "unsupported_dtype",
-        "unsupported_shape",
-        "semantic_mismatch"
+        "layout_mismatch"
     ]
 }

@@ -84,9 +84,9 @@
     ],
     "minimum_gap_cases": 3,
     "required_gap_reasons": [
-      "unsupported_dtype",
-      "unsupported_shape",
-      "semantic_mismatch"
+      "layout_mismatch",
+      "semantic_mismatch",
+      "multi_operator_required"
     ]
   },
   "scoring": {
@@ -97,6 +97,12 @@
   "admission": {
     "status": "pending_device_measurement",
     "reason": "the hidden gap set, the naive-composition and expert-dispatch baselines, and the 1.3x admission gate are all measurements. None of them can be produced off the target device, and none of them are asserted here.",
-    "dispatch_note": "the dispatch decision is whether to gather windows and call the fused path, or stay in a custom window kernel"
+    "dispatch_note": "the dispatch decision is whether to gather windows and call the fused path, or stay in a custom window kernel",
+    "gap_reason_coverage": {
+      "state": "covered",
+      "reachable": ["layout_mismatch", "semantic_mismatch", "multi_operator_required"],
+      "unreachable": ["unsupported_shape"],
+      "basis": "satisfies the §4.3 two-category floor with three categories. semantic_mismatch: the reference computes a cosine similarity between L2-normalised q and k scaled by a clamped learnable logit scale, adds a continuous relative position bias produced by a small MLP, and applies a -100 additive mask on the shifted windows. None of that is softmax(scale * q·k), so the fused path is not semantically equivalent even where it accepts the shape. layout_mismatch: the attention consumes window-partitioned (nW*B, Wh*Ww, C) tensors rather than BHSD, so the library cannot be called on the task's own layout. multi_operator_required: patch embedding, window partition/cyclic shift/reverse, the bias MLP, the window attention, patch merging and the classifier head cannot be served by one fused call. unsupported_shape is unreachable: head_dim is fixed at 32 and the measured probe showed a non-aligned token count still dispatches fused."
+    }
   }
 }

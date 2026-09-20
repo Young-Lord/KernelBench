@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://kernelbench.local/musa/schemas/semantics-contract-1.0.0.json",
+  "title": "MUSA operator semantic contract (tasks/*/semantics.json)",
+  "description": "Guide §4.2. The file has to be readable on its own for a family-scoped task, and it has to pin three conventions or the goldens are wrong in a way that is hard to trace back: the causal alignment, the window direction, and the fully-masked-row convention. The family prose varies by operator, so only the structured block is constrained here; the prose keys are left free so a second family can describe itself without editing this schema.",
+  "$defs": {
+    "tensor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "shape", "dtypes", "layout", "stride"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "role": {"enum": ["input", "output", "optional_input", "optional_output"]},
+        "shape": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "dtypes": {
+          "type": "array", "minItems": 1, "uniqueItems": true,
+          "items": {"enum": ["float16", "bfloat16", "float32"]}
+        },
+        "layout": {"type": "string", "minLength": 2},
+        "stride": {"enum": ["contiguous", "explicit_in_manifest"]}
+      }
+    },
+    "dynamic_axis_range": {
+      "type": "array", "minItems": 2, "maxItems": 2,
+      "items": {"type": "integer", "minimum": 1}
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["left", "right", "unlimited_value"],
+      "properties": {
+        "left": {"type": "string", "minLength": 1},
+        "right": {"type": "string", "minLength": 1},
+        "unlimited_value": {"const": -1}
+      }
+    },
+    "attention": {
+      "type": "object",
+      "required": ["scale", "causal_alignment"],
+      "properties": {
+        "scale": {"enum": ["inverse_sqrt_d", "case_value", "1/sqrt(D), applied by the framework call"]},
+        "softmax_max_shift": {"const": true},
+        "accumulation_dtype": {"enum": ["float32", "float64"]},
+        "causal_alignment": {"enum": ["top_left", "bottom_right"]},
+        "window": {"$ref": "#/$defs/window"},
+        "fully_masked_row": {
+          "type": "object",
+          "required": ["output"],
+          "properties": {
+            "output": {"const": "zeros"},
+            "lse": {"enum": ["negative_infinity", "-inf"]}
+          }
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "family"],
+  "properties": {
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "family": {"type": "string", "minLength": 2},
+    "operation": {"type": "string", "minLength": 2},
+    "set_entry": {"type": "string", "minLength": 2},
+    "note": {"type": "string"},
+    "tensors": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/tensor"}},
+    "dynamic_axes": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/dynamic_axis_range"}
+    },
+    "abi": {
+      "type": "object",
+      "required": ["stream"],
+      "properties": {
+        "passing": {"enum": ["in_process_torch_tensors", "raw_binary"]},
+        "layout": {"type": "string"},
+        "stream": {"type": "string", "minLength": 1},
+        "note": {"type": "string"}
+      }
+    },
+    "attention": {
+      "if": {"type": "object"},
+      "then": {"$ref": "#/$defs/attention"},
+      "else": {"type": "string"}
+    },
+    "determinism": {
+      "if": {"type": "object"},
+      "then": {"type": "object", "required": ["required"]},
+      "else": {"type": "string"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"required": ["operation"], "properties": {"operation": {"const": "sdpa_forward"}}},
+      "then": {"required": ["tensors", "dynamic_axes", "abi", "attention", "determinism"]}
+    }
+  ]
+}
