@@ -21,6 +21,7 @@
   "reference": "problem.py:Model",
   "case_parameters": {
     "shape.B": "batch_size",
+    "shape.C": "embed_dim",
     "shape.H": "image_height",
     "shape.W": "image_width"
   },

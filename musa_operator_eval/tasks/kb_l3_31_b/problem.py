@@ -87,17 +87,23 @@ LIBRARY_POLICY = {
     "minimum_gap_cases": 3,
     # Only the reasons a hidden case of this task can reach; each is one of the
     # canonical failure_reasons in agent_reference/sdpa_forward_capabilities.json.
-    # `layout_mismatch` is the one that applies: the contract attends the
-    # (H*W, B, C) view of a (B, C, H, W) image, so the library cannot be called on
-    # the task's own tensor without a layout conversion, and that conversion is the
-    # dispatch decision. `unsupported_shape` is unreachable because head_dim is
-    # fixed at 32 (embed_dim and num_heads are not case parameters) and a
-    # non-aligned sequence length was measured to still dispatch fused.
+    # `unsupported_shape` is the one that applies: head_dim is embed_dim /
+    # num_heads, both of which are case parameters, and the fused kernel on the
+    # measured build declines anything above 128.
+    #
+    # This list said `layout_mismatch` until a device probe disproved it. The
+    # reasoning was that the contract attends the (H*W, B, C) view of a
+    # (B, C, H, W) image, so the library could not be called without a conversion.
+    # Measured: the fused path accepted the contiguous, the transposed and the
+    # strided views this task produces, and refused only a three-dimensional input,
+    # which is a rank error rather than a layout the library declines, since
+    # nn.MultiheadAttention always hands it four dimensions.
+    #
     # `semantic_mismatch` is unreachable: the scale is the default 1/sqrt(D) and
     # there is no mask. `multi_operator_required` is unreachable: one attention op.
     # This is below the two-category floor §4.3 asks for; see
     # `admission.gap_reason_coverage` in task.json.
     "required_gap_reasons": [
-        "layout_mismatch"
+        "unsupported_shape"
     ]
 }

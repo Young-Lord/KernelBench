@@ -22,6 +22,7 @@
   "capability_reference": "agent_reference/sdpa_forward_capabilities.json",
   "case_parameters": {
     "shape.B": "batch_size",
+    "shape.C": "embed_dim",
     "shape.H": "image_height",
     "shape.W": "image_width"
   },
@@ -85,7 +86,7 @@
     ],
     "minimum_gap_cases": 3,
     "required_gap_reasons": [
-      "layout_mismatch"
+      "unsupported_shape"
     ]
   },
   "scoring": {
@@ -99,9 +100,9 @@
     "dispatch_note": "the problem is already written against a framework attention module, so the library path is the reference's own route",
     "gap_reason_coverage": {
       "state": "open",
-      "reachable": ["layout_mismatch"],
-      "unreachable": ["unsupported_shape", "semantic_mismatch", "multi_operator_required"],
-      "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. layout_mismatch: the reference reshapes the image to (B, C, H*W) and permutes to (H*W, B, C) before attending, so the tensor the attention core consumes is sequence-major, not the BHSD the fused path is written for. The library cannot serve the task's own layout without a conversion, which is the dispatch decision. This is a structural judgement, not a measurement: the family probe only covered a non-contiguous tensor in the BHSD layout, which is a different case, so this reason must be confirmed on the device before the hidden set relies on it. unsupported_shape is unreachable because head_dim = embed_dim / num_heads is fixed at 32 by the problem defaults, and a non-aligned sequence length was measured to still dispatch fused. semantic_mismatch is unreachable: the scale is the framework default 1/sqrt(D) and there is no mask, so no row can be fully masked. multi_operator_required is unreachable: one attention op. This entry needs a second measurable category before it can meet the floor."
+      "reachable": ["unsupported_shape"],
+      "unreachable": ["semantic_mismatch", "layout_mismatch", "multi_operator_required"],
+      "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is embed_dim / num_heads, both now case parameters, and the fused path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path. This was measured: head_dim 32 dispatches fused at every sequence length tried from 49 to 1000, and 192 and 256 do not. layout_mismatch was the reason declared here before that measurement, and it is not a gap: the fused path accepted the contiguous, the transposed and the strided views this task produces, and refused only a three-dimensional input, which is a rank error rather than a layout the library declines, since nn.MultiheadAttention always hands it four dimensions. semantic_mismatch is unreachable: the scale is the framework default 1/sqrt(D) and there is no mask, so no row can be fully masked. multi_operator_required is unreachable: one attention op. This entry needs a second measurable category before it can meet the floor."
     }
   }
 }
