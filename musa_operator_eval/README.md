@@ -20,10 +20,13 @@ source-audit rule set. See `kernel_static_checker.static_audit_kernel`.
 - `tasks/`: agent-visible task packages. Each carries a KernelBench-format
   `problem.py` (`Model`, `get_inputs`, `get_init_inputs`, plus `TIER` and
   `LIBRARY_POLICY`), a `semantics.json` contract, a `PROMPT.md`, and the case list.
+- `sets/`: curated operator sets, each with a hand-written manifest and a
+  generated index. `sets/attention/` covers the attention family and records
+  which A-tier answer and which measurement already exist for every entry.
 - `agent_reference/`: sanitized, agent-visible capability descriptions.
 - `sources/`: provenance and license records for the upstream snapshots a task derives from.
 - `templates/`: baseline and gap-evidence templates.
-- `tools/`: capability probing, environment capture, case generation, admission gate.
+- `tools/`: capability probing, environment capture, case generation, admission gate, task driver, set verification.
 - `tests/`: CPU-only unit tests for the tools above.
 - `private/`: evaluator-only assets; ignored by Git except for its README.
 
@@ -51,6 +54,10 @@ python musa_operator_eval/tools/candidate_gate.py <baseline.json>
 python musa_operator_eval/tools/run_task.py --submission <model_new.py> --static-only
 python musa_operator_eval/tools/run_task.py --submission <model_new.py> \
   --backend musa --precision fp16 --output runs/<task>/report.json
+
+# Verify a curated set and regenerate its index
+python musa_operator_eval/tools/collect_attention_set.py
+python musa_operator_eval/tools/collect_attention_set.py --check   # verify only, for CI
 ```
 
 `run_task.py` is the entry point for a whole task. It specializes `problem.py`
@@ -58,6 +65,13 @@ per case using the `case_parameters` mapping in `task.json`, evaluates the
 submission against the reference, and checks the dispatch trace. `--static-only`
 stops after the source audit and the case-override check, so it runs on a
 machine with no device.
+
+`collect_attention_set.py` reads `sets/attention/attention_set.json`, which is
+curated by hand, and verifies every claim it makes against the repository: the
+reference and A-tier answer files exist, and every recorded measurement still
+matches the file it was read from. It then regenerates `sets/attention/SET.md`.
+Exit code is non-zero on drift, so a re-run of a baseline cannot silently leave
+a stale number in the index.
 
 Public inputs and goldens are regenerated on demand and are not committed.
 All tools are standard-library-plus-NumPy and are hardware-independent; the
@@ -72,6 +86,9 @@ python musa_operator_eval/tests/test_reference_and_cases.py -v
 
 # Task driver: case specialization, static report, CLI (stdlib only)
 python musa_operator_eval/tests/test_run_task.py -v
+
+# Attention set: measurement drift, generated index well-formedness (stdlib only)
+python musa_operator_eval/tests/test_attention_set.py -v
 
 # Cross-checks the task's PyTorch reference against the NumPy one (needs torch)
 python musa_operator_eval/tests/test_problem_reference.py -v

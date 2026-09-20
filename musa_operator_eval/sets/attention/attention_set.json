@@ -1,0 +1,231 @@
+{
+  "schema_version": "1.0.0",
+  "set_id": "attention_v0",
+  "title": "MUSA attention set",
+  "purpose": "The attention family of the MUSA operator evaluation: every KernelBench attention problem, the A-tier answer that already exists for it, the measurement that already exists for it, and what is still missing for each target.",
+  "provenance": {
+    "curated_from": [
+      "docs/musa_attention_tuning_notes.md",
+      "runs/musa_attn_perf_results.csv",
+      "deepseek_api_level1_musa_s4000_baseline/",
+      "analysis/pytorch_vs_deepseek_musa/",
+      "KernelBench/level3_musa/"
+    ],
+    "origin_commits": {
+      "c6b6eb0": "add MUSA attention kernels for KernelBench level3 problems",
+      "898244a": "tune MUSA attention kernels with tiled bands (43/44/50/31/97)",
+      "edee502": "rewrite p97 SDPA as two register-tiled SGEMMs",
+      "60d82eb": "rewrite p30 window attention as one CTA per (window, head)"
+    }
+  },
+
+  "targets": [
+    {"target_id": "s4000_fp32", "device": "MTT S4000", "musa_arch": "mp_22", "warp_size": 128, "dtype": "fp32", "status": "measured", "measured_by": "runs/musa_attn_perf_results.csv"},
+    {"target_id": "s4000_fp16", "device": "MTT S4000", "musa_arch": "mp_22", "warp_size": 128, "dtype": "fp16", "status": "planned"},
+    {"target_id": "s4000_bf16", "device": "MTT S4000", "musa_arch": "mp_22", "warp_size": 128, "dtype": "bf16", "status": "planned"},
+    {"target_id": "s5000_fp32", "device": "MTT S5000", "musa_arch": "mp_31", "warp_size": 32, "dtype": "fp32", "status": "planned"},
+    {"target_id": "s5000_fp16", "device": "MTT S5000", "musa_arch": "mp_31", "warp_size": 32, "dtype": "fp16", "status": "planned"},
+    {"target_id": "s5000_bf16", "device": "MTT S5000", "musa_arch": "mp_31", "warp_size": 32, "dtype": "bf16", "status": "planned"},
+    {"target_id": "s80_fp32", "device": "MTT S80 / S3000", "musa_arch": "mp_21", "warp_size": 128, "dtype": "fp32", "status": "planned"}
+  ],
+
+  "warp_size_note": "mp_22 (S4000) and mp_21 (S80) use 128-thread warps; mp_31 (S5000) uses 32. Every tuned A-tier kernel in this set was tuned on mp_22, and the tuning record shows the optimum sitting at the 1024-thread CTA ceiling with 32 lanes per query row. Those two facts are warp-size sensitive, so no mp_22 launch configuration should be carried to mp_31 without re-measuring. Source: docs/musa/README.md and docs/musa_attention_tuning_notes.md.",
+
+  "entries": [
+    {
+      "entry_id": "kb_l1_97",
+      "kernelbench": {"level": 1, "problem_id": 97, "name": "ScaledDotProductAttention"},
+      "reference": {"path": "KernelBench/level1/97_ScaledDotProductAttention.py", "entrypoint": "Model"},
+      "attention_kind": "dense_mha",
+      "structure": "plain F.scaled_dot_product_attention over already-split Q/K/V, no mask, no GQA",
+      "shapes": {"B": 32, "H": 32, "S": 512, "D": 1024},
+      "shape_note": "head_dim 1024 is what rules out the flash-tile design here: the q/o state alone is about 8KB per row, so the band width collapses to at most 8 rows and latency starvation beats the bandwidth saved.",
+      "tier": {
+        "A_kernel": {"eligible": true, "answer": "KernelBench/level1_musa/problem_97/model_new.py"},
+        "B_library": {"eligible": true, "basis": "torch_musa registers sdpa and routes it to muDNN SDP; mutlass experimental/fmha and MATE are the fused candidates", "expected_path": "fused_library for the registered configuration"}
+      },
+      "measurements": [
+        {"measurement_id": "l1_97_naive_s4000_fp32", "role": "a_tier_naive", "target_id": "s4000_fp32",
+         "reader": "kernelbench_eval_json", "selector": {"problem": "97", "sample_id": 0}, "runtime_unit": "ms",
+         "expected": {"submission_ms": 38200.0, "correctness": true}},
+        {"measurement_id": "l1_97_tuned_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 97, "ts": "2026-09-05 01:06:11"},
+         "expected": {"reference_ms": 76.36, "submission_ms": 191.026, "speedup": 0.3997}}
+      ],
+      "notes": [
+        "The tuning record shows this problem spent many rounds far behind: 38176ms, then 3712ms after fixing uncoalesced access, then 1151ms after row-band K/V reuse, then 191ms once the two-stage register-tiled SGEMM replaced the flash-tile attempt.",
+        "This is the same shape family as the B-tier sdpa_forward_pilot task, so its trace and dispatch contract can be reused verbatim."
+      ]
+    },
+    {
+      "entry_id": "kb_l3_43",
+      "kernelbench": {"level": 3, "problem_id": 43, "name": "MinGPTCausalAttention"},
+      "reference": {"path": "KernelBench/level3/43_MinGPTCausalAttention.py", "entrypoint": "Model"},
+      "attention_kind": "causal_mha",
+      "structure": "fused QKV linear, split into heads, scaled QK^T, top-left causal masked_fill(-inf), softmax, P.V, output projection",
+      "shapes": {"B": 128, "H": 8, "S": 512, "C": 768, "D": 96},
+      "tier": {
+        "A_kernel": {"eligible": true, "answer": "KernelBench/level3_musa/problem_43/model_new.py"},
+        "B_library": {"eligible": true, "basis": "the attention core is an sdpa call; the surrounding projections are nn.Linear and so are library-routed already", "expected_path": "fused_library for the core, library_composition for the projections"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_43_band_s4000_fp32", "role": "a_tier_initial", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 43, "ts": "2026-09-04 19:23:44"},
+         "expected": {"reference_ms": 47.766, "submission_ms": 1561.216, "speedup": 0.0306}},
+        {"measurement_id": "l3_43_flashtile_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 43, "ts": "2026-09-05 00:33:57"},
+         "expected": {"reference_ms": 47.679, "submission_ms": 140.849, "speedup": 0.3385}}
+      ],
+      "notes": [
+        "The tuned kernel is a flash-tile band: FMHA_TILE_BM 32, FMHA_TILE_BN 32, 32 lanes per query row, 1024 threads per CTA, shared arrays padded by one element to break bank conflicts.",
+        "The intermediate band version was 1561ms and the first flash-tile attempt at BM16/BN32 was slower still (668ms core-only), so the thread count and tile size here are measured optima, not defaults."
+      ]
+    },
+    {
+      "entry_id": "kb_l3_44",
+      "kernelbench": {"level": 3, "problem_id": 44, "name": "MiniGPTBlock"},
+      "reference": {"path": "KernelBench/level3/44_MiniGPTBlock.py", "entrypoint": "Model"},
+      "attention_kind": "causal_mha",
+      "structure": "a full MiniGPT transformer block: the causal attention of 43 plus the MLP and both residual paths",
+      "shapes": {"B": 128, "H": 8, "S": 512, "C": 768, "D": 96},
+      "tier": {
+        "A_kernel": {"eligible": true, "answer": "KernelBench/level3_musa/problem_44/model_new.py"},
+        "B_library": {"eligible": true, "basis": "same attention core as 43, but a much larger share of the runtime is now the library-routed MLP, which is exactly the composition case the tiers must separate", "expected_path": "library_composition"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_44_band_s4000_fp32", "role": "a_tier_initial", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 44, "ts": "2026-09-04 19:24:01"},
+         "expected": {"reference_ms": 106.25, "submission_ms": 1619.783, "speedup": 0.0656}},
+        {"measurement_id": "l3_44_flashtile_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 44, "ts": "2026-09-05 00:33:57"},
+         "expected": {"reference_ms": 106.179, "submission_ms": 199.693, "speedup": 0.5317}}
+      ],
+      "notes": ["Shares the kernel source with 43; the higher final ratio reflects the MLP share of the block rather than a better attention kernel."]
+    },
+    {
+      "entry_id": "kb_l3_50",
+      "kernelbench": {"level": 3, "problem_id": 50, "name": "ReLUSelfAttention"},
+      "reference": {"path": "KernelBench/level3/50_ReLUSelfAttention.py", "entrypoint": "Model"},
+      "attention_kind": "causal_relu_attention",
+      "structure": "causal self-attention with relu on the masked scores instead of softmax, so there is no denominator",
+      "shapes": {"B": 16, "H": 12, "S": 1024, "C": 768, "D": 64},
+      "tier": {
+        "A_kernel": {"eligible": true, "answer": "KernelBench/level3_musa/problem_50/model_new.py"},
+        "B_library": {"eligible": false, "reason": "no fused library provides relu attention; the only library path would be a composition that materializes scores, which is the thing being measured", "expected_path": "custom_fallback"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_50_band_s4000_fp32", "role": "a_tier_initial", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 50, "ts": "2026-09-04 19:24:23"},
+         "expected": {"reference_ms": 19.263, "submission_ms": 523.439, "speedup": 0.0368}},
+        {"measurement_id": "l3_50_flashtile_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 50, "ts": "2026-09-05 00:33:57"},
+         "expected": {"reference_ms": 19.263, "submission_ms": 57.205, "speedup": 0.3367}}
+      ],
+      "notes": ["Because there is no softmax denominator, the relu variant is a pure streaming weighted sum and needs no online rescale; the same kernel handles both modes."]
+    },
+    {
+      "entry_id": "kb_l3_31",
+      "kernelbench": {"level": 3, "problem_id": 31, "name": "VisionAttention"},
+      "reference": {"path": "KernelBench/level3/31_VisionAttention.py", "entrypoint": "Model"},
+      "attention_kind": "dense_mha",
+      "structure": "single dense multi-head attention over a flattened 128x128 image, no mask, no causal",
+      "shapes": {"B": 2, "H": 4, "S": 16384, "D": 32},
+      "shape_note": "16384 tokens at head_dim 32 is the long-sequence small-head case: the score matrix is quadratic in 16384 while the per-row state is tiny.",
+      "tier": {
+        "A_kernel": {"eligible": true, "answer": "KernelBench/level3_musa/problem_31/model_new.py"},
+        "B_library": {"eligible": true, "basis": "a plain unmasked attention over a contiguous 4D tensor is what the fused library path is for", "expected_path": "fused_library"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_31_dense_s4000_fp32", "role": "a_tier_initial", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 31, "ts": "2026-09-04 19:25:26"},
+         "expected": {"reference_ms": 76.237, "submission_ms": 2949.666, "speedup": 0.0258}},
+        {"measurement_id": "l3_31_flashtile_s4000_fp32", "role": "a_tier_intermediate", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 31, "ts": "2026-09-05 00:33:57"},
+         "expected": {"reference_ms": 75.882, "submission_ms": 526.967, "speedup": 0.144}},
+        {"measurement_id": "l3_31_twostage_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 31, "ts": "2026-09-05 02:09:25"},
+         "expected": {"reference_ms": 76.063, "submission_ms": 291.363, "speedup": 0.2611}}
+      ],
+      "notes": [
+        "The final design abandons flash-tile entirely and materializes S/P through a two-stage GEMM plus a global row softmax. On a dense long-sequence small-head problem the extra 8.6GB of intermediates costs less than the low arithmetic intensity of streaming rescale.",
+        "Shared memory budget scales as band x head_dim, so the BM128 configuration that won here fails outright at head_dim 96. A launch configuration is only valid for the head_dim it was measured on."
+      ]
+    },
+    {
+      "entry_id": "kb_l3_30",
+      "kernelbench": {"level": 3, "problem_id": 30, "name": "SwinTransformerV2"},
+      "reference": {"path": "KernelBench/level3/30_SwinTransformerV2.py", "entrypoint": "Model"},
+      "attention_kind": "windowed_mha",
+      "structure": "shifted-window attention with relative position bias over 7x7=49-token windows",
+      "shapes": {"B": 10, "S_window": 49, "D": 32},
+      "shape_note": "The window is 49 tokens, which is smaller than one warp's worth of work at mp_22, so the parallel decomposition is the whole problem.",
+      "tier": {
+        "A_kernel": {"eligible": true, "answer": "KernelBench/level3_musa/problem_30/model_new.py"},
+        "B_library": {"eligible": true, "basis": "window attention is still an attention core once the windows are gathered, so the dispatch question is whether to gather-then-call the fused path or stay in a custom window kernel", "expected_path": "library_composition"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_30_perrow_s4000_fp32", "role": "a_tier_initial", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 30, "ts": "2026-09-04 19:26:29"},
+         "expected": {"reference_ms": 61.157, "submission_ms": 110.389, "speedup": 0.554}},
+        {"measurement_id": "l3_30_wholewindow_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 30, "ts": "2026-09-05 11:13:39"},
+         "expected": {"reference_ms": 60.9, "submission_ms": 75.406, "speedup": 0.8076}}
+      ],
+      "notes": [
+        "The per-row kernel recomputed the whole window of K/V for every query row; one CTA per (window, head) that stages the entire window once cut the attention portion from 52ms to 18.5ms.",
+        "This is the closest entry to parity in the set at 0.81x, and the remaining gap is attributed to the serial per-row softmax inside the window kernel."
+      ]
+    },
+    {
+      "entry_id": "kb_l3_28",
+      "kernelbench": {"level": 3, "problem_id": 28, "name": "VisionTransformer"},
+      "reference": {"path": "KernelBench/level3/28_VisionTransformer.py", "entrypoint": "Model"},
+      "attention_kind": "dense_mha_degenerate",
+      "structure": "a 6-layer ViT whose per-layer attention is dense over 197 tokens at head_dim 64",
+      "shapes": {"B": 10, "layers": 6, "S": 197, "H": 8, "D": 64},
+      "shape_note": "Listed as degenerate in the tuning record: the attention core is not the bottleneck at this sequence length, and the kernels were left unchanged.",
+      "tier": {
+        "A_kernel": {"eligible": false, "reason": "the attention core is already inside the noise floor of the surrounding layers, so a kernel-level score would not measure kernel quality", "answer": "KernelBench/level3_musa/problem_28/model_new.py"},
+        "B_library": {"eligible": false, "reason": "same reason: no dispatch decision here is worth more than the measurement noise"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_28_unchanged_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 28, "ts": "2026-09-04 19:24:43"},
+         "expected": {"reference_ms": 8.471, "submission_ms": 7.814, "speedup": 1.0841}}
+      ],
+      "notes": ["Kept in the set as a control: an entry that is already at or above parity, to show what a degenerate case looks like in the report."]
+    },
+    {
+      "entry_id": "kb_l3_32",
+      "kernelbench": {"level": 3, "problem_id": 32, "name": "ConvolutionalVisionTransformer"},
+      "reference": {"path": "KernelBench/level3/32_ConvolutionalVisionTransformer.py", "entrypoint": "Model"},
+      "attention_kind": "dense_mha_degenerate",
+      "structure": "CvT whose attention operates on a small token count after convolutional token embedding",
+      "shapes": {"B": 10, "image": 32, "C": 128, "H": 4},
+      "shape_note": "Degenerate like 28; the sequence is small and the convolution dominates.",
+      "tier": {
+        "A_kernel": {"eligible": false, "reason": "attention is not a meaningful share of the runtime", "answer": "KernelBench/level3_musa/problem_32/model_new.py"},
+        "B_library": {"eligible": false, "reason": "same"}
+      },
+      "measurements": [
+        {"measurement_id": "l3_32_unchanged_s4000_fp32", "role": "a_tier_tuned", "target_id": "s4000_fp32",
+         "reader": "attn_perf_csv", "selector": {"problem": 32, "ts": "2026-09-04 19:25:56"},
+         "expected": {"reference_ms": 4.109, "submission_ms": 3.46, "speedup": 1.1879}}
+      ],
+      "notes": ["Second control entry, already above parity."]
+    }
+  ],
+
+  "dangling_references": [
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/torch_musa/2.11.0.post1", "role": "framework SDPA and muDNN attention integration"},
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/mate/v0.2.6", "role": "MP31 fused attention library candidate"},
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/mutlass/commit-78b349514831", "role": "FMHA implementation dependency and expert reference"},
+    {"referenced_by": "musa_operator_eval/sources/attention-source-001.json", "path": "musa_attention_set/implementations/tilelang_musa_legacy/commit-4b59fea16afc", "role": "S4000/S5000 kernel reference candidate"},
+    {"referenced_by": "KernelBench/level3_musa/problem_43/model_new.py", "path": "musa_attention_set archive", "role": "design reference named in the kernel header comment"},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "torch_musa/", "role": "level 1 upstream source tree"},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "mutlass/", "role": "level 1 upstream source tree"},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "mate/", "role": "level 1 upstream source tree"},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "MNN/", "role": "level 1 upstream source tree"},
+    {"referenced_by": "docs/musa/source_inventory.md", "path": "MT-flashMLA/", "role": "level 1 upstream source tree"}
+  ]
+}
