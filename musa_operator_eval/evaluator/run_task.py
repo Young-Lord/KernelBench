@@ -17,10 +17,12 @@ code from `exit_codes.py` rather than a bare 1. The report records which stage
 produced the code, so the number identifies the stage and the report explains it.
 
     # Audit the submission and verify the case overrides. Runs anywhere.
-    python musa_operator_eval/tools/run_task.py --submission model_new.py --static-only
+    python musa_operator_eval/evaluator/run_task.py --submission model_new.py --static-only
 
-    # Full evaluation. Needs the target device.
-    python musa_operator_eval/tools/run_task.py \
+    # Full evaluation. Needs the target device. `--build-dir` is where the
+    # submission's compiled artifacts land, which is what the B tier's link
+    # whitelist check reads; it defaults to <generated-dir>/build.
+    python musa_operator_eval/evaluator/run_task.py \
         --submission model_new.py --backend musa --precision fp16 \
         --generated-dir musa_operator_eval/tasks/sdpa_forward_pilot/generated \
         --output runs/sdpa/report.json
@@ -32,18 +34,27 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 # `run_task.py` is run as a script from anywhere, and loaded by tests through
 # `importlib.util.spec_from_file_location`, neither of which puts this directory
 # on `sys.path`. Adding it here is what makes the sibling `exit_codes` import
 # below work in both cases.
-_TOOLS_DIR = Path(__file__).resolve().parent
-if str(_TOOLS_DIR) not in sys.path:
-    sys.path.insert(0, str(_TOOLS_DIR))
+_EVALUATOR_DIR = Path(__file__).resolve().parent
+# The case-specialisation rule is public: it is the convention that turns a §4.3
+# case entry into a problem, and `tools/generate_cases.py` applies the same one to
+# build a golden. The evaluator reads it from there rather than keeping a second
+# copy, and the dependency points this way on purpose -- the public flow must not
+# need anything out of `evaluator/`.
+_TOOLS_DIR = _EVALUATOR_DIR.parent / "tools"
+for _directory in (_EVALUATOR_DIR, _TOOLS_DIR):
+    if str(_directory) not in sys.path:
+        sys.path.insert(0, str(_directory))
 
 from exit_codes import (  # noqa: E402  (import follows the sys.path fix-up above)
     EXIT_BOUNDARY_FAILED,
@@ -71,12 +82,26 @@ from exit_codes import (  # noqa: E402  (import follows the sys.path fix-up abov
     describe as describe_exit_code,
 )
 
+# Case specialisation is shared with `generate_cases.py`, which builds the problem
+# a golden is computed from. The names are re-exported because this module is the
+# driver: `measure_baseline.py` and the tests import them from here.
+from case_specialization import (  # noqa: E402,F401
+    CASE_OVERRIDE_HEADER,
+    case_source,
+    load_task,
+    resolve_case_field,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 REPO_TOP = ROOT.parent
 DEFAULT_TASK_DIR = ROOT / "tasks" / "sdpa_forward_pilot"
 DEFAULT_GENERATED_SUBDIR = "generated"
 
-CASE_OVERRIDE_HEADER = "# --- case overrides injected by run_task.py for {case_id} ---"
+# Where a full run puts the submission's compiled artifacts when `--build-dir` is
+# not given. It sits under the generated directory because that is the one
+# directory a run already owns: the task package is agent-visible and the private
+# tree is maintainer-only.
+DEFAULT_BUILD_SUBDIR = "build"
 
 # The driver's precision vocabulary, mapped onto the dtype names a task's
 # `tensor_contract` uses. Keeping the mapping in one place is what lets the flag
@@ -115,13 +140,27 @@ STAGE_EXIT_CODES = {
     "performance": EXIT_PERFORMANCE_FAILED,
 }
 
-# §4.7 stages this driver does not run, and the code each would return. The link
-# whitelist check reads the build product's export table, which only exists after
-# a device build; until it is wired here, naming it is better than leaving a
-# reader to wonder why the code never appears.
-STAGES_NOT_IMPLEMENTED = {
-    "link_whitelist_check": EXIT_LINK_WHITELIST_VIOLATION,
-}
+# The §4.7 stages this driver runs, in the order §5's step 8 names them:
+# `静态审计 → 编译 → 公开 → 隐藏 → 边界 → 稳定性 → 性能`, with the B tier's two
+# extra checks where §4.7 puts them -- the link whitelist immediately after the
+# build it reads, and the dispatch trace inside every case that records one.
+#
+# The link check is not a source scan and cannot be: a source scan reads the
+# imports a submission wrote, while this reads the sonames the linker resolved,
+# including whatever came in behind them. That is why the build has to be a stage
+# of its own rather than a side effect of the first case.
+STAGE_ORDER = (
+    "case_generation",
+    "golden",
+    "static_audit",
+    "build",
+    "link_whitelist_check",
+    "evaluation",
+)
+
+# §4.7 gives the link whitelist to the B tier only. The A tier forbids library
+# compute outright, so it has no whitelist to check against.
+TIER_ONLY_STAGES = {"link_whitelist_check": "B_library"}
 
 # A golden that is absent, corrupt or contradicted means the ground truth cannot
 # be trusted, so the run stops there — in the static pass as much as the device
@@ -237,72 +276,6 @@ def allowed_precisions(task: dict) -> List[str]:
     return [name for name, dtype in PRECISION_DTYPE_NAMES.items() if dtype in dtypes]
 
 
-def load_task(task_dir: Path, cases_path: Optional[Path] = None) -> Tuple[dict, dict, str]:
-    """Load the contract, the case list and the reference source for a task.
-
-    Args:
-        task_dir: the task package
-        cases_path: the case manifest to evaluate. Defaults to the task's
-            `public_cases.json`; point it at a private manifest to evaluate the
-            hidden set. The cases live outside the task package because the
-            hidden ones must not be readable from it.
-
-    Returns:
-        (task, cases_manifest, problem_source)
-
-    Raises:
-        FileNotFoundError: a required task file is missing.
-        ValueError: the contract does not name a problem file or case parameters.
-    """
-    task = json.loads((task_dir / "task.json").read_text(encoding="utf-8"))
-    cases = json.loads((cases_path or task_dir / "public_cases.json").read_text(encoding="utf-8"))
-
-    problem_file = task.get("problem_file")
-    if not problem_file:
-        raise ValueError("task.json must declare `problem_file`")
-    problem_source = (task_dir / problem_file).read_text(encoding="utf-8")
-
-    return task, cases, problem_source
-
-
-def resolve_case_field(case: dict, dotted_path: str) -> Any:
-    """Read a dotted path such as `attributes.scale` out of a case entry.
-
-    Raises:
-        KeyError: the path does not exist in this case, which means the task's
-            `case_parameters` mapping and its case list disagree.
-    """
-    value: Any = case
-    for part in dotted_path.split("."):
-        if not isinstance(value, dict) or part not in value:
-            raise KeyError(f"case {case.get('case_id')!r} has no field {dotted_path!r}")
-        value = value[part]
-    return value
-
-
-def case_source(problem_source: str, case: dict, case_parameters: Dict[str, str]) -> str:
-    """Return the problem source specialized to one case.
-
-    The overrides are appended rather than substituted so the reference stays
-    byte-identical to what a reader sees in `problem.py`; the appended block just
-    re-binds the module-level defaults before `get_init_inputs` / `get_inputs`
-    read them. That is the same idiom KernelBench problems already use for their
-    constants.
-    """
-    assignments = "\n".join(
-        f"{variable} = {resolve_case_field(case, path)!r}"
-        for path, variable in case_parameters.items()
-    )
-    return (
-        problem_source.rstrip()
-        + "\n\n\n"
-        + CASE_OVERRIDE_HEADER.format(case_id=case["case_id"])
-        + "\n"
-        + assignments
-        + "\n"
-    )
-
-
 def verify_case_parameters(
     cases: List[dict], case_parameters: Dict[str, str]
 ) -> List[str]:
@@ -387,6 +360,10 @@ def run_static_audit(
     Kept separate from the report so the full path can run exactly the same
     audit before it compiles anything, which is what makes an audit failure stop
     the run instead of being re-discovered once per case on the device.
+
+    §4.6's frozen list is read out of the package's own inventory, so the boundary
+    the audit draws is the one the starter declares rather than a second copy of
+    it that could drift.
     """
     checker = _load_checker()
     policy = task.get("library_policy") or {}
@@ -397,6 +374,162 @@ def run_static_audit(
         library_policy=policy,
         backend=task.get("target_environment", {}).get("backend", "musa"),
         precision=precision,
+        frozen_paths=(task.get("starter") or {}).get("frozen"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Environment stage (§4.7, §5 step 1)
+# ---------------------------------------------------------------------------
+
+
+def environment_stage(task: dict) -> dict:
+    """Compare this machine against the configuration the task was measured on.
+
+    §5 step 1 fixes the environment, and §4.4 says a speedup is only meaningful
+    within one configuration. This is the "评测前比对" half of that: the task names
+    a snapshot and the evaluator checks that the machine in front of it is that
+    snapshot before spending a compile. Everything the comparison needs is
+    recomputed here rather than read back from the record, so the check is
+    independent of the record it checks.
+
+    Returns:
+        {"ran": bool, "passed": bool, "declared": {...}, "live": {...}, "mismatches": [...]}
+    """
+    target = task.get("target_environment") or {}
+    declared_id = target.get("snapshot_id")
+    record_path = target.get("record")
+    if not declared_id or not record_path:
+        return {
+            "ran": False,
+            "passed": True,
+            "reason": "the task names no environment record, so there is nothing to compare against",
+        }
+
+    # Task-contract paths are relative to the evaluation set, which is where
+    # `environments/` lives; `case_generation.tool` in a case manifest is the one
+    # field that is repo-relative, and `resolve_generation_tool` handles that.
+    record = json.loads((ROOT / record_path).read_text(encoding="utf-8"))
+    collector = load_module_from_path(
+        "musa_collect_environment", _EVALUATOR_DIR / "collect_environment.py"
+    )
+    live = collector.environment_fingerprint()
+
+    declared = {
+        "snapshot_id": declared_id,
+        "device_name": (record.get("hardware") or {}).get("device_name"),
+        "architecture": (record.get("hardware") or {}).get("architecture"),
+        "driver": (record.get("software") or {}).get("driver"),
+        "musa_toolkit": (record.get("software") or {}).get("musa_toolkit"),
+        "mudnn": (record.get("software") or {}).get("mudnn"),
+        "mublas": (record.get("software") or {}).get("mublas"),
+    }
+    seen = dict(live["resolved"])
+    seen["snapshot_id"] = live["snapshot_id"]
+
+    mismatches = []
+    for field in ("device_name", "architecture", "driver", "musa_toolkit", "mudnn", "mublas"):
+        expected, actual = declared.get(field), seen.get(field)
+        if expected and actual and expected != actual:
+            mismatches.append(
+                f"{field}: the task was measured on {expected!r}, this machine reports {actual!r}"
+            )
+    if declared["snapshot_id"] != live["snapshot_id"]:
+        mismatches.append(
+            f"snapshot_id: the task names {declared['snapshot_id']}, this machine is {live['snapshot_id']}"
+        )
+
+    return {
+        "ran": True,
+        "passed": not mismatches,
+        "declared": declared,
+        "live": {
+            "snapshot_id": live["snapshot_id"],
+            "device_name": seen.get("device_name"),
+            "architecture": seen.get("architecture"),
+            "driver": seen.get("driver"),
+            "musa_toolkit": seen.get("musa_toolkit"),
+            "mudnn": seen.get("mudnn"),
+            "mublas": seen.get("mublas"),
+        },
+        "mismatches": mismatches,
+        "missing_probes": live.get("missing") or [],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Build and link stages (§4.7)
+# ---------------------------------------------------------------------------
+
+
+def build_submission(
+    submission_path: Path, build_dir: Path, task_dir: Optional[Path] = None, timeout: int = 1800
+) -> dict:
+    """Compile the submission once, through the starter's declared build path.
+
+    §4.7 makes the build a stage rather than a side effect of the first case:
+    the B tier's link whitelist check reads what was built and cannot read it
+    before it exists, and a submission the audit rejects never spends a compile.
+
+    §4.7 also says the stage runs through the starter's build entry point and no
+    other, so this runs `starter/build.py` rather than compiling the submission
+    itself. The consequence is not only procedural: a submission that builds under
+    its own script builds under the evaluator, and the script is the agent's way to
+    find out that its kernels compile before it submits.
+
+    Returns:
+        {"passed": bool, "detail": str, "build_dir": str, "script": str}
+    """
+    build_dir = Path(build_dir)
+    build_dir.mkdir(parents=True, exist_ok=True)
+
+    script = Path(task_dir or "") / "starter" / "build.py" if task_dir else None
+    if script is None or not script.is_file():
+        return {
+            "passed": False,
+            "detail": (
+                f"the task names no starter build script ({script}); §4.6 requires one "
+                "build entry point, and a task without one cannot be built the way it "
+                "says it is built"
+            ),
+            "build_dir": str(build_dir),
+            "script": str(script) if script else None,
+        }
+
+    environment = dict(os.environ)
+    environment["TORCH_EXTENSIONS_DIR"] = str(build_dir)
+    completed = subprocess.run(
+        [sys.executable, str(script), "--submission", str(submission_path), "--build-dir", str(build_dir)],
+        capture_output=True,
+        text=True,
+        env=environment,
+        timeout=timeout,
+    )
+    detail = (completed.stderr or completed.stdout or "").strip()[-4000:]
+    return {
+        "passed": completed.returncode == 0,
+        # The starter's script separates "this did not build" from "this machine
+        # has no device stack" by exit code, and the caller reports them
+        # differently: one is a verdict on the submission, the other on the box.
+        "environment_missing": completed.returncode == 3,
+        "detail": detail,
+        "build_dir": str(build_dir),
+        "script": str(script),
+    }
+
+
+def link_whitelist_stage(task: dict, build_dir: Path) -> dict:
+    """Read every artifact under `build_dir` and check what it links.
+
+    §4.7 gives this stage to the B tier alone. The A tier forbids library compute
+    outright, so it has no whitelist for a build product to violate.
+    """
+    policy = task.get("library_policy") or {}
+    tool = load_module_from_path("musa_link_whitelist", _EVALUATOR_DIR / "link_whitelist.py")
+    return tool.check_build_dir(
+        Path(build_dir),
+        policy.get("allowed_libraries"),
+        policy.get("allowed_symbol_prefixes"),
     )
 
 
@@ -466,19 +599,24 @@ def check_golden_integrity(case: dict, golden_path: Path, manifest: dict) -> Lis
     return errors
 
 
-def recompute_golden(case: dict, generation_tool: Path) -> dict:
+def recompute_golden(case: dict, generation_tool: Path, task_dir: Optional[Path] = None) -> dict:
     """Regenerate a case's golden from its seed and return the fresh manifest.
 
     This is the cross-check the `golden` field exists for: it re-runs the same
     deterministic generator a grader would, so a golden produced from a different
     seed, a different reference revision or a changed case definition shows up as
     a disagreement rather than as a plausible-looking number.
+
+    `task_dir` is the package the case belongs to. The generator builds a case
+    from that package's own reference, so pointing the cross-check at the wrong
+    package would recompute a different task's golden and compare it against this
+    one's.
     """
     generator = load_module_from_path("musa_case_generator", generation_tool)
     if not hasattr(generator, "generate_case"):
-        raise AttributeError(f"{generation_tool} defines no generate_case(case, output_root)")
+        raise AttributeError(f"{generation_tool} defines no generate_case(case, output_root, task_dir)")
     with tempfile.TemporaryDirectory(prefix="run_task_golden_") as temporary:
-        generator.generate_case(case, Path(temporary))
+        generator.generate_case(case, Path(temporary), task_dir)
         regenerated = Path(temporary) / case["case_id"] / "golden" / GOLDEN_MANIFEST_NAME
         return json.loads(regenerated.read_text(encoding="utf-8"))
 
@@ -508,7 +646,7 @@ def compare_golden_manifests(stored: dict, regenerated: dict) -> List[str]:
 
 
 def verify_golden(
-    case: dict, generated_root: Path, generation_tool: Optional[Path] = None
+    case: dict, generated_root: Path, generation_tool: Optional[Path] = None, task_dir: Optional[Path] = None
 ) -> dict:
     """Cross-check one case's stored golden and describe the outcome.
 
@@ -559,7 +697,7 @@ def verify_golden(
     # turn into a crash either. The failure is recorded as the reason the golden
     # stayed unverified.
     try:
-        regenerated = recompute_golden(case, generation_tool)
+        regenerated = recompute_golden(case, generation_tool, task_dir)
     except Exception as error:  # noqa: BLE001 — any failure means "not recomputed"
         result["status"] = "integrity_only"
         result["detail"] = f"recomputation unavailable: {type(error).__name__}: {error}"
@@ -590,7 +728,7 @@ def resolve_generation_tool(case_generation: Optional[dict]) -> Optional[Path]:
 
 
 def golden_stage(
-    cases: List[dict], generated_root: Path, case_generation: Optional[dict]
+    cases: List[dict], generated_root: Path, case_generation: Optional[dict], task_dir: Optional[Path] = None
 ) -> dict:
     """Cross-check every case's golden and report whether any of them is fatal.
 
@@ -598,12 +736,13 @@ def golden_stage(
         cases: the case entries
         generated_root: the `--output-dir` the generator wrote into
         case_generation: the manifest's `case_generation` block, if it has one
+        task_dir: the package the cases belong to, for the recomputation
 
     Returns:
         {"results": [...], "exit_code": int, "fatal": bool, "counts": {...}}
     """
     generation_tool = resolve_generation_tool(case_generation)
-    results = [verify_golden(case, generated_root, generation_tool) for case in cases]
+    results = [verify_golden(case, generated_root, generation_tool, task_dir) for case in cases]
 
     counts: Dict[str, int] = {}
     for result in results:
@@ -652,6 +791,7 @@ def static_report(
     precision: str = "fp16",
     generated_dir: Optional[Path] = None,
     case_generation: Optional[dict] = None,
+    task_dir: Optional[Path] = None,
 ) -> dict:
     """Audit the submission and check the case overrides and goldens, without a device.
 
@@ -689,7 +829,7 @@ def static_report(
             "reason": "no generated directory was given, so no case's golden was cross-checked",
         }
     else:
-        golden = golden_stage(cases, generated_dir, case_generation)
+        golden = golden_stage(cases, generated_dir, case_generation, task_dir)
         report["golden"] = golden
         report["stages"].append("golden")
         if golden["fatal"]:
@@ -722,19 +862,33 @@ def run_case(
     num_perf_trials: int,
     verbose: bool,
 ) -> dict:
-    """Evaluate one case and return its row of the report."""
+    """Evaluate one case and return its row of the report.
+
+    §4.7 gives the dispatch trace to the B tier alone, and the two tiers are
+    graded by two different evaluators because of it: the A tier is asked whether
+    the answer is right, and the B tier is asked how the answer was reached. An
+    A-tier case has no expected path, so running it through the dispatch wrapper
+    asked a submission to record a trace nothing had told it to record and failed
+    it for not doing so.
+    """
     sys.path.insert(0, str(REPO_TOP / "src"))
-    from kernelbench.eval import eval_library_dispatch_against_ref, get_torch_dtype_from_string
+    from kernelbench.eval import (
+        eval_kernel_against_ref,
+        eval_library_dispatch_against_ref,
+        get_torch_dtype_from_string,
+    )
 
     policy = task.get("library_policy") or {}
+    tier = task.get("tier", "A_kernel")
     specialized_source = case_source(problem_source, case, task.get("case_parameters") or {})
 
-    result = eval_library_dispatch_against_ref(
-        specialized_source,
-        submission_source,
-        expected_dispatch_path=case.get("expected_path"),
-        dispatch_case_id=case.get("case_id"),
-        required_trace_fields=policy.get("required_trace_fields"),
+    shared = dict(
+        # §4.3 defines a case by its parameters and its seed, and the framework's
+        # default seed is a fixed 42. Without this the seed in the case list was
+        # read by the generator and by nothing else, so every case of a task ran
+        # on the same random inputs and the seed a case declared described a
+        # tensor nobody ever saw.
+        seed_num=int(case.get("seed", 42)),
         # The contract's tolerance block is the task's one lever on grading, and it
         # only loosens. Without this the field was declared by every package and
         # read by nothing, so a task could state a bar its own cases were graded
@@ -751,6 +905,18 @@ def run_case(
         measure_performance=num_perf_trials > 0,
         verbose=verbose,
     )
+
+    if tier == "B_library":
+        result = eval_library_dispatch_against_ref(
+            specialized_source,
+            submission_source,
+            expected_dispatch_path=case.get("expected_path"),
+            dispatch_case_id=case.get("case_id"),
+            required_trace_fields=policy.get("required_trace_fields"),
+            **shared,
+        )
+    else:
+        result = eval_kernel_against_ref(specialized_source, submission_source, **shared)
 
     if result is None:
         return {
@@ -825,6 +991,13 @@ def _usable_runtime(row: dict) -> bool:
     return isinstance(runtime, (int, float)) and runtime > 0
 
 
+# §4.7 groups the stability re-run under the correctness stage, so it applies to
+# the cases that stage covers: the answer has to be right, and it has to still be
+# right when the same case runs again. A performance case is timed repeatedly
+# already, and a case that disagrees with itself is not a fast case.
+STABILITY_STAGES = ("correctness", "boundary", "stability")
+
+
 def evaluate_cases(
     task: dict,
     cases: List[dict],
@@ -836,6 +1009,7 @@ def evaluate_cases(
     num_perf_trials: int,
     verbose: bool,
     golden_results: Optional[Dict[str, dict]] = None,
+    stability_reruns: int = 1,
 ) -> Tuple[List[dict], int]:
     """Run every case, short-circuiting once a stage has failed.
 
@@ -889,11 +1063,48 @@ def evaluate_cases(
                 "status": golden_result["status"],
                 "verified": golden_result["verified"],
             }
+
+        # §4.7's stability re-run, recorded on every row rather than only on the
+        # rows that were re-run: "checked and agreed" and "not checked" are
+        # different facts, and a report that omits the block leaves a reader to
+        # infer which one happened. A submission that passes once and fails the
+        # second time on the same case and the same seed is not slow and not
+        # wrong, it is non-deterministic, and the number it earned the first time
+        # cannot be reproduced.
+        stability: dict = {"reruns": 0, "agrees": True}
+        if not stability_reruns:
+            stability["reason"] = "not re-run: the stability re-run is switched off"
+        elif stage not in STABILITY_STAGES:
+            stability["reason"] = f"not re-run: a {stage} case is repeated by its own protocol"
+        elif not row["passed"]:
+            stability["reason"] = "not re-run: the case did not pass the first time"
+        else:
+            for attempt in range(stability_reruns):
+                rerun = run_case(
+                    task, case, problem_source, submission_source, backend, precision,
+                    num_correct_trials, num_perf_trials, verbose,
+                )
+                stability["reruns"] = attempt + 1
+                if not rerun.get("passed"):
+                    stability["agrees"] = False
+                    stability["reason"] = (
+                        "the case passed on the first run and failed on re-run "
+                        f"{attempt + 1} with the same seed and the same inputs"
+                    )
+                    stability["errors"] = (rerun.get("errors") or [])[:4]
+                    row["passed"] = False
+                    break
+        row["stability"] = stability
+
         rows.append(row)
 
         if not row["passed"] and failed_stage_rank is None:
             failed_stage_rank = stage_rank
-            exit_code = exit_code_for_case_row(row, case)
+            exit_code = (
+                EXIT_STABILITY_FAILED
+                if row.get("stability", {}).get("agrees") is False
+                else exit_code_for_case_row(row, case)
+            )
 
     return rows, exit_code
 
@@ -909,10 +1120,20 @@ def evaluate_task(
     num_perf_trials: int,
     verbose: bool,
     generated_dir: Path,
+    task_dir: Optional[Path] = None,
+    build_dir: Optional[Path] = None,
+    submission_path: Optional[Path] = None,
+    stability_reruns: int = 1,
 ) -> dict:
-    """Run the full §4.7 pipeline for one submission, short-circuiting per stage."""
+    """Run the full §4.7 pipeline for one submission, short-circuiting per stage.
+
+    `submission_path` is where the submission came from, for the stages that read
+    it as a file rather than as a string: the build runs the starter's script
+    against it. It is last so the positional callers that predate it keep working.
+    """
     cases = cases_manifest["cases"]
     case_parameters = task.get("case_parameters") or {}
+    build_dir = Path(build_dir) if build_dir else Path(generated_dir) / DEFAULT_BUILD_SUBDIR
     report: dict = {
         "mode": "full",
         "task_id": task.get("id"),
@@ -940,7 +1161,7 @@ def evaluate_task(
     # nothing reads. A manifest that declares a golden must deliver one: the
     # field is part of the task definition, so an absent file is an incomplete
     # evaluation setup, not a case that merely went uncross-checked.
-    golden = golden_stage(cases, generated_dir, cases_manifest.get("case_generation"))
+    golden = golden_stage(cases, generated_dir, cases_manifest.get("case_generation"), task_dir)
     report["golden"] = golden
     report["stages"].append("golden")
     if golden["fatal"]:
@@ -955,10 +1176,48 @@ def evaluate_task(
         return report
 
     golden_by_case = {result["case_id"]: result for result in golden["results"]}
-    # Importing the device stack is the first thing `run_case` does, and on a
-    # machine without it the failure is an ImportError several frames down. That
-    # is an environment fact, not a submission verdict, so it gets a code of its
-    # own instead of a traceback that reads like a harness bug.
+
+    # Everything below reaches for the device stack, and on a machine without it
+    # the failure is an ImportError several frames down. That is an environment
+    # fact, not a submission verdict, so it gets a code of its own instead of a
+    # traceback that reads like a harness bug.
+    try:
+        materialised = submission_path
+        if materialised is None:
+            # A caller that supplied only the source still gets a build: the
+            # starter's script takes a path, so the source is written to one.
+            scratch = Path(tempfile.mkdtemp(prefix="run_task_submission_"))
+            materialised = scratch / "model_new.py"
+            materialised.write_text(submission_source, encoding="utf-8")
+        build = build_submission(materialised, build_dir, task_dir)
+    except ImportError as error:
+        report["environment"] = {
+            "error": str(error),
+            "reason": "the device stack (torch / kernelbench) could not be imported",
+        }
+        report["summary"] = build_summary(EXIT_ENVIRONMENT_UNAVAILABLE)
+        return report
+    report["build"] = build
+    report["stages"].append("build")
+    if not build["passed"]:
+        if build.get("environment_missing"):
+            report["environment"] = {
+                "error": build["detail"][-400:],
+                "reason": "the device stack (torch / kernelbench) could not be imported",
+            }
+            report["summary"] = build_summary(EXIT_ENVIRONMENT_UNAVAILABLE)
+            return report
+        report["summary"] = build_summary(EXIT_BUILD_FAILED, errors=[build["detail"][-400:]])
+        return report
+
+    if task.get("tier") == "B_library":
+        link = link_whitelist_stage(task, build_dir)
+        report["link_whitelist"] = link
+        report["stages"].append("link_whitelist_check")
+        if not link["passed"]:
+            report["summary"] = build_summary(EXIT_LINK_WHITELIST_VIOLATION, errors=link["errors"])
+            return report
+
     try:
         rows, case_exit_code = evaluate_cases(
             task,
@@ -971,6 +1230,7 @@ def evaluate_task(
             num_perf_trials,
             verbose,
             golden_by_case,
+            stability_reruns,
         )
     except ImportError as error:
         report["environment"] = {
@@ -982,12 +1242,39 @@ def evaluate_task(
     report["cases"] = rows
     report["stages"].append("evaluation")
 
+    # A submission may compile lazily, on the first forward call rather than at
+    # import, and then the up-front check had no artifact to read. Re-reading the
+    # same directory after the cases ran closes that hole; the second read only
+    # reports what the first one could not have seen, which is why it is nested
+    # under the first rather than replacing it.
+    late_link_errors: List[str] = []
+    if task.get("tier") == "B_library":
+        late = link_whitelist_stage(task, build_dir)
+        late_errors = [error for error in late["errors"] if error not in report["link_whitelist"]["errors"]]
+        report["link_whitelist"]["after_evaluation"] = {
+            "checked": late["checked"],
+            "passed": late["passed"],
+            "new_errors": late_errors,
+        }
+        if late_errors:
+            late_link_errors = late_errors
+
     passed = sum(1 for row in rows if row.get("passed"))
     skipped = sum(1 for row in rows if row.get("skipped"))
     failed = len(rows) - passed - skipped
     exit_code = EXIT_OK if (failed == 0 and skipped == 0) else (case_exit_code or EXIT_SUMMARY_FAILED)
+    if late_link_errors:
+        # §4.7 gives the link check its own code, and a violation found late is
+        # still the same violation: a run that scored a submission which links a
+        # non-whitelisted library would be admitting it on the wrong question.
+        exit_code = EXIT_LINK_WHITELIST_VIOLATION
     report["summary"] = build_summary(
-        exit_code, cases=len(rows), passed=passed, failed=failed, skipped=skipped
+        exit_code,
+        cases=len(rows),
+        passed=passed,
+        failed=failed,
+        skipped=skipped,
+        errors=late_link_errors,
     )
     return report
 
@@ -1009,11 +1296,28 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num-correct-trials", type=int, default=5)
     parser.add_argument("--num-perf-trials", type=int, default=100)
     parser.add_argument(
+        "--stability-reruns",
+        type=int,
+        default=1,
+        help=(
+            "§4.7 re-runs each correctness and boundary case with the same seed; a case "
+            "that disagrees with itself is reported as a stability failure. 0 disables it."
+        ),
+    )
+    parser.add_argument(
         "--generated-dir",
         type=Path,
         help=(
             "the directory `generate_cases.py --output-dir` wrote into; a case's `golden` "
             "path is resolved against it. Defaults to <task-dir>/generated."
+        ),
+    )
+    parser.add_argument(
+        "--build-dir",
+        type=Path,
+        help=(
+            "where the submission's compiled artifacts land; the B tier's link whitelist "
+            "check reads this directory. Defaults to <generated-dir>/build."
         ),
     )
     parser.add_argument("--static-only", action="store_true", help="audit and verify case overrides, no device")
@@ -1034,6 +1338,7 @@ def emit_report(report: dict, output: Optional[Path]) -> None:
 def main() -> int:
     args = build_parser().parse_args()
     generated_dir = args.generated_dir or (args.task_dir / DEFAULT_GENERATED_SUBDIR)
+    build_dir = args.build_dir or (generated_dir / DEFAULT_BUILD_SUBDIR)
 
     try:
         task, cases_manifest, problem_source = load_task(args.task_dir, args.cases)
@@ -1051,8 +1356,12 @@ def main() -> int:
             precision=args.precision,
             generated_dir=generated_dir,
             case_generation=cases_manifest.get("case_generation"),
+            task_dir=args.task_dir,
         )
     else:
+        # The flag against the contract is free and needs no machine, so it is
+        # settled before the probe: a caller who asked for a precision the task
+        # does not permit is told that, rather than that this box is the wrong one.
         permitted = allowed_precisions(task)
         if args.precision not in permitted:
             print(
@@ -1063,6 +1372,28 @@ def main() -> int:
                 file=sys.stderr,
             )
             return EXIT_PRECISION_CONTRACT_MISMATCH
+
+        environment = environment_stage(task)
+        if not environment["passed"]:
+            # Short-circuit before the build: every number this run would produce
+            # belongs to a configuration the task was not measured in, and §4.4
+            # says such a speedup means nothing.
+            report = {
+                "mode": "full",
+                "task_id": task.get("id"),
+                "tier": task.get("tier"),
+                "backend": args.backend,
+                "precision": args.precision,
+                "environment": environment,
+                "stages": ["environment"],
+                "cases": [],
+                "summary": build_summary(
+                    EXIT_ENVIRONMENT_UNAVAILABLE, errors=environment["mismatches"]
+                ),
+            }
+            emit_report(report, args.output)
+            return report["summary"]["exit_code"]
+
         report = evaluate_task(
             task,
             cases_manifest,
@@ -1074,8 +1405,13 @@ def main() -> int:
             args.num_perf_trials,
             args.verbose,
             generated_dir,
+            args.task_dir,
+            build_dir,
+            args.submission,
+            args.stability_reruns,
         )
         report["submission"] = str(args.submission)
+        report["environment"] = environment
 
     emit_report(report, args.output)
     return report["summary"]["exit_code"]

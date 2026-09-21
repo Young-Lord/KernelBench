@@ -684,6 +684,7 @@ def eval_kernel_against_ref(
             device=device,
             backend=backend,
             precision=precision,
+            tolerance=tolerance,
         )
     except Exception as e:
         # TODO: add metadata for runtime error e.g. error in launching kernel, illegal memory access, ...
@@ -904,6 +905,7 @@ def run_and_check_correctness(
     device: Optional[torch.device] =None,
     backend: str ="cuda",
     precision: torch.dtype =torch.float32,
+    tolerance: float | None = None,
 ) -> KernelExecResult:
     """
     run the model and check correctness,
@@ -913,9 +915,17 @@ def run_and_check_correctness(
     num_correct_trials: run the evalutation multiple times with (ideally) different random inputs to ensure correctness
     backend: backend type for handling dtype conversions
     precision: torch.dtype
+    tolerance: the task contract's `max_abs_error`, or None to use the
+        framework's per-dtype value. Resolved once through `resolve_tolerance`,
+        which only ever loosens, so the whole trial loop is held to one number.
     """
     pass_count = 0
     gpu = kb_gpu.get_gpu_module()
+
+    # Resolved once, before the loop. This read its own name before it was ever
+    # assigned, so the correctness check raised UnboundLocalError on every run and
+    # the contract's `tolerances` block was never consulted on this path at all.
+    resolved_tolerance = resolve_tolerance(precision, tolerance)
 
     # Generate num_correct_trials seeds deterministically from the initial seed
     torch.manual_seed(seed)
@@ -969,10 +979,9 @@ def run_and_check_correctness(
                 # in torchbench, they use both precisions for atol and rtol
                 # kernelbench v0 and v0.1 uses fp32, atol = rtol = 1e-02
                 # now we will return the tolerance from get_tolerance_for_precision
-                tolerance = resolve_tolerance(precision, tolerance)
                 # check output value difference
                 if not torch.allclose(
-                    output, output_new, atol=tolerance, rtol=tolerance
+                    output, output_new, atol=resolved_tolerance, rtol=resolved_tolerance
                 ):  # fail
                     max_diff = torch.max(torch.abs(output - output_new)).item()
                     avg_diff = torch.mean(torch.abs(output - output_new)).item()

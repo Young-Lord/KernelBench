@@ -11,11 +11,26 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def load_tool(filename, module_name):
     """Load a tool by path so the tests never import torch."""
-    spec = importlib.util.spec_from_file_location(module_name, ROOT / "tools" / filename)
+    # The public flow lives in tools/ and the evaluation service in evaluator/,
+    # and this loader is used for both, so the name decides which directory.
+    for directory in (ROOT / "tools", ROOT / "evaluator"):
+        if (directory / filename).is_file():
+            break
+    spec = importlib.util.spec_from_file_location(module_name, directory / filename)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+# A generated case runs the task's reference, which is a torch model, so the
+# cross-tool test that needs one is skipped where torch is missing.
+try:
+    import torch  # noqa: F401
+
+    HAS_TORCH = True
+except ImportError:
+    HAS_TORCH = False
 
 
 def load_manifest_tool():
@@ -260,6 +275,7 @@ class PrivateManifestGoldenPathTests(unittest.TestCase):
             with self.subTest(case=case["case_id"]):
                 self.assertEqual(case["golden"], f"{case['case_id']}/golden/tensors.json")
 
+    @unittest.skipUnless(HAS_TORCH, "a case is built by running the task's reference, which needs torch")
     def test_the_golden_path_is_where_the_generator_writes(self):
         """Cross-tool: the manifest's layout and the generator's layout agree."""
         manifest = self.manifest()
@@ -394,7 +410,7 @@ class PrivateManifestSchemaTests(unittest.TestCase):
         return load_manifest_tool().build_manifest(self.EVIDENCE["cases"], dict(self.TASK))
 
     def validator(self):
-        path = ROOT / "tools" / "validate_schemas.py"
+        path = ROOT / "evaluator" / "validate_schemas.py"
         if not path.is_file():
             self.skipTest("validate_schemas.py is not present")
         return load_tool("validate_schemas.py", "validate_schemas")

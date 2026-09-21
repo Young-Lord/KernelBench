@@ -356,24 +356,39 @@ def collect_driver() -> dict:
     return result
 
 
-def build_snapshot(args) -> dict:
-    components = collect_components()
-    devices = collect_devices()
-    device_properties = collect_device_properties()
-    host = collect_host()
-    driver = collect_driver()
+def snapshot_identity(components: dict, devices: dict, device_properties: dict, driver: dict,
+                      overrides: dict = None) -> dict:
+    """Derive a machine configuration's identity from probes already taken.
 
-    architecture, architecture_source = derive_architecture(device_properties, args.architecture)
+    §5 step 1 fixes the environment, and §4.4 says a speedup is only meaningful
+    within one configuration, so the configuration needs a name that two parties
+    can compute independently. This is that computation, in one place: the
+    collector uses it to name a snapshot, and the evaluator uses it to check that
+    the machine it is about to grade on is the machine the task was measured on.
+
+    Args:
+        components: `collect_components()` output
+        devices: `collect_devices()` output
+        device_properties: `collect_device_properties()` output
+        driver: `collect_driver()` output
+        overrides: values a caller supplied instead of a probe
+
+    Returns:
+        {"snapshot_id", "device_instance_id", "hardware", "software", "resolved", "missing"}
+    """
+    overrides = overrides or {}
+    architecture, architecture_source = derive_architecture(device_properties, overrides.get("architecture"))
     summarised = [summarize_device(gpu) for gpu in devices.get("devices", [])]
     first = summarised[0] if summarised else {}
+    component = components.get("components", {})
 
     resolved = {
         "architecture": architecture,
-        "device_name": args.device_name or first.get("product_name"),
-        "driver": args.driver or devices.get("driver_version"),
-        "musa_toolkit": args.toolkit or (components["components"].get("musa_toolkits") or {}).get("version"),
-        "mudnn": args.mudnn or (components["components"].get("mudnn") or {}).get("version"),
-        "mublas": args.mublas or (components["components"].get("mublas") or {}).get("version"),
+        "device_name": overrides.get("device_name") or first.get("product_name"),
+        "driver": overrides.get("driver") or devices.get("driver_version"),
+        "musa_toolkit": overrides.get("toolkit") or (component.get("musa_toolkits") or {}).get("version"),
+        "mudnn": overrides.get("mudnn") or (component.get("mudnn") or {}).get("version"),
+        "mublas": overrides.get("mublas") or (component.get("mublas") or {}).get("version"),
     }
     missing = [name for name, value in resolved.items() if not value]
     if not resolved["architecture"] and not architecture_source:
@@ -383,12 +398,67 @@ def build_snapshot(args) -> dict:
     identity_source = "|".join(str(part) for part in (
         resolved["device_name"], resolved["architecture"], resolved["driver"],
         driver.get("commit"), resolved["musa_toolkit"], resolved["mudnn"], resolved["mublas"],
-        (components["components"].get("musa_toolkits") or {}).get("commit id"),
-        (components["components"].get("mudnn") or {}).get("commit id"),
-        (components["components"].get("musa_runtime") or {}).get("commit id"),
+        (component.get("musa_toolkits") or {}).get("commit id"),
+        (component.get("mudnn") or {}).get("commit id"),
+        (component.get("musa_runtime") or {}).get("commit id"),
     ))
-    snapshot_id = "musa-" + hashlib.sha256(identity_source.encode()).hexdigest()[:16]
-    device_instance_id = ("gpu-" + hashlib.sha256(identifier.encode()).hexdigest()[:16]) if identifier else None
+    return {
+        "snapshot_id": "musa-" + hashlib.sha256(identity_source.encode()).hexdigest()[:16],
+        "device_instance_id": ("gpu-" + hashlib.sha256(identifier.encode()).hexdigest()[:16]) if identifier else None,
+        "hardware": {
+            "device_name": resolved["device_name"],
+            "architecture": resolved["architecture"],
+            "architecture_source": architecture_source,
+            "device_count": len(summarised) or None,
+        },
+        "software": {
+            "driver": resolved["driver"],
+            "driver_release": driver.get("release_string"),
+            "driver_commit": driver.get("commit"),
+            "musa_toolkit": resolved["musa_toolkit"],
+            "mudnn": resolved["mudnn"],
+            "mublas": resolved["mublas"],
+        },
+        "resolved": resolved,
+        "missing": missing,
+        "raw": {"components": components, "devices": devices, "device_properties": device_properties, "driver": driver},
+    }
+
+
+def environment_fingerprint(overrides: dict = None) -> dict:
+    """Probe this machine and name the configuration it is.
+
+    Args:
+        overrides: values to use instead of a probe
+    """
+    return snapshot_identity(
+        collect_components(), collect_devices(), collect_device_properties(), collect_driver(), overrides
+    )
+
+
+def build_snapshot(args) -> dict:
+    components = collect_components()
+    devices = collect_devices()
+    device_properties = collect_device_properties()
+    host = collect_host()
+    driver = collect_driver()
+
+    identity = snapshot_identity(
+        components, devices, device_properties, driver,
+        {
+            "architecture": args.architecture,
+            "device_name": args.device_name,
+            "driver": args.driver,
+            "toolkit": args.toolkit,
+            "mudnn": args.mudnn,
+            "mublas": args.mublas,
+        },
+    )
+    missing = list(identity["missing"])
+    summarised = [summarize_device(gpu) for gpu in devices.get("devices", [])]
+    first = summarised[0] if summarised else {}
+    snapshot_id = identity["snapshot_id"]
+    device_instance_id = identity["device_instance_id"]
 
     container = collect_container()
     return {
@@ -399,11 +469,8 @@ def build_snapshot(args) -> dict:
         "device_instance_id": device_instance_id,
         "visibility": "full",
         "captured_at": args.captured_at,
-        "hardware": {"device_name": resolved["device_name"], "architecture": resolved["architecture"],
-                     "architecture_source": architecture_source, "device_count": len(summarised) or None},
-        "software": {"driver": resolved["driver"], "driver_release": driver.get("release_string"),
-                     "driver_commit": driver.get("commit"), "musa_toolkit": resolved["musa_toolkit"],
-                     "mudnn": resolved["mudnn"], "mublas": resolved["mublas"]},
+        "hardware": identity["hardware"],
+        "software": identity["software"],
         "toolkit_components": components["components"],
         "device_instance": first or None,
         "device_properties_via_torch": device_properties,

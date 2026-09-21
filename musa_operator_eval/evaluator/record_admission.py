@@ -17,7 +17,7 @@ It writes rather than a human copying numbers out of a log, because a hand-copie
 geometric mean is a number nobody can re-derive from the artifact it came from.
 
     # what would be recorded, without recording it
-    python3 musa_operator_eval/tools/record_admission.py \
+    python3 musa_operator_eval/evaluator/record_admission.py \
         --task-dir musa_operator_eval/tasks/kb_l3_31_b \
         --baseline musa_operator_eval/private/vision_attention_b_v0/baseline.hidden.json \
         --admission musa_operator_eval/private/vision_attention_b_v0/admission.json
@@ -145,6 +145,47 @@ def audit(baseline: dict, admission: dict, task: dict) -> tuple[list[str], dict]
     return problems, measurements
 
 
+def admission_blocks(measurements: dict, baseline: dict, admission: dict, baseline_path) -> tuple:
+    """Split the measurement into the contract's summary and the private evidence.
+
+    §2 hands the agent the contract, so the contract may say that the gate passed
+    and at what threshold, and may not say which hidden case was worth what: a
+    ratio table keyed by hidden case ids describes the set the task is graded on,
+    down to which configuration is the gap and what the fused path is worth when
+    it applies. The per-case numbers belong in the private record the baseline
+    already lives in.
+
+    Args:
+        measurements: the re-derived ratios and the gate's numbers
+        baseline: the measured baseline document
+        admission: the gate's own output
+        baseline_path: where the baseline is stored
+
+    Returns:
+        (contract block, private evidence record)
+    """
+    decision = admission.get("decision")
+    block = {
+        "status": "measured",
+        "decision": decision,
+        "measured_geometric_mean": measurements["geometric_mean_ratio"],
+        "threshold": measurements["threshold"],
+        "measured_in": baseline.get("environment_snapshot"),
+    }
+    evidence = {
+        "decision": decision,
+        "threshold": measurements["threshold"],
+        "geometric_mean_ratio": measurements["geometric_mean_ratio"],
+        "ratios": measurements["ratios"],
+        "hidden_cases": measurements["hidden_cases"],
+        "measured_in": baseline.get("environment_snapshot"),
+        "measured_over": baseline.get("case_manifest") or "the private case manifest",
+        "baseline": str(baseline_path),
+        "reason": admission.get("reason") or "measured naive/expert geometric mean",
+    }
+    return block, evidence
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--task-dir", type=Path, required=True)
@@ -160,17 +201,7 @@ def main() -> int:
 
     problems, measurements = audit(baseline, admission, task)
 
-    decision = admission.get("decision")
-    block = {
-        "status": "measured",
-        "decision": decision,
-        "measured_geometric_mean": measurements["geometric_mean_ratio"],
-        "threshold": measurements["threshold"],
-        "ratios": measurements["ratios"],
-        "measured_over": "the private case manifest, which is the set the gate is defined over",
-        "measured_in": baseline.get("environment_snapshot"),
-        "baseline": str(args.baseline),
-    }
+    block, evidence = admission_blocks(measurements, baseline, admission, args.baseline)
 
     previously = task.get("admission") or {}
     was_pending = previously.get("status") == "pending_device_measurement"
@@ -181,6 +212,9 @@ def main() -> int:
         "notes",
         "also_answered",
         "how_to_read_the_mean",
+        "gate",
+        "evidence",
+        "note",
     ):
         if key not in previously:
             continue
@@ -201,14 +235,21 @@ def main() -> int:
             print(f"  - {problem}")
         return 1
 
-    if decision == "admit":
+    if block["decision"] == "admit":
         print("\nboth halves hold: every hidden case passed for the naive and the expert, "
               "and every expert trace matched its case's expected path.")
 
     if args.apply:
         task["admission"] = block
         contract_path.write_text(json.dumps(task, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"\nwritten to {contract_path}")
+        # The private record is the one that keeps the per-case numbers. Writing
+        # both from one place is what keeps them from drifting: a reader can
+        # re-derive the contract's geometric mean from this file and get the same
+        # number, and nothing in the agent-visible tree carries the cases.
+        args.admission.write_text(
+            json.dumps(evidence, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        print(f"\nwritten to {contract_path} (summary) and {args.admission} (per-case evidence)")
     else:
         print("\npass --apply to write this into the contract")
     return 0

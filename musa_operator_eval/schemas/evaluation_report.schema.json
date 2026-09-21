@@ -2,92 +2,456 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/evaluation-report-1.0.0.json",
   "title": "MUSA evaluation report (tools/run_task.py --output)",
-  "description": "Guide §4.7/§4.8. run_task.py emits two report shapes from one entry point: `static` (audit, case-override and golden checks, no device) and `full` (every case evaluated). The mode decides which stage blocks are present, so it is validated by value the same way the task tier is. The report is a derived artifact produced by a tool this schema does not own, so the properties are permissive: the invariants pinned here are the mode, the tier, and the fact that `summary.passed_overall` is always present and always agrees with `summary.exit_code`.",
+  "description": "Guide \u00a74.7/\u00a74.8. run_task.py emits two report shapes from one entry point: `static` (audit, case-override and golden checks, no device) and `full` (every case evaluated). The mode decides which stage blocks are present, so it is validated by value the same way the task tier is. The report is a derived artifact produced by a tool this schema does not own, so the properties are permissive: the invariants pinned here are the mode, the tier, and the fact that `summary.passed_overall` is always present and always agrees with `summary.exit_code`.",
   "$defs": {
     "case_row": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["case_id"],
+      "required": [
+        "case_id"
+      ],
       "properties": {
-        "case_id": {"type": "string", "minLength": 1},
-        "tag": {"type": ["string", "null"]},
-        "stage": {"type": ["string", "null"]},
-        "skipped": {"type": "boolean"},
-        "reason": {"type": "string"},
-        "expected_path": {"enum": ["fused_library", "library_composition", "custom_fallback", null]},
-        "compiled": {"type": ["boolean", "null"]},
-        "correctness": {"type": ["boolean", "null"]},
-        "dispatch_trace_passed": {"type": ["boolean", "null"]},
-        "runtime": {"type": ["number", "null"]},
-        "ref_runtime": {"type": ["number", "null"]},
-        "tier": {"type": ["string", "null"]},
-        "dispatch_trace_summary": {"type": ["object", "null"]},
-        "golden": {"type": ["object", "null"]},
-        "static_audit_errors": {"type": "array", "items": {"type": "string"}},
-        "dispatch_trace_errors": {"type": "array", "items": {"type": "string"}},
-        "passed": {"type": "boolean"},
-        "errors": {"type": "array", "items": {"type": "string"}}
+        "case_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stage": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "skipped": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "expected_path": {
+          "enum": [
+            "fused_library",
+            "library_composition",
+            "custom_fallback",
+            null
+          ]
+        },
+        "compiled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "correctness": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "dispatch_trace_passed": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "runtime": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "The submission's measured time in milliseconds, which is the unit a baseline row's latency_ms is in, so a report's runtime divides into the baseline directly. The framework's KernelExecResult comment says microseconds; the recorded values are milliseconds."
+        },
+        "ref_runtime": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "tier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dispatch_trace_summary": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "golden": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "static_audit_errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dispatch_trace_errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "stability": {
+          "description": "Guide \u00a74.7's stability re-run: whether the case agreed with itself when it was run again with the same seed and the same inputs.",
+          "type": "object",
+          "required": [
+            "reruns",
+            "agrees"
+          ],
+          "properties": {
+            "reruns": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "agrees": {
+              "type": "boolean"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "errors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "max_abs_error": {
+          "description": "The worst absolute difference between the produced tensors and the golden, before the tolerance decides.",
+          "type": [
+            "number",
+            "null"
+          ]
+        }
       }
     },
     "stage_messages": {
       "type": "object",
       "properties": {
-        "count": {"type": "integer", "minimum": 0},
-        "errors": {"type": "array", "items": {"type": "string"}}
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   },
   "type": "object",
   "additionalProperties": false,
-  "required": ["mode", "task_id", "tier", "summary"],
+  "required": [
+    "mode",
+    "task_id",
+    "tier",
+    "summary"
+  ],
   "properties": {
-    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
-    "mode": {"enum": ["static", "full"]},
-    "task_id": {"type": "string", "minLength": 1},
-    "tier": {"enum": ["A_kernel", "B_library"]},
-    "backend": {"type": "string", "minLength": 1},
-    "precision": {"enum": ["fp32", "fp16", "bf16"]},
-    "submission": {"type": "string", "minLength": 1},
-    "stages": {"type": "array", "items": {"type": "string", "minLength": 1}},
-    "contract": {"type": "object"},
-    "case_generation": {"type": "object"},
-    "golden": {"type": "object"},
-    "cases": {"type": "array", "items": {"$ref": "#/$defs/case_row"}},
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "mode": {
+      "enum": [
+        "static",
+        "full",
+        "binary"
+      ],
+      "description": "static: the audit and the golden cross-check without a device. full: the Python-module path end to end. binary: the compiled path end to end, where the submission runs in its own process and imports no torch."
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tier": {
+      "enum": [
+        "A_kernel",
+        "B_library"
+      ]
+    },
+    "backend": {
+      "type": "string",
+      "minLength": 1
+    },
+    "build": {
+      "description": "Guide \u00a74.7. The build stage: whether the submission compiled, and the compiler output when it did not. \u00a75's step 8 puts it after the audit so a rejected submission never spends a compile, and before the link check because that check reads what the build produced.",
+      "type": "object",
+      "properties": {
+        "passed": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "build_dir": {
+          "type": "string"
+        },
+        "environment_missing": {
+          "type": "boolean"
+        },
+        "script": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "returncode": {
+          "type": "integer"
+        },
+        "libraries_linked": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The contract's whitelist, resolved onto libraries that exist and passed to the build script."
+        },
+        "whitelist_entries_without_a_library": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Whitelist entries that name no library the machine has. They are not errors: the contract may name an operation (SDPA) rather than a file, and a task whose answer never links it should not fail for that."
+        }
+      }
+    },
+    "precision": {
+      "enum": [
+        "fp32",
+        "fp16",
+        "bf16"
+      ]
+    },
+    "submission": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stages": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "contract": {
+      "type": "object"
+    },
+    "case_generation": {
+      "type": "object"
+    },
+    "golden": {
+      "type": "object"
+    },
+    "environment": {
+      "description": "Present when a device stage could not reach the stack it needs. An environment failure is not a submission verdict, so it is reported as its own block with its own exit code rather than as a failed case.",
+      "type": "object",
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "link_whitelist": {
+      "description": "Guide \u00a74.7's B-tier-only stage: which libraries the build products actually link, read off their dynamic sections. `checked` counts the artifacts whose dynamic section could be read; an artifact that could not be read is an error rather than a skip, because \"could not read it\" and \"links nothing\" are different facts.",
+      "type": "object",
+      "properties": {
+        "ran": {
+          "type": "boolean"
+        },
+        "build_dir": {
+          "type": "string"
+        },
+        "checked": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "after_evaluation": {
+          "description": "A second read of the same directory once the cases have run, reported separately because a submission may compile lazily on its first forward call, which leaves the up-front stage with nothing to read.",
+          "type": "object",
+          "properties": {
+            "checked": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "passed": {
+              "type": "boolean"
+            },
+            "new_errors": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/case_row"
+      }
+    },
     "static_audit": {
       "type": "object",
       "properties": {
-        "ran": {"type": "boolean"},
-        "passed": {"type": "boolean"},
-        "reason": {"type": "string"},
-        "errors": {"type": "array", "items": {"type": "string"}},
-        "warnings": {"type": "array", "items": {"type": "string"}}
+        "ran": {
+          "type": "boolean"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     },
-    "case_parameters": {"$ref": "#/$defs/stage_messages"},
-    "case_sources": {"$ref": "#/$defs/stage_messages"},
+    "case_parameters": {
+      "$ref": "#/$defs/stage_messages"
+    },
+    "case_sources": {
+      "$ref": "#/$defs/stage_messages"
+    },
     "summary": {
       "type": "object",
-      "required": ["passed_overall"],
+      "required": [
+        "passed_overall"
+      ],
       "properties": {
-        "cases": {"type": "integer", "minimum": 0},
-        "passed": {"type": "integer", "minimum": 0},
-        "failed": {"type": "integer", "minimum": 0},
-        "skipped": {"type": "integer", "minimum": 0},
-        "errors": {"type": "array", "items": {"type": "string"}},
-        "passed_overall": {"type": "boolean"},
-        "exit_code": {"type": "integer", "minimum": 0, "maximum": 127},
-        "exit_code_description": {"type": "string"}
+        "cases": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "passed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "failed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "passed_overall": {
+          "type": "boolean"
+        },
+        "exit_code": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 127
+        },
+        "exit_code_description": {
+          "type": "string"
+        }
       }
+    },
+    "submission_artifact": {
+      "description": "The executable the build produced, named so a report can be reproduced from it.",
+      "type": "string"
     }
   },
   "allOf": [
     {
-      "if": {"required": ["mode"], "properties": {"mode": {"const": "static"}}},
-      "then": {"required": ["static_audit", "case_parameters", "case_sources"]}
+      "if": {
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "const": "static"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "static_audit",
+          "case_parameters",
+          "case_sources"
+        ]
+      }
     },
     {
-      "if": {"required": ["mode"], "properties": {"mode": {"const": "full"}}},
-      "then": {"required": ["backend", "precision", "cases"]}
+      "if": {
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "const": "full"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "backend",
+          "precision",
+          "cases"
+        ]
+      }
     }
   ]
 }

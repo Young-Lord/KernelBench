@@ -10,6 +10,88 @@
   "scale": "1/sqrt(D)",
   "softmax": "max-shift, accumulation in float32",
   "dropout": "attn_pdrop and resid_pdrop; the graded cases set both to 0, which is also the problem default",
-  "determinism": "with both dropout rates at 0 the reference is deterministic",
-  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer, so every case must satisfy S <= max_seqlen"
+  "determinism": {
+    "required": true,
+    "seed_source": "case_manifest"
+  },
+  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer, so every case must satisfy S <= max_seqlen",
+  "tensors": [
+    {
+      "name": "x",
+      "role": "input",
+      "shape": [
+        "B",
+        "S",
+        "C"
+      ],
+      "dtypes": [
+        "bfloat16",
+        "float16",
+        "float32"
+      ],
+      "layout": "BSC",
+      "stride": "contiguous"
+    },
+    {
+      "name": "output",
+      "role": "output",
+      "shape": [
+        "B",
+        "S",
+        "C"
+      ],
+      "dtypes": [
+        "bfloat16",
+        "float16",
+        "float32"
+      ],
+      "layout": "BSC",
+      "stride": "contiguous"
+    }
+  ],
+  "dynamic_axes": {
+    "B": [
+      1,
+      8
+    ],
+    "C": [
+      64,
+      1024
+    ],
+    "H": [
+      2,
+      12
+    ],
+    "S": [
+      1,
+      2048
+    ],
+    "S_max": [
+      1,
+      2048
+    ]
+  },
+  "abi": {
+    "passing": "in_process_torch_tensors",
+    "layout": "contiguous",
+    "stream": "current_musa_stream",
+    "note": "runner is a ModelNew module evaluated in the same process as the reference"
+  },
+  "attention": {
+    "scale": "inverse_sqrt_d",
+    "accumulation_dtype": "float32",
+    "causal_alignment": "top_left",
+    "window": {
+      "left": "-1: this family applies no window, so every key is visible on the left",
+      "right": "-1: this family applies no window, so every key is visible on the right",
+      "unlimited_value": -1
+    },
+    "fully_masked_row": {
+      "output": "zeros",
+      "reachable": false,
+      "note": "Cannot occur here: with no explicit mask and no padding, every query row sees the whole key range, so the softmax denominator is at least one element. The convention is declared anyway, because §4.2 asks for it and because a reader cannot tell an unreachable case from an unconsidered one."
+    },
+    "softmax_max_shift": true
+  },
+  "tier_dtypes_note": "The dtypes here are the family's, which is what §4.2's signature describes; which of them a given tier is graded at is §4.1's business and lives in task.json's tensor_contract.input_dtypes. The two tiers of this entry differ on that field alone."
 }

@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-_spec = importlib.util.spec_from_file_location("candidate_gate", ROOT / "tools" / "candidate_gate.py")
+_spec = importlib.util.spec_from_file_location("candidate_gate", ROOT / "evaluator" / "candidate_gate.py")
 assert _spec is not None and _spec.loader is not None
 candidate_gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(candidate_gate)

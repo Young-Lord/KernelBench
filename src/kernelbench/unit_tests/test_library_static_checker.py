@@ -126,6 +126,152 @@ class ABInversionTests(unittest.TestCase):
         self.assertTrue(any("softmax" in message for message in errors), errors)
 
 
+class ExceptionProbeTests(unittest.TestCase):
+    """A library reports "unsupported" by raising, so B has to catch it.
+
+    §4.5 requires the B tier to choose its path by probing at runtime and forbids
+    keying dispatch on a version string instead. That leaves writing the probe as
+    a call whose refusal is an exception, so the try-except half of `code_bypass`
+    cannot be an error here. The `pass` half stays an error, because inheriting
+    the reference and doing nothing is a bypass in every tier.
+    """
+
+    PROBING_SUBMISSION = '''
+import json
+import os
+
+import torch
+import mudnn
+
+class ModelNew(torch.nn.Module):
+    def forward(self, q, k, v):
+        try:
+            out = mudnn.fused_sdpa(q, k, v)
+            path = "fused_library"
+        except RuntimeError:
+            out = None
+            path = "custom_fallback"
+        record = {"case_id": os.environ["KB_DISPATCH_CASE_ID"], "selected_path": path, "probe_status": "accepted"}
+        with open(os.environ["KB_DISPATCH_TRACE"], "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record) + "\\n")
+        return out
+'''
+
+    def test_a_probe_that_catches_the_refusal_passes_the_b_tier(self):
+        valid, errors, _ = validate_library_kernel_static(self.PROBING_SUBMISSION, POLICY)
+        self.assertTrue(valid, f"the B tier rejected the probe it requires: {errors}")
+
+    def test_the_same_probe_is_still_an_error_for_the_a_tier(self):
+        valid, errors, _ = static_audit_kernel(self.PROBING_SUBMISSION, tier="A_kernel", backend="")
+        self.assertFalse(valid, "the A tier accepted a try-except fallback")
+        self.assertTrue(any("try-except" in message for message in errors), errors)
+
+    def test_the_probe_relaxation_is_opt_in_on_the_shared_checker(self):
+        """Only the B entry point sets it, so stock grading is unchanged."""
+        valid, errors, _ = validate_kernel_static(self.PROBING_SUBMISSION, backend="")
+        self.assertFalse(valid, "the default check set stopped rejecting try-except")
+        self.assertTrue(any("try-except" in message for message in errors), errors)
+
+    def test_inheriting_and_doing_nothing_is_an_error_in_both_tiers(self):
+        code = "import torch\n\nclass ModelNew(torch.nn.Module):\n    def forward(self, q, k, v):\n        pass\n"
+        for tier, policy in (("A_kernel", None), ("B_library", POLICY)):
+            with self.subTest(tier=tier):
+                valid, errors, _ = static_audit_kernel(
+                    code, tier=tier, library_policy=policy, backend=""
+                )
+                self.assertFalse(valid, f"{tier} accepted an inherited `pass` body")
+                self.assertTrue(any("pass" in message for message in errors), errors)
+
+    def test_the_word_pass_in_prose_is_not_a_bypass(self):
+        """The check reads statements; `pass` as an English noun is not one.
+
+        Every answer in this repository explains its measurement protocol in a
+        docstring, and the word is unavoidable there. A checker that rejects the
+        answers it ships cannot grade anything.
+        """
+        code = (
+            '"""One profiling pass per case.\n\nPassing a mask explicitly matters.\n"""\n'
+            "import torch\n"
+            "def forward(x):  # a single pass over x\n"
+            "    return x + 1\n"
+        )
+        for tier, policy in (("A_kernel", None), ("B_library", POLICY)):
+            with self.subTest(tier=tier):
+                _, errors, _ = static_audit_kernel(
+                    code, tier=tier, library_policy=policy, backend=""
+                )
+                self.assertFalse(any("pass" in message for message in errors), errors)
+
+    def test_source_that_does_not_parse_still_falls_back_to_the_statement_shape(self):
+        """A one-line `pass` is caught even where the AST cannot read the file."""
+        code = "def forward(x):\n    if x:\n        pass\n"
+        valid, errors, _ = static_audit_kernel(code, tier="B_library", library_policy=POLICY, backend="")
+        self.assertFalse(valid)
+        self.assertTrue(any("pass" in message for message in errors), errors)
+
+
+class OutOfScopeTests(unittest.TestCase):
+    """§4.6 freezes a task package, and the audit is what draws that boundary.
+
+    The file half matters because the reference, the case list and the contract
+    are the task; a submission that rewrites them is grading itself. The
+    rebinding half matters more here than in a harness that isolates the two
+    models, because this one runs the reference in the same process as the
+    submission: rebinding `Model.forward` makes the answer and the thing it is
+    compared against the same object, and no numeric check can see that.
+    """
+
+    FROZEN = ["problem.py", "task.json", "semantics.json", "public_cases.json"]
+
+    def audit(self, code, tier="A_kernel", frozen=None):
+        return static_audit_kernel(
+            code,
+            tier=tier,
+            library_policy=POLICY if tier == "B_library" else None,
+            backend="",
+            frozen_paths=self.FROZEN if frozen is None else frozen,
+        )
+
+    def test_a_write_to_a_frozen_file_is_rejected_in_both_tiers(self):
+        for snippet in (
+            'open("problem.py", "w").write("x")',
+            'from pathlib import Path\nPath("semantics.json").write_text("x")',
+            'import os\nos.remove("public_cases.json")',
+        ):
+            for tier in ("A_kernel", "B_library"):
+                with self.subTest(snippet=snippet, tier=tier):
+                    valid, errors, _ = self.audit(snippet, tier=tier)
+                    self.assertFalse(valid, f"{tier} accepted {snippet}")
+                    self.assertTrue(any("out-of-scope" in error for error in errors), errors)
+
+    def test_reading_the_reference_is_not_a_finding(self):
+        valid, errors, _ = self.audit('data = open("problem.py").read()')
+        self.assertTrue(valid, errors)
+
+    def test_writing_the_submissions_own_artifact_is_not_a_finding(self):
+        valid, errors, _ = self.audit('open("model_new_output.bin", "wb").write(b"")')
+        self.assertTrue(valid, errors)
+
+    def test_a_package_that_freezes_nothing_has_no_boundary_to_draw(self):
+        valid, errors, _ = self.audit('open("problem.py", "w").write("x")', frozen=[])
+        self.assertTrue(valid, errors)
+
+    def test_rebinding_the_reference_is_rejected_without_a_frozen_list(self):
+        """The reference is not a file the submission may reach either way."""
+        for snippet in ("Model.forward = lambda self, x: x", 'setattr(Model, "forward", fake)'):
+            with self.subTest(snippet=snippet):
+                valid, errors, _ = self.audit(snippet, frozen=[])
+                self.assertFalse(valid)
+                self.assertTrue(any("out-of-scope" in error for error in errors), errors)
+
+    def test_the_a_tier_enforces_it_by_default(self):
+        self.assertIn("out_of_scope_modification", _checker.A_TIER_FORBIDDEN_CHECKS)
+        valid, errors, _ = static_audit_kernel(
+            'open("problem.py", "w")', tier="A_kernel", backend="", frozen_paths=self.FROZEN
+        )
+        self.assertFalse(valid, errors)
+
+
 class WhitelistTests(unittest.TestCase):
     def test_non_whitelisted_import_is_rejected(self):
         valid, errors, _ = validate_library_kernel_static("import triton\n" + GOOD_SUBMISSION, POLICY)

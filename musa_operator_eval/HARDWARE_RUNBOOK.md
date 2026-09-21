@@ -32,16 +32,101 @@ be run before submitting. `run_task.py` evaluates whatever `--cases` points at,
 defaulting to the task's `public_cases.json`:
 
 ```bash
-python musa_operator_eval/tools/run_task.py \
+# The hidden goldens are generated once, outside the agent-visible tree, and the
+# runner resolves each case's declared `golden` path against --generated-dir.
+python musa_operator_eval/tools/generate_cases.py \
+  --task-dir musa_operator_eval/tasks/sdpa_forward_pilot \
+  --manifest musa_operator_eval/private/sdpa_forward_b_v0/cases.private.json \
+  --output-dir musa_operator_eval/private/generated/sdpa_forward_b_v0
+
+python musa_operator_eval/evaluator/run_task.py \
+  --task-dir musa_operator_eval/tasks/sdpa_forward_pilot \
   --cases musa_operator_eval/private/sdpa_forward_b_v0/cases.private.json \
+  --generated-dir musa_operator_eval/private/generated/sdpa_forward_b_v0 \
   --submission <model_new.py> --backend musa --precision fp16 \
   --output runs/sdpa_forward_b_v0/hidden_report.json
 ```
+
+The run reports its stages in order and stops at the first failure: case
+generation, golden, static audit, build, link whitelist check (B tier only),
+evaluation. `--build-dir` is where the submission's compiled artifacts land, which
+is what the link check reads; it defaults to `<generated-dir>/build`.
+
+The hidden goldens live under `musa_operator_eval/private/generated/<task id>/` on the
+device, and `--generated-dir` points at that directory. They are regenerated rather
+than committed, and a sync that deletes files the local tree does not have will
+delete them: exclude `musa_operator_eval/private/generated/` when syncing.
+
+§4.7 re-runs every correctness and boundary case with the same seed and reports a case
+that disagrees with itself as a stability failure; `--stability-reruns 0` turns that
+off. Every full report also carries an `environment` block comparing the machine
+against the snapshot the task names, and a run on a different configuration stops
+before the build.
 
 The hidden manifest is built by `make_private_manifest.py` from recorded gap
 evidence. It refuses to build a manifest that does not cover at least
 `minimum_gap_cases` gaps across at least `required_gap_reasons` categories, both
 read from the task contract.
+
+## The compiled path
+
+Every package ships `starter/cpp`: a frozen `runner.cc`, `abi_io.h` and `build.sh`
+plus one editable `kernel.mu`. The runner reads `<input-dir>/tensors.json` and its
+`.bin` files, calls `kernel_entry`, and writes `<output-dir>/tensors.json` and its
+`.bin` files, without libtorch -- the artifact's dynamic section names `libmusart`
+and the C runtime.
+
+    # A: the worked submission that proves the ABI (it lives under private/ because
+    # it is an answer, not a scaffold)
+    python musa_operator_eval/evaluator/run_binary.py \
+        --task-dir musa_operator_eval/tasks/kb_l1_97_a \
+        --submission musa_operator_eval/private/scaled_dot_product_attention_a_v0/compiled \
+        --cases musa_operator_eval/private/scaled_dot_product_attention_a_v0/cases.private.json \
+        --generated-dir musa_operator_eval/private/generated/scaled_dot_product_attention_a_v0 \
+        --output /tmp/binary_a.json
+
+    # B: the same driver, where the link check finally has a real artifact to read
+    python musa_operator_eval/evaluator/run_binary.py \
+        --task-dir musa_operator_eval/tasks/kb_l3_43_b \
+        --submission musa_operator_eval/tasks/kb_l3_43_b/starter/cpp \
+        --cases musa_operator_eval/private/mingpt_causal_attention_b_v0/cases.private.json \
+        --generated-dir musa_operator_eval/private/generated/mingpt_causal_attention_b_v0
+
+Two things to know about it. The stage list is §4.7's, and `link_whitelist_check`
+appears only for the B tier. The build script gets `--extra-library` for whatever
+the contract whitelists and the machine can resolve, so what is linked and what is
+checked are the same list.
+
+## Three traps worth knowing before reading a number
+
+**The graded bar is resolved from the contract, not from a manifest.** A task's
+`tolerances.max_abs_error` is a loosen-only override of the framework's per-dtype floor
+(`get_tolerance_for_precision`: 1e-4 at fp32, 1e-2 at fp16/bf16), applied to `atol` and
+`rtol` alike. Both drivers resolve it the same way and every report records the value as
+`tolerance_used`, so a reader never has to guess which bar a row was graded at. A
+per-case `tolerance` field existed once and only the compiled driver read it, which is
+exactly how two graders end up holding one submission to two different numbers.
+
+**`runtime` is milliseconds, whatever the framework's comment says.**
+`kernelbench.eval`'s `KernelExecResult` documents `runtime` as microseconds, and the
+values it actually records are milliseconds: an expert module measures 0.834 in a
+`run_task.py` report and 0.7048 in the baseline record for the same case, and those
+are the same number. `rank.py` therefore divides the two directly. A tool that
+trusted the comment reported every ratio a thousand times too high.
+
+**A killed run can leave torchada's JIT lock behind, and every later run then hangs
+before printing anything.** `torchada` compiles its C++ ops on import through torch's
+`cpp_extension`, which takes a file baton at
+`~/.cache/torch_extensions/py310_cpu/torchada_cpp_ops/lock`. A `kill -9` during that
+compile leaves the file with no owner and no holder to release it, and a fresh
+`import kernelbench.gpu` then blocks in `FileBaton.wait` indefinitely -- with no
+output and no error, which reads exactly like a device hang. Clear it:
+
+    rm -f ~/.cache/torch_extensions/py310_cpu/torchada_cpp_ops/lock \
+          ~/.cache/torch_extensions/py310_cpu/torchada_cpp_ops/.ninja_lock
+
+and prefer `kill` to `kill -9`, or check `pgrep -af "evaluator/run_task[.]py"` and
+`mthreads-gmi` before concluding anything about the machine.
 
 ## Admission
 

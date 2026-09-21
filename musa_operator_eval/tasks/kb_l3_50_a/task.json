@@ -35,6 +35,15 @@
       "float32"
     ],
     "accumulation_dtype": "float32",
+    "layouts": [
+      "BSC"
+    ],
+    "dynamic_axes": [
+      "B",
+      "C",
+      "H",
+      "S"
+    ],
     "note": "float32 only, which is what every A-tier measurement in sets/attention was taken at and what the hand-written kernels in this repository were tuned for."
   },
   "prohibited": [
@@ -80,5 +89,72 @@
   "scoring": {
     "speedup": "upstream_musa_baseline_latency / submission_latency",
     "ranking": "A-kernel track only; never merged or averaged with the B-library track"
+  },
+  "starter": {
+    "editable": [
+      {
+        "path": "starter/model_new.py",
+        "submit_as": "model_new.py",
+        "regions": [
+          "state",
+          "device_kernel",
+          "host_launch"
+        ]
+      }
+    ],
+    "frozen": [
+      "PROMPT.md",
+      "problem.py",
+      "public_cases.json",
+      "semantics.json",
+      "starter/build.py",
+      "starter/cpp/abi_io.h",
+      "starter/cpp/build.sh",
+      "starter/cpp/runner.cc",
+      "task.json"
+    ],
+    "build": {
+      "command": "python musa_operator_eval/evaluator/run_task.py --task-dir musa_operator_eval/tasks/kb_l3_50_a --submission model_new.py --backend musa --precision fp32",
+      "note": "§5 step 8's order: the static audit runs before this build, so a rejected submission never spends a compile.",
+      "script": "starter/build.py"
+    },
+    "self_test": {
+      "command": "python musa_operator_eval/evaluator/run_task.py --task-dir musa_operator_eval/tasks/kb_l3_50_a --submission model_new.py --static-only",
+      "note": "Runs without a device: case overrides, golden cross-check and the source audit."
+    },
+    "abi": {
+      "inputs": "<generated-dir>/<case_id>/input/tensors.json plus one .bin per tensor",
+      "outputs": "<generated-dir>/<case_id>/golden/tensors.json plus one .bin per tensor",
+      "transport": "raw little-endian tensors plus a JSON manifest",
+      "submission": "a Python module defining ModelNew",
+      "runner": "musa_operator_eval/evaluator/run_task.py, which imports torch through the framework's evaluator",
+      "runner_imports_libtorch": true,
+      "deviation": "§4.6 asks the runner not to import libtorch, so that ATen cannot be reached from the graded process. This package does not meet that: the submission is a Python module whose forward is called in the evaluator's own process, which is where ATen lives. What enforces the tier boundary instead is the source audit -- the A tier's ban on the fused attention entry point is a check on the submission's text, not an isolation guarantee -- and the B tier's dispatch trace, which says which path earned the number. Recorded here rather than left implicit, because a reader comparing this ABI against §4.6 would otherwise have to infer it."
+    },
+    "cpp": {
+      "path": "starter/cpp",
+      "build": "starter/cpp/build.sh",
+      "editable": [
+        "starter/cpp/kernel.mu"
+      ],
+      "frozen": [
+        "starter/cpp/abi_io.h",
+        "starter/cpp/runner.cc",
+        "starter/cpp/build.sh"
+      ],
+      "entrypoint": "kernel_entry",
+      "abi": "the runner reads <input-dir>/tensors.json and its .bin files, calls kernel_entry, and writes <output-dir>/tensors.json and its .bin files",
+      "runner_imports_libtorch": false,
+      "links": "the MUSA runtime plus the contract's whitelist, applied through build.sh --extra-library; libtorch is not among them",
+      "command": "starter/cpp/build.sh --submission <dir with kernel.mu> --build-dir <dir> [--extra-library <name>]",
+      "regions": [
+        "device_kernel",
+        "host_launch"
+      ]
+    }
+  },
+  "hyperparameters": {
+    "causal_alignment": "top_left",
+    "activation": "relu on the attention scores before the softmax"
   }
 }

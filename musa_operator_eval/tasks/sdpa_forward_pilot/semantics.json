@@ -10,7 +10,7 @@
   ],
   "outputs_note": "One output only. A log-sum-exp would be a second output, and the harness compares exactly one tensor; more importantly the library's fused kernel does not produce one, so requiring it would close the fused path this task exists to exercise.",
   "dynamic_axes": {"B": [1, 32], "H_q": [1, 64], "H_kv": [1, 64], "S_q": [1, 4096], "S_kv": [1, 4096], "D": [32, 256]},
-  "abi": {"passing": "in_process_torch_tensors", "layout": "contiguous", "stream": "current_musa_stream", "note": "runner is a KernelBench ModelNew evaluated in the same process as the reference"},
+  "abi": {"passing": "in_process_torch_tensors", "layout": "contiguous", "stream": "current_musa_stream", "note": "runner is a ModelNew module evaluated in the same process as the reference"},
   "attention": {
     "scale": "case_value",
     "softmax_max_shift": true,

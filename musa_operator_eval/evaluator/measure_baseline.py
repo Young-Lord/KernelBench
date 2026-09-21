@@ -34,12 +34,12 @@ Implementations that cannot be honestly built on this checkout are recorded as
 `unavailable` with a reason rather than being approximated by something else. An
 approximation under a real implementation's name is worse than a gap.
 
-    python musa_operator_eval/tools/measure_baseline.py \
+    python musa_operator_eval/evaluator/measure_baseline.py \
         --task-dir musa_operator_eval/tasks/kb_l3_43_b \
         --naive  musa_operator_eval/private/mingpt_causal_attention_b_v0/naive/model_new.py \
         --expert musa_operator_eval/private/mingpt_causal_attention_b_v0/expert/model_new.py \
         --unavailable musa_operator_eval/private/mingpt_causal_attention_b_v0/unavailable.json \
-        --output musa_operator_eval/private/mingpt_causal_attention_b_v0/baseline.json
+        --output musa_operator_eval/private/mingpt_causal_attention_b_v0/baseline.hidden.json
 """
 
 from __future__ import annotations
@@ -84,6 +84,9 @@ REFERENCE_ROLE = "reference_model"
 NAIVE_ROLE = "naive_library_composition"
 BLIND_ROLE = "torch_musa_sdpa"
 EXPERT_ROLE = "expert_dispatch"
+# The A tier's denominator: the hand-written MUSA implementation the task's
+# speedup is taken against. Independent of whether it is the reference.
+UPSTREAM_ROLE = "upstream_musa"
 
 
 # ----------------------------------------------------------------------------
@@ -125,6 +128,23 @@ def build_model(model_class, init_inputs, dtype: torch.dtype, seed: int):
         return model.to(device=DEVICE, dtype=dtype)
 
 
+def parse_implementation(value: str) -> tuple:
+    """Parse a `role=path[=note]` argument.
+
+    The B tier's roster is fixed by §4.4 and its two denominators are always the
+    same two roles, so the flags are named after them. The A tier's roster is
+    fixed too and different -- the upstream implementation is the denominator
+    there -- so it is supplied as roles instead of having a second set of named
+    flags that would drift from this one.
+    """
+    parts = value.split("=", 2)
+    if len(parts) < 2 or not parts[0]:
+        raise argparse.ArgumentTypeError(f"{value!r} is not role=path")
+    role, path = parts[0], Path(parts[1])
+    note = parts[2] if len(parts) > 2 else None
+    return role, path, note
+
+
 def load_model_class(path: Path):
     spec = importlib.util.spec_from_file_location("baseline_implementation", path)
     if spec is None or spec.loader is None:
@@ -145,13 +165,36 @@ def load_unavailable(path):
 # ----------------------------------------------------------------------------
 
 
-def time_median(fn, warmup=PROTOCOL["warmup"], measurements=PROTOCOL["measurements"], rounds=PROTOCOL["rounds"]):
-    """MUSA-event timing, median of per-round means."""
+def percentile(samples, fraction):
+    """The nearest-rank percentile of a sorted sample list.
+
+    §4.4 asks a baseline record for quantiles rather than one number. With a
+    handful of rounds the higher ones are coarse, and recording them is still
+    better than not: a median alone cannot show a run that is bimodal, and a
+    bimodal baseline is a baseline whose ratio depends on which mode a submission
+    was measured against.
+    """
+    if not samples:
+        return None
+    ordered = sorted(samples)
+    rank = max(1, min(len(ordered), int(round(fraction * len(ordered) + 0.5))))
+    return ordered[rank - 1]
+
+
+def time_samples(fn, warmup=PROTOCOL["warmup"], measurements=PROTOCOL["measurements"], rounds=PROTOCOL["rounds"]):
+    """MUSA-event timing: one number per round, each the mean of its measurements.
+
+    Returned as the sample list rather than as a summary, because §4.4's record
+    asks for quantiles and only the caller knows which to derive. `PROTOCOL` says
+    whether the clock was pinned; the timer is MUSA events throughout, which is
+    the protocol's `timer` field, so a wall clock cannot flatter a short case.
+    """
     for _ in range(warmup):
         fn()
     torch.musa.synchronize()
 
     samples = []
+    peak_before = torch.musa.max_memory_allocated() if hasattr(torch.musa, "max_memory_allocated") else None
     for _ in range(rounds):
         start = torch.musa.Event(enable_timing=True)
         end = torch.musa.Event(enable_timing=True)
@@ -161,6 +204,13 @@ def time_median(fn, warmup=PROTOCOL["warmup"], measurements=PROTOCOL["measuremen
         end.record()
         torch.musa.synchronize()
         samples.append(start.elapsed_time(end) / measurements)
+    peak_after = torch.musa.max_memory_allocated() if hasattr(torch.musa, "max_memory_allocated") else None
+    return samples, peak_before, peak_after
+
+
+def time_median(fn, **kwargs):
+    """The median of the per-round means, which is what the gate is defined on."""
+    samples, _before, _after = time_samples(fn, **kwargs)
     return sorted(samples)[len(samples) // 2]
 
 
@@ -191,7 +241,16 @@ def _measure(name, call, expected, tolerance, trace=None, must_trace=False, requ
             row.update(status="fail", reason=f"max_abs_diff {difference:.6f} exceeds {tolerance}")
             return row
         with torch.no_grad():
-            row["latency_ms"] = time_median(call)
+            samples, peak_before, peak_after = time_samples(call)
+        row["latency_ms"] = sorted(samples)[len(samples) // 2]
+        row["latency_ms_p90"] = percentile(samples, 0.90)
+        row["latency_ms_p10"] = percentile(samples, 0.10)
+        row["latency_ms_rounds"] = [round(value, 6) for value in samples]
+        row["throughput_per_second"] = (
+            round(1000.0 / row["latency_ms"], 4) if row["latency_ms"] else None
+        )
+        if peak_before is not None and peak_after is not None:
+            row["peak_memory_bytes"] = max(0, peak_after - peak_before)
 
         # The dispatch half of the gate. A speedup is only meaningful once it is
         # known which path earned it, so a row whose trace does not match is not a
@@ -292,9 +351,9 @@ def main() -> int:
                         help="the case manifest to measure. Defaults to the task's public list; point it at "
                              "the private one to measure the set the gate is actually defined over, which "
                              "is the only set an admission decision may be based on.")
-    parser.add_argument("--naive", type=Path, required=True,
+    parser.add_argument("--naive", type=Path,
                         help="the task's naive library composition; the gate's numerator")
-    parser.add_argument("--expert", type=Path, required=True,
+    parser.add_argument("--expert", type=Path,
                         help="the task's expert dispatch; the speedup denominator")
     parser.add_argument("--blind", type=Path, default=None,
                         help="a submission that calls the library's SDPA and assumes it is fused")
@@ -303,6 +362,23 @@ def main() -> int:
     parser.add_argument("--snapshot-id", default=None,
                         help="defaults to the snapshot the task declares it was measured in")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--tier",
+        default="B_library",
+        choices=["B_library", "A_kernel"],
+        help=(
+            "the roster and the scoring block follow the tier: the B tier's speedup is against "
+            "the expert dispatch, the A tier's against the upstream implementation"
+        ),
+    )
+    parser.add_argument(
+        "--implementation",
+        action="append",
+        type=parse_implementation,
+        default=None,
+        metavar="ROLE=PATH",
+        help="an implementation to measure under this role; repeatable. Required for the A tier.",
+    )
     args = parser.parse_args()
 
     # Removed before the work starts rather than written at the end, so a run that
@@ -314,10 +390,29 @@ def main() -> int:
 
     task, cases_manifest, problem_source = load_task(args.task_dir, args.cases)
 
-    implementations = {NAIVE_ROLE: load_model_class(args.naive), EXPERT_ROLE: load_model_class(args.expert)}
-    if args.blind is not None:
-        implementations[BLIND_ROLE] = load_model_class(args.blind)
-    unavailable = load_unavailable(args.unavailable)
+    if args.tier == "A_kernel":
+        # §4.4's A tier: the upstream implementation is the speedup denominator and
+        # the library paths are reference points beside it. The roster is supplied
+        # because which module stands for `upstream_musa` is a per-package fact.
+        implementations = {}
+        unavailable = {}
+        for role, path, note in args.implementation or []:
+            if path.is_file():
+                implementations[role] = load_model_class(path)
+            else:
+                unavailable[role] = note or f"no implementation at {path}"
+        if not implementations:
+            print("[baseline] the A tier needs at least one --implementation ROLE=PATH", file=sys.stderr)
+            return 2
+    else:
+        missing = [name for name, value in (("--naive", args.naive), ("--expert", args.expert)) if value is None]
+        if missing:
+            print(f"[baseline] the B tier measures against {', '.join(missing)}", file=sys.stderr)
+            return 2
+        implementations = {NAIVE_ROLE: load_model_class(args.naive), EXPERT_ROLE: load_model_class(args.expert)}
+        if args.blind is not None:
+            implementations[BLIND_ROLE] = load_model_class(args.blind)
+        unavailable = load_unavailable(args.unavailable)
 
     snapshot_id = args.snapshot_id or task["target_environment"]["snapshot_id"]
 
@@ -358,12 +453,25 @@ def main() -> int:
         },
         "implementations": sorted({row["implementation"] for row in results}),
         "results": results,
-        "scoring": {
-            "speedup_denominator": EXPERT_ROLE,
-            "reference_implementation": NAIVE_ROLE,
-            "correctness_gate": "all_hidden_cases",
-            "minimum_naive_to_expert_ratio": 1.3,
-        },
+        "scoring": (
+            {
+                "speedup_denominator": UPSTREAM_ROLE,
+                "reference_implementation": REFERENCE_ROLE,
+                "correctness_gate": "all_hidden_cases",
+                # §4.4 lists torch_musa eager as its own entry and asks it only to
+                # cross-check semantics. On this tier the reference model *is* plain
+                # PyTorch run eagerly, so the same measurement answers both and a
+                # second row under a second name would be the same numbers twice.
+                "torch_musa_eager": "the reference model: this tier's reference is plain PyTorch evaluated eagerly",
+            }
+            if args.tier == "A_kernel"
+            else {
+                "speedup_denominator": EXPERT_ROLE,
+                "reference_implementation": NAIVE_ROLE,
+                "correctness_gate": "all_hidden_cases",
+                "minimum_naive_to_expert_ratio": 1.3,
+            }
+        ),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

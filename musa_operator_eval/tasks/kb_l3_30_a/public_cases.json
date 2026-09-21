@@ -18,7 +18,8 @@
       "shape": {
         "B": 1,
         "image": 224
-      }
+      },
+      "golden": "smoke_001/golden/tensors.json"
     },
     {
       "case_id": "smoke_002",
@@ -28,7 +29,8 @@
       "shape": {
         "B": 2,
         "image": 224
-      }
+      },
+      "golden": "smoke_002/golden/tensors.json"
     },
     {
       "case_id": "smoke_003",
@@ -38,7 +40,8 @@
       "shape": {
         "B": 4,
         "image": 224
-      }
+      },
+      "golden": "smoke_003/golden/tensors.json"
     }
   ]
 }

@@ -5,8 +5,8 @@
   "environment_snapshot": "REPLACE_WITH_SNAPSHOT_ID",
   "measurement_protocol": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median", "timer": "musa_event"},
   "weight_alignment": "re-seed and rebuild, as kernelbench.eval does; no state dict is copied",
-  "tolerance_source": "kernelbench.eval.get_tolerance_for_precision",
-  "implementations": ["reference_model", "upstream_musa", "mudnn_fused", "torch_musa_sdpa", "torch_musa_eager", "naive_library_composition", "expert_dispatch"],
+  "tolerance_source": "kernelbench.eval.resolve_tolerance",
+  "implementations": ["expert_dispatch", "mudnn_fused", "naive_library_composition", "reference_model", "torch_musa_eager", "upstream_musa"],
   "results": [],
   "scoring": {"speedup_denominator": "expert_dispatch", "reference_implementation": "naive_library_composition", "correctness_gate": "all_hidden_cases", "minimum_naive_to_expert_ratio": 1.3}
 }

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/baseline-1.0.0.json",
   "title": "MUSA task baseline (private/*/baseline.json)",
-  "description": "Guide §4.4. A baseline is only meaningful against the environment it was measured in, so the snapshot id is required and every row has to say which implementation it belongs to. The B tier adds two implementations that the A tier does not have -- the naive library composition (the lower bound) and the expert dispatch (the speedup denominator), so for B_library the scoring denominator is pinned to the expert dispatch.",
+  "description": "Guide \u00a74.4. A baseline is only meaningful against the environment it was measured in, so the snapshot id is required and every row has to say which implementation it belongs to. The B tier adds two implementations that the A tier does not have -- the naive library composition (the lower bound) and the expert dispatch (the speedup denominator), so for B_library the scoring denominator is pinned to the expert dispatch.",
   "$defs": {
     "result": {
       "type": "object",
@@ -25,9 +25,11 @@
           "enum": [
             "pass",
             "fail",
+            "error",
             "unavailable",
             "unsupported"
-          ]
+          ],
+          "description": "pass: the implementation answered and agreed with the reference. fail: it answered and disagreed. error: the call raised, which is what a library does when it declines a configuration -- a different fact from a wrong answer and from an implementation that could not be built at all (unavailable). A row with no status is a missing measurement, which is why the enum is closed."
         },
         "latency_ms": {
           "type": [
@@ -46,8 +48,7 @@
           "type": [
             "integer",
             "null"
-          ],
-          "minimum": 0
+          ]
         },
         "numeric": {
           "type": "object"
@@ -75,6 +76,32 @@
             "minLength": 1
           },
           "description": "The paths the implementation's own trace reported. Recorded so a mismatch can be read without re-running; null when nothing was recorded."
+        },
+        "latency_ms_p10": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Guide \u00a74.4's quantiles: the nearest-rank 10th percentile of the per-round means."
+        },
+        "latency_ms_p90": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "latency_ms_rounds": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "throughput_per_second": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Invocations of the case's operation per second, derived from the median."
         }
       }
     }
@@ -140,7 +167,11 @@
           "minLength": 1
         },
         "clock_locked": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Guide \u00a74.4 asks the protocol to say whether the clock was pinned. Null means the platform does not expose it, which is a fact about the machine rather than a missing field."
         }
       }
     },

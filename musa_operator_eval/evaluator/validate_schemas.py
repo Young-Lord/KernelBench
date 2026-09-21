@@ -14,13 +14,13 @@ uniqueItems, minLength, maxLength, pattern, minimum, maximum, minProperties,
 allOf, anyOf, not, if/then/else.
 
     # every artifact in this repository
-    python3 musa_operator_eval/tools/validate_schemas.py --all
+    python3 musa_operator_eval/evaluator/validate_schemas.py --all
 
     # one file, kind inferred from its name
-    python3 musa_operator_eval/tools/validate_schemas.py musa_operator_eval/tasks/kb_l1_97_a/task.json
+    python3 musa_operator_eval/evaluator/validate_schemas.py musa_operator_eval/tasks/kb_l1_97_a/task.json
 
     # force a kind, which is how a hidden case manifest is checked
-    python3 musa_operator_eval/tools/validate_schemas.py --kind case_manifest \
+    python3 musa_operator_eval/evaluator/validate_schemas.py --kind case_manifest \
         musa_operator_eval/private/sdpa_forward_b_v0/cases.private.json
 
 Exit codes: 0 all valid, 1 at least one document invalid, 2 bad usage.
@@ -369,7 +369,7 @@ def discover(root: Path) -> List[tuple]:
     found += [(path, "case_manifest") for path in sorted(root.glob("tasks/*/public_cases.json"))]
     found += [(path, "environment_snapshot") for path in sorted(root.glob("environments/*.public.json"))]
     found += [(path, "case_manifest") for path in sorted(root.glob("private/*/cases.private.json"))]
-    found += [(path, "baseline") for path in sorted(root.glob("private/*/baseline.json"))]
+    found += [(path, "baseline") for path in sorted(root.glob("private/*/baseline.hidden.json"))]
     found += [(path, "baseline") for path in sorted(root.glob("private/*/baseline.hidden.json"))]
     found += [(path, "environment_snapshot") for path in sorted(root.glob("private/environments/*.full.json"))]
     return found

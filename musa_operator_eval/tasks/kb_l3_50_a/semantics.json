@@ -8,6 +8,79 @@
   "mask": "causal, top-left, applied before the activation",
   "activation": "ReLU on the masked scores, in place of Softmax",
   "normalisation": "none: there is no denominator, so the output is a plain weighted sum",
-  "determinism": "no dropout anywhere, so the reference is deterministic",
-  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer; input length equals max_seqlen in every case"
+  "determinism": {
+    "required": true,
+    "seed_source": "case_manifest"
+  },
+  "causal_mask_buffer": "the reference precomputes a (max_seqlen, max_seqlen) tril buffer; input length equals max_seqlen in every case",
+  "tensors": [
+    {
+      "name": "x",
+      "role": "input",
+      "shape": [
+        "B",
+        "S",
+        "C"
+      ],
+      "dtypes": [
+        "float32"
+      ],
+      "layout": "BSC",
+      "stride": "contiguous"
+    },
+    {
+      "name": "output",
+      "role": "output",
+      "shape": [
+        "B",
+        "S",
+        "C"
+      ],
+      "dtypes": [
+        "float32"
+      ],
+      "layout": "BSC",
+      "stride": "contiguous"
+    }
+  ],
+  "dynamic_axes": {
+    "B": [
+      1,
+      2
+    ],
+    "C": [
+      128,
+      256
+    ],
+    "H": [
+      4,
+      8
+    ],
+    "S": [
+      64,
+      129
+    ]
+  },
+  "abi": {
+    "passing": "in_process_torch_tensors",
+    "layout": "contiguous",
+    "stream": "current_musa_stream",
+    "note": "runner is a ModelNew module evaluated in the same process as the reference"
+  },
+  "attention": {
+    "scale": "inverse_sqrt_d",
+    "accumulation_dtype": "float32",
+    "causal_alignment": "top_left",
+    "window": {
+      "left": "-1: this family applies no window, so every key is visible on the left",
+      "right": "-1: this family applies no window, so every key is visible on the right",
+      "unlimited_value": -1
+    },
+    "fully_masked_row": {
+      "output": "zeros",
+      "reachable": false,
+      "note": "Cannot occur here: with no explicit mask and no padding, every query row sees the whole key range, so the softmax denominator is at least one element. The convention is declared anyway, because §4.2 asks for it and because a reader cannot tell an unreachable case from an unconsidered one."
+    },
+    "note": "No softmax in this family: the masked scores are rectified and multiplied by v, so there is no denominator to shift and §4.2's max-shift clause does not apply."
+  }
 }

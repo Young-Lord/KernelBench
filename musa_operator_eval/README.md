@@ -59,10 +59,14 @@ pattern.
 - `tasks/`: agent-visible task packages. Each carries a KernelBench-format
   `problem.py` (`Model`, `get_inputs`, `get_init_inputs`, plus `TIER` and
   `LIBRARY_POLICY` for the B tier), a `semantics.json` contract, a `PROMPT.md`,
-  the public case list, and a `tensor_contract` naming the dtypes it is graded
-  at. A task names the environment it was measured on rather than describing it.
-  `problem.py` declares its own tier, so the driver refuses to run it at a
-  precision the contract does not permit.
+  a `starter/` project, the public case list, and a `tensor_contract` naming the
+  dtypes it is graded at. A task names the environment it was measured on rather
+  than describing it. `problem.py` declares its own tier, so the driver refuses to
+  run it at a precision the contract does not permit.
+  The contract's `starter` block is §4.6's inventory: which file the agent copies
+  and where its marked regions are, which files are frozen, how the project is
+  built and run, and the ABI it is built against. The static audit reads `frozen`
+  from there, so the boundary it draws is the one the package declares.
 - `environments/`: one agent-visible record per machine configuration, named
   after its `snapshot_id`. A task points here; the device model, architecture and
   component versions live here and nowhere else, so a machine is described once
@@ -80,8 +84,18 @@ pattern.
   quietly inheriting a first family's boundaries.
 - `sources/`: provenance and license records. `attention-source-001.json` covers the upstream snapshots a task derives from; `attention-kernel-candidates.json` inventories candidate attention kernel implementations and which target each can serve.
 - `templates/`: baseline and gap-evidence templates.
-- `tools/`: capability probing, environment capture, case generation, admission gate, task driver, set verification.
+- `tools/`: the public flow. `generate_cases.py` turns a §4.3 case entry into
+  inputs and a golden, and `case_specialization.py` is the convention that turns a
+  case into a runnable problem. The evaluator imports that convention from here
+  rather than keeping a second copy; nothing here imports the evaluator.
+- `evaluator/`: the evaluation service — the §4.7 pipeline, the link whitelist
+  check, the admission gate, the publication audit, the environment collector and
+  the schema validator. §2 puts the scoring criteria in the task definition and
+  the scripts out of the agent's hands; see `evaluator/README.md` for how this
+  checkout stands against that and what the production mount looks like.
 - `tests/`: CPU-only unit tests for the tools above.
+- `CONFORMANCE.md`: the guide, requirement by requirement, with the shortfalls
+  this set carries stated rather than left to be found.
 - `private/`: evaluator-only assets; ignored by Git except for its README.
 
 ## Tools
@@ -89,42 +103,70 @@ pattern.
 ```bash
 # Capture the MUSA environment: device identity, driver, every toolkit component
 # with its commit, and the host side no container image pins
-python musa_operator_eval/tools/collect_environment.py
+python musa_operator_eval/evaluator/collect_environment.py
 
 # Probe fused-library / composition coverage per route
-python musa_operator_eval/tools/probe_sdpa.py
+python musa_operator_eval/evaluator/probe_sdpa.py
 
-# Deterministically regenerate public inputs and golden outputs from case.seed
-python musa_operator_eval/tools/generate_cases.py
+# Deterministically regenerate a task's public inputs and golden outputs from
+# case.seed. The golden comes from the package's own `golden_oracle` where it
+# declares one and from its reference model in float64 on the CPU otherwise.
+python musa_operator_eval/tools/generate_cases.py \
+  --task-dir musa_operator_eval/tasks/kb_l3_43_b
+
+# The same generator produces the hidden set, which is why the evaluator's golden
+# cross-check has something to compare against. A hidden manifest may not write
+# into a task package: that tree is the agent's.
+python musa_operator_eval/tools/generate_cases.py \
+  --task-dir musa_operator_eval/tasks/kb_l3_43_b \
+  --manifest musa_operator_eval/private/mingpt_causal_attention_b_v0/cases.private.json \
+  --output-dir musa_operator_eval/private/generated/kb_l3_43_b
+
+# §4.7's B-tier-only link check, standalone
+python musa_operator_eval/evaluator/link_whitelist.py \
+  --build-dir runs/kb_l3_43_b/build --task-dir musa_operator_eval/tasks/kb_l3_43_b
+
+# §2's publication audit: what the agent is handed holds task definitions only
+python musa_operator_eval/evaluator/audit_agent_package.py
 
 # Build a private hidden-case manifest from measured gap evidence
-python musa_operator_eval/tools/make_private_manifest.py \
+python musa_operator_eval/evaluator/make_private_manifest.py \
   --evidence <private-gap-evidence.json> \
   --output musa_operator_eval/private/<task-id>/cases.private.json
 
 # Measure the B-tier baselines in the gate's own shape (needs the device)
-python musa_operator_eval/tools/measure_baseline.py \
+python musa_operator_eval/evaluator/measure_baseline.py \
   --task-dir musa_operator_eval/tasks/kb_l3_43_b \
   --naive  musa_operator_eval/private/<task-id>/naive/model_new.py \
   --expert musa_operator_eval/private/<task-id>/expert/model_new.py \
   --blind  musa_operator_eval/private/<task-id>/blind/model_new.py \
   --unavailable musa_operator_eval/private/<task-id>/unavailable.json \
-  --output musa_operator_eval/private/<task-id>/baseline.json
+  --output musa_operator_eval/private/<task-id>/baseline.hidden.json
 
 # Apply the B-tier naive/expert admission gate
-python musa_operator_eval/tools/candidate_gate.py <baseline.json>
+python musa_operator_eval/evaluator/candidate_gate.py <baseline.json>
 
 # Drive a task across all of its cases
-python musa_operator_eval/tools/run_task.py --submission <model_new.py> --static-only
-python musa_operator_eval/tools/run_task.py --submission <model_new.py> \
+python musa_operator_eval/evaluator/run_task.py --submission <model_new.py> --static-only
+python musa_operator_eval/evaluator/run_task.py --submission <model_new.py> \
   --backend musa --precision fp16 --output runs/<task>/report.json
 # Grade the hidden set, which lives outside the task package
-python musa_operator_eval/tools/run_task.py --submission <model_new.py> \
+python musa_operator_eval/evaluator/run_task.py --submission <model_new.py> \
   --cases musa_operator_eval/private/<task-id>/cases.private.json
 
+# The same pipeline over a compiled submission (§4.6's torch-free runner)
+python musa_operator_eval/evaluator/run_binary.py \
+  --task-dir musa_operator_eval/tasks/<task-id> --submission <dir with kernel.mu> \
+  --cases musa_operator_eval/private/<task-id>/cases.private.json \
+  --generated-dir musa_operator_eval/private/generated/<task-id>
+
+# §5 step 8: the two tracks, ranked apart and never combined
+python musa_operator_eval/evaluator/rank.py --report runs/a/report.json \
+  --report runs/b/report.json --baseline 'musa_operator_eval/private/*/baseline.hidden.json'
+
 # Verify a curated set and regenerate its index
-python musa_operator_eval/tools/collect_attention_set.py
-python musa_operator_eval/tools/collect_attention_set.py --check   # verify only, for CI
+python musa_operator_eval/evaluator/collect_attention_set.py
+python musa_operator_eval/evaluator/collect_attention_set.py --check   # verify only, for CI
 ```
 
 `run_task.py` is the entry point for a whole task. It specializes `problem.py`

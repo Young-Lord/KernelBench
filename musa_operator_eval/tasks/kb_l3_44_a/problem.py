@@ -1,8 +1,8 @@
 """
 Reference implementation for the A-tier task kb_l3_44.
 
-Copied verbatim from KernelBench/level3/44_MiniGPTBlock.py. The A tier is audited with the
-standard KernelBench rule set, which is the default when a problem
+Copied verbatim from the source record named in task.json. The A tier is audited with the
+framework's default rule set, which is the default when a problem
 declares no TIER, so this file is the problem and nothing else. Do not
 edit it: the submission is a separate module.
 

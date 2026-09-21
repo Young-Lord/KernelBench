@@ -39,6 +39,15 @@ def read_library_policy_from_problem():
 reference = load("sdpa_reference", TASK_DIR / "reference" / "sdpa_reference.py")
 generator = load("generate_cases", ROOT / "tools" / "generate_cases.py")
 
+# The generator builds a case by running the task's reference, and that reference
+# is a torch model. Every test that needs a generated case is skipped without it,
+# so the rest of this file still runs on a machine without a GPU stack.
+try:
+    import torch
+except ImportError:
+    torch = None
+
+
 
 class TierContractConsistencyTests(unittest.TestCase):
     """problem.py and task.json both declare the tier policy; they must agree."""
@@ -146,7 +155,7 @@ class TargetEnvironmentTests(unittest.TestCase):
 
     def test_the_record_carries_no_field_the_collector_redacts(self):
         """The artifact is checked against the rule, not against a copy of it."""
-        collector = load("collect_environment", ROOT / "tools" / "collect_environment.py")
+        collector = load("collect_environment", ROOT / "evaluator" / "collect_environment.py")
         for key in collector.REDACTED_KEYS:
             self.assertNotIn(key, self.record)
         self.assertNotIn("device_instance_id", self.record)
@@ -218,7 +227,7 @@ class CapabilityReferenceTests(unittest.TestCase):
         Discovering that is the task. A reference that lists the ops hands the
         dispatch decision over before the submission writes a probe.
         """
-        probe = load("probe_sdpa", ROOT / "tools" / "probe_sdpa.py")
+        probe = load("probe_sdpa", ROOT / "evaluator" / "probe_sdpa.py")
         blob = self.path.read_text(encoding="utf-8").lower()
         for op in probe.FUSED_LIBRARY_OPS | probe.LIBRARY_COMPOSITION_OPS:
             with self.subTest(op=op):
@@ -281,12 +290,14 @@ class ReferenceTests(unittest.TestCase):
         decoded = generator.bfloat16_to_float32(encoded)
         np.testing.assert_allclose(decoded, values, rtol=0.01, atol=0.001)
 
+    @unittest.skipUnless(torch is not None, "a case is built by running the task's reference, which needs torch")
     def test_case_generation_is_deterministic(self):
         manifest = json.loads((ROOT / "tasks" / "sdpa_forward_pilot" / "public_cases.json").read_text(encoding="utf-8"))
         case = manifest["cases"][0]
+        task_dir = ROOT / "tasks" / "sdpa_forward_pilot"
         with tempfile.TemporaryDirectory() as first, tempfile.TemporaryDirectory() as second:
-            generator.generate_case(case, Path(first))
-            generator.generate_case(case, Path(second))
+            generator.generate_case(case, Path(first), task_dir)
+            generator.generate_case(case, Path(second), task_dir)
             first_manifest = json.loads((Path(first) / case["case_id"] / "input" / "tensors.json").read_text())
             second_manifest = json.loads((Path(second) / case["case_id"] / "input" / "tensors.json").read_text())
             self.assertEqual(first_manifest, second_manifest)

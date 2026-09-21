@@ -24,7 +24,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-_spec = importlib.util.spec_from_file_location("validate_schemas", ROOT / "tools" / "validate_schemas.py")
+_spec = importlib.util.spec_from_file_location("validate_schemas", ROOT / "evaluator" / "validate_schemas.py")
 assert _spec is not None and _spec.loader is not None
 validator = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(validator)
@@ -60,6 +60,20 @@ def task_document(tier, **overrides):
         "submission": {"entrypoint": "ModelNew"},
         "attempt_budget": {"max_attempts": 20, "wall_time_seconds": 7200},
         "outputs": {"required": ["output"]},
+        "starter": {
+            "editable": [{"path": "starter/model_new.py", "submit_as": "model_new.py", "regions": ["device_kernel"]}],
+            "frozen": ["problem.py", "task.json"],
+            "build": {"command": "run_task.py --submission model_new.py", "note": "the task's build entry point"},
+            "self_test": {"command": "run_task.py --submission model_new.py --static-only", "note": "no device needed"},
+            "abi": {
+                "inputs": "input/tensors.json plus .bin",
+                "outputs": "golden/tensors.json plus .bin",
+                "transport": "raw binary plus a JSON manifest",
+                "submission": "a module defining ModelNew",
+                "runner_imports_libtorch": True,
+                "deviation": "the runner imports the framework's evaluator, which imports torch",
+            },
+        },
     }
     if tier == "B_library":
         document["capability_reference"] = "agent_reference/sdpa_forward_capabilities.json"
@@ -72,6 +86,29 @@ def task_document(tier, **overrides):
             "dispatch_order": ["fused_library", "library_composition", "custom_fallback"],
             "minimum_gap_cases": 3,
             "required_gap_reasons": ["unsupported_shape", "semantic_mismatch"],
+        }
+        document["starter"]["dispatch"] = {
+            "file": "model_new.py",
+            "region": "probe_and_dispatch",
+            "note": "the submission is one module, so the dispatch is a marked region of it",
+        }
+        document["starter"]["cpp"] = {
+            "path": "starter/cpp",
+            "build": "starter/cpp/build.sh",
+            "editable": ["starter/cpp/kernel.mu"],
+            "frozen": ["starter/cpp/abi_io.h", "starter/cpp/runner.cc", "starter/cpp/build.sh"],
+            "entrypoint": "kernel_entry",
+            "abi": "the runner reads the input directory and writes the output directory",
+            "runner_imports_libtorch": False,
+            "links": "the MUSA runtime plus the contract's whitelist",
+            "command": "starter/cpp/build.sh --submission <dir> --build-dir <dir>",
+            "regions": ["probe_and_dispatch", "host_launch"],
+        }
+        document["starter"]["link_whitelist"] = {
+            "source": "task.json:library_policy",
+            "allowed_libraries": ["libmusa"],
+            "allowed_symbol_prefixes": ["musa"],
+            "checked_by": "musa_operator_eval/evaluator/link_whitelist.py",
         }
     document.update(overrides)
     return document

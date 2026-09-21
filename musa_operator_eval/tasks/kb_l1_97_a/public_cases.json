@@ -20,7 +20,8 @@
         "H": 4,
         "S": 64,
         "D": 64
-      }
+      },
+      "golden": "smoke_001/golden/tensors.json"
     },
     {
       "case_id": "smoke_002",
@@ -32,7 +33,8 @@
         "H": 8,
         "S": 128,
         "D": 64
-      }
+      },
+      "golden": "smoke_002/golden/tensors.json"
     },
     {
       "case_id": "smoke_003",
@@ -44,7 +46,8 @@
         "H": 4,
         "S": 129,
         "D": 96
-      }
+      },
+      "golden": "smoke_003/golden/tensors.json"
     }
   ]
 }

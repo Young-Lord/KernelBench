@@ -206,7 +206,7 @@ class PublicCaseTests(unittest.TestCase):
                     self.assertIn(case["tag"], CASE_TAGS)
 
     def test_case_parameters_resolve_for_every_public_case(self):
-        runner = load("run_task", ROOT / "tools" / "run_task.py")
+        runner = load("run_task", ROOT / "evaluator" / "run_task.py")
         for directory, task in all_packages():
             cases = json.loads((directory / "public_cases.json").read_text(encoding="utf-8"))["cases"]
             with self.subTest(task=task["id"]):
@@ -222,7 +222,7 @@ class PublicCaseTests(unittest.TestCase):
                     self.assertIn(variable, declared)
 
     def test_the_driver_can_specialise_every_case_into_valid_python(self):
-        runner = load("run_task", ROOT / "tools" / "run_task.py")
+        runner = load("run_task", ROOT / "evaluator" / "run_task.py")
         for directory, task in all_packages():
             _, cases, source = runner.load_task(directory)
             for case in cases["cases"]:
@@ -237,6 +237,83 @@ class PublicCaseTests(unittest.TestCase):
             with self.subTest(task=task["id"]):
                 self.assertEqual(len(set(identifiers)), len(identifiers))
                 self.assertEqual(len(set(seeds)), len(seeds))
+
+
+class ContractMinimumTests(unittest.TestCase):
+    """§4.1's field list, checked field by field rather than in aggregate.
+
+    The contract is where §4.1 says the operator's identity, its tolerance and its
+    prohibitions are declared once and referenced elsewhere, so a field it omits is
+    a field a reader has to reconstruct from the case list or from the reference.
+    The two below were the ones no package but the pilot carried: the layout, and
+    the axes that move between cases.
+    """
+
+    def packages(self):
+        return list(all_packages())
+
+    def test_every_contract_names_its_layout_and_its_dynamic_axes(self):
+        for directory, task in self.packages():
+            contract = task["tensor_contract"]
+            with self.subTest(task=task["id"]):
+                self.assertTrue(contract.get("layouts"), f"{directory.name} declares no layout")
+                self.assertTrue(contract.get("dynamic_axes"), f"{directory.name} declares no dynamic axes")
+                # Every axis a case varies must be one the contract named, or the
+                # declaration does not describe the case list it belongs to.
+                manifest = json.loads((directory / "public_cases.json").read_text(encoding="utf-8"))
+                varying = set()
+                for case in manifest["cases"]:
+                    varying |= set(case["shape"])
+                # `dynamic_axes` is the case-list vocabulary, so the two have to
+                # be the same set: an axis that moves between cases and is not
+                # declared is one a reader would not know was free.
+                declared = set(contract["dynamic_axes"])
+                self.assertEqual(
+                    declared - varying, set(),
+                    f"{directory.name} declares {sorted(declared - varying)}, which no case varies",
+                )
+                self.assertTrue(
+                    varying <= declared | {"channels"},
+                    f"{directory.name} varies {sorted(varying - declared)} without declaring it",
+                )
+
+    def test_the_b_tier_declares_where_its_dispatch_lives(self):
+        for directory, task in self.packages():
+            if task["tier"] != "B_library":
+                continue
+            dispatch = task["starter"].get("dispatch")
+            regions = task["starter"]["editable"][0]["regions"]
+            with self.subTest(task=task["id"]):
+                self.assertIsNotNone(dispatch, "§4.1 asks the B tier for its dispatch file")
+                self.assertEqual(dispatch["file"], task["starter"]["editable"][0]["submit_as"])
+                self.assertIn(dispatch["region"], regions)
+
+    def test_the_a_tier_has_no_dispatch_to_declare(self):
+        for directory, task in self.packages():
+            if task["tier"] == "A_kernel":
+                with self.subTest(task=task["id"]):
+                    self.assertNotIn("dispatch", task["starter"])
+
+
+class PublicCaseListTests(unittest.TestCase):
+    """§4.3's field list applies to the public list as much as the hidden one."""
+
+    def test_every_public_case_records_the_golden_path_it_is_checked_against(self):
+        """The two lists have one format; only the content and visibility differ.
+
+        A public smoke case is what the agent self-tests against, and the golden
+        path is the field that says where that answer is. Leaving it out of the
+        public list while the hidden list carries it makes the published list a
+        different format from the one the schema describes.
+        """
+        for path in sorted(TASKS_DIR.glob("*/public_cases.json")):
+            manifest = json.loads(path.read_text(encoding="utf-8"))
+            with self.subTest(task=path.parent.name):
+                self.assertEqual(manifest["visibility"], "public")
+                for case in manifest["cases"]:
+                    self.assertEqual(
+                        case.get("golden"), f"{case['case_id']}/golden/tensors.json"
+                    )
 
 
 class TierPairTests(unittest.TestCase):
@@ -334,6 +411,251 @@ class LibraryPolicyTests(unittest.TestCase):
                 self.assertEqual(reference.name, f"{task['family']}_capabilities.json")
                 self.assertEqual(
                     json.loads(reference.read_text(encoding="utf-8"))["family"], task["family"])
+
+
+class StarterInventoryTests(unittest.TestCase):
+    """§3 and §4.6: the starter project, and the inventory that goes with it.
+
+    §4.6 asks for a declaration of which files may be edited, where the marked
+    regions are, how the project is built and run, and -- for the B tier -- what it
+    may link. The declaration is only worth having if it describes the files that
+    are actually shipped, so each of those is checked against the package rather
+    than against a second hand-written copy: the frozen list against the package's
+    own files, the marker list against the markers in the starter, the link
+    whitelist against `library_policy`, and the interface against the reference's
+    own signature.
+    """
+
+    #: §4.5's disclosure rule, applied to the starter because it is agent-visible too.
+    DISCLOSURES = {
+        "the upstream project": r"KernelBench|ScalingIntelligence",
+        "a library function name": r"scaled_dot_product_attention|MultiheadAttention|mudnn_\w+",
+        "a version string": r"\b\d+\.\d+\.\d+\b",
+    }
+
+    def packages(self):
+        return list(all_packages())
+
+    @staticmethod
+    def signature(source: str, class_name: str, method: str) -> list:
+        tree = ast.parse(source)
+        for node in tree.body:
+            if isinstance(node, ast.ClassDef) and node.name == class_name:
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef) and item.name == method:
+                        return [arg.arg for arg in item.args.args if arg.arg != "self"]
+        raise AssertionError(f"{class_name}.{method} is not defined")
+
+    @staticmethod
+    def returned_list_length(source: str, function_name: str) -> int:
+        """How many tensors a problem's `get_inputs` / `get_init_inputs` returns.
+
+        Read off the literal list rather than by executing the module: the point of
+        this check is the interface the reference publishes, and running the
+        reference to find it would make the check need a device.
+        """
+        tree = ast.parse(source)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == function_name:
+                returns = [item for item in ast.walk(node) if isinstance(item, ast.Return)]
+                assert len(returns) == 1, f"{function_name} returns more than once"
+                value = returns[0].value
+                assert isinstance(value, ast.List), f"{function_name} does not return a literal list"
+                return len(value.elts)
+        raise AssertionError(f"{function_name} is not defined")
+
+    def test_every_package_ships_a_starter(self):
+        for directory, task in self.packages():
+            starter = directory / task["starter"]["editable"][0]["path"]
+            with self.subTest(task=task["id"]):
+                self.assertTrue(starter.is_file(), f"{starter} is missing")
+
+    def test_the_declared_regions_are_the_markers_in_the_starter(self):
+        for directory, task in self.packages():
+            starter = directory / task["starter"]["editable"][0]["path"]
+            text = starter.read_text(encoding="utf-8")
+            declared = task["starter"]["editable"][0]["regions"]
+            with self.subTest(task=task["id"]):
+                for region in declared:
+                    self.assertEqual(text.count(f"# --- BEGIN {region} ---"), 1,
+                                     f"{region} has no single opening marker")
+                    self.assertEqual(text.count(f"# --- END {region} ---"), 1,
+                                     f"{region} has no single closing marker")
+                # A marker nobody declared is a region the audit cannot describe.
+                found = set(re.findall(r"# --- BEGIN ([a-z_]+) ---", text))
+                self.assertEqual(found, set(declared))
+
+    def test_the_frozen_list_covers_the_package(self):
+        """The declaration and the tree must agree, or the boundary is fiction.
+
+        Every file in the package is frozen except the starter the agent copies.
+        A file in neither list is one the audit would let a submission rewrite.
+        """
+        for directory, task in self.packages():
+            editable_paths = {entry["path"] for entry in task["starter"]["editable"]} | set(
+                (task["starter"].get("cpp") or {}).get("editable", [])
+            )
+            on_disk = sorted(
+                path.relative_to(directory).as_posix()
+                for path in directory.rglob("*")
+                if path.is_file() and "__pycache__" not in path.parts
+                and path.relative_to(directory).as_posix() not in editable_paths
+                and not path.relative_to(directory).as_posix().startswith("generated/")
+            )
+            with self.subTest(task=task["id"]):
+                self.assertEqual(sorted(task["starter"]["frozen"]), on_disk)
+
+    def test_every_starter_declares_the_build_script_it_ships(self):
+        """§4.7's build stage runs the starter's entry point and no other."""
+        for directory, task in self.packages():
+            declared = (task["starter"]["build"].get("script"))
+            with self.subTest(task=task["id"]):
+                self.assertEqual(declared, "starter/build.py")
+                self.assertTrue((directory / declared).is_file())
+                self.assertIn(declared, task["starter"]["frozen"])
+
+    def test_the_build_scripts_are_one_script(self):
+        """One build path means one script, not eleven that can drift apart."""
+        bodies = {}
+        for directory, task in self.packages():
+            text = (directory / task["starter"]["build"]["script"]).read_text(encoding="utf-8")
+            # The first line names the task; everything after it is shared.
+            bodies[task["id"]] = text.split("\n", 1)[1]
+        self.assertEqual(len(set(bodies.values())), 1, "the build scripts have drifted apart")
+
+    def test_the_frozen_compiled_files_are_one_set(self):
+        """§4.6 freezes the ABI and the runner: eleven copies must be one text.
+
+        The kernel is per task and the inventory says so; everything else is the
+        harness, and a package whose runner had drifted would be graded against a
+        different ABI than its goldens were written for.
+        """
+        frozen = {}
+        for directory, task in self.packages():
+            cpp = task["starter"]["cpp"]
+            for relative in cpp["frozen"]:
+                name = Path(relative).name
+                if name == "build.sh":
+                    # The first line is the shebang; the rest is shared, and the
+                    # build script legitimately differs by nothing else.
+                    body = (directory / relative).read_text(encoding="utf-8").split("\n", 1)[1]
+                else:
+                    body = (directory / relative).read_text(encoding="utf-8")
+                frozen.setdefault(name, {})[task["id"]] = body
+        self.assertTrue(frozen, "no compiled starter is declared")
+        for name, copies in sorted(frozen.items()):
+            with self.subTest(file=name):
+                self.assertEqual(len(set(copies.values())), 1, f"{name} has drifted between packages")
+
+    def test_the_compiled_kernel_is_the_editable_half(self):
+        """The kernel is what a submission writes; the runner and the ABI are not."""
+        for directory, task in self.packages():
+            with self.subTest(task=task["id"]):
+                cpp = task["starter"]["cpp"]
+                self.assertEqual(cpp["editable"], [task["starter"]["cpp"]["path"] + "/kernel.mu"])
+                self.assertNotIn("kernel.mu", " ".join(Path(entry).name for entry in cpp["frozen"]))
+
+    def test_the_build_script_reports_a_missing_device_stack_differently(self):
+        """'Did not build' and 'this machine has no torch' are different results."""
+        script = (ROOT / "tasks" / "sdpa_forward_pilot" / "starter" / "build.py").read_text(encoding="utf-8")
+        self.assertIn("ModuleNotFoundError", script)
+        self.assertIn("return 3", script)
+        self.assertIn("return 1", script)
+
+    def test_the_tier_decides_which_regions_exist(self):
+        for directory, task in self.packages():
+            regions = task["starter"]["editable"][0]["regions"]
+            with self.subTest(task=task["id"]):
+                if task["tier"] == "A_kernel":
+                    self.assertIn("device_kernel", regions)
+                    self.assertNotIn("probe_and_dispatch", regions)
+                else:
+                    self.assertIn("probe_and_dispatch", regions)
+                    self.assertIn("dispatch_trace", regions)
+
+    def test_the_starter_interface_is_the_interface_the_evaluator_calls(self):
+        """A starter with the wrong arity is a starter that cannot be graded.
+
+        The evaluator builds the reference as `Model(*get_init_inputs())` and calls
+        `forward(*get_inputs())`, so those two lists are the interface, not the
+        reference's own `__init__`: the Swin package's reference takes eleven
+        keyword arguments and its `get_init_inputs` returns none of them.
+        """
+        for directory, task in self.packages():
+            reference_source = (directory / task["problem_file"]).read_text(encoding="utf-8")
+            starter_source = (directory / task["starter"]["editable"][0]["path"]).read_text(encoding="utf-8")
+            with self.subTest(task=task["id"]):
+                self.assertEqual(
+                    len(self.signature(starter_source, "ModelNew", "__init__")),
+                    self.returned_list_length(reference_source, "get_init_inputs"),
+                )
+                self.assertEqual(
+                    len(self.signature(starter_source, "ModelNew", "forward")),
+                    self.returned_list_length(reference_source, "get_inputs"),
+                )
+                # Where `get_inputs` builds named tensors, the names are the
+                # interface too: a submission that renames them still works, but a
+                # starter that does teaches the wrong signature.
+                names = self.returned_names(reference_source)
+                if names:
+                    self.assertEqual(self.signature(starter_source, "ModelNew", "forward"), names)
+
+    @staticmethod
+    def returned_names(source: str) -> list:
+        """The variable names `get_inputs` returns, when it returns bare names."""
+        tree = ast.parse(source)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "get_inputs":
+                returns = [item for item in ast.walk(node) if isinstance(item, ast.Return)]
+                value = returns[0].value
+                if all(isinstance(elt, ast.Name) for elt in value.elts):
+                    return [elt.id for elt in value.elts]
+        return []
+
+    def test_the_b_tier_link_whitelist_mirrors_the_library_policy(self):
+        for directory, task in self.packages():
+            if task["tier"] != "B_library":
+                continue
+            declared = task["starter"]["link_whitelist"]
+            policy = task["library_policy"]
+            with self.subTest(task=task["id"]):
+                self.assertEqual(declared["allowed_libraries"], policy["allowed_libraries"])
+                self.assertEqual(
+                    declared["allowed_symbol_prefixes"], policy["allowed_symbol_prefixes"]
+                )
+
+    def test_the_abi_records_whether_the_runner_imports_libtorch(self):
+        """§4.6 asks for a runner without libtorch. A package that does not have
+        one has to say so, which the schema enforces by requiring `deviation`."""
+        for directory, task in self.packages():
+            abi = task["starter"]["abi"]
+            with self.subTest(task=task["id"]):
+                self.assertIsInstance(abi["runner_imports_libtorch"], bool)
+                if abi["runner_imports_libtorch"]:
+                    self.assertIn("deviation", abi)
+
+    def test_the_starter_does_not_disclose_what_the_prompt_may_not(self):
+        for directory, task in self.packages():
+            text = (directory / task["starter"]["editable"][0]["path"]).read_text(encoding="utf-8")
+            for label, pattern in self.DISCLOSURES.items():
+                with self.subTest(task=task["id"], disclosure=label):
+                    self.assertIsNone(re.search(pattern, text),
+                                      f"the starter names {label}")
+
+    def test_the_driver_reads_the_frozen_list_it_declares(self):
+        """The audit's boundary is the package's declaration, not a second copy."""
+        runner = load("run_task", ROOT / "evaluator" / "run_task.py")
+        for directory, task in self.packages():
+            with self.subTest(task=task["id"]):
+                _, errors, _ = runner.run_static_audit(
+                    task,
+                    'open("problem.py", "w").write("x")',
+                    "fp16" if "float16" in task["tensor_contract"]["input_dtypes"] else "fp32",
+                )
+                self.assertTrue(
+                    any("out-of-scope" in error for error in errors),
+                    f"{task['id']}: a write to a frozen file was not reported: {errors}",
+                )
 
 
 class PromptTests(unittest.TestCase):
@@ -494,6 +816,34 @@ class CapabilityReferenceTests(unittest.TestCase):
             with self.subTest(reference=path.name):
                 self.assertEqual(missing, [], f"{path.name} does not declare {missing}")
 
+    #: The same bans the starter and the prompts are held to, in the vocabulary the
+    #: documents themselves declare under `prohibited_disclosures`. The schema
+    #: version is exempt: it is a version string by construction and names nothing.
+    DISCLOSURES = {
+        "the upstream project": r"KernelBench|ScalingIntelligence|minGPT|karpathy",
+        "a library function name": r"scaled_dot_product_attention|MultiheadAttention|mudnn_\w+|mublas_\w+",
+        "a version string": r"\b\d+\.\d+\.\d+\b",
+        "a commit": r"\b[0-9a-f]{40}\b",
+        "a url": r"https?://",
+    }
+
+    def test_no_reference_discloses_what_it_says_it_will_not(self):
+        """A document that lists its own banned disclosures should be held to them.
+
+        The list was prose until this test: the files declared
+        `prohibited_disclosures` and nothing read it, which is the same shape of gap
+        as a field no validator visits.
+        """
+        for path, document in self.references():
+            declared = set(document.get("prohibited_disclosures", []))
+            self.assertTrue(declared, f"{path.name} declares no prohibited disclosures")
+            body = json.dumps({key: value for key, value in document.items() if key != "schema_version"}, ensure_ascii=False)
+            for label, pattern in self.DISCLOSURES.items():
+                with self.subTest(reference=path.name, disclosure=label):
+                    self.assertEqual(re.findall(pattern, body), [], f"{path.name} discloses {label}")
+            for required in ("repository_name", "library_function_name", "hidden_case", "expert_source"):
+                self.assertIn(required, declared, f"{path.name} does not prohibit {required}")
+
     def test_no_reference_names_a_path(self):
         """A family document cannot point at a task-scoped file, so it must not try.
 
@@ -597,7 +947,7 @@ class TensorContractTests(unittest.TestCase):
                 self.assertTrue(contract.get("accumulation_dtype"), "no accumulation_dtype declared")
 
     def test_declared_dtypes_use_the_drivers_vocabulary(self):
-        runner = load("run_task", ROOT / "tools" / "run_task.py")
+        runner = load("run_task", ROOT / "evaluator" / "run_task.py")
         known = set(runner.PRECISION_DTYPE_NAMES.values())
         for _, task in all_packages():
             for dtype in task["tensor_contract"]["input_dtypes"]:
@@ -605,7 +955,7 @@ class TensorContractTests(unittest.TestCase):
                     self.assertIn(dtype, known)
 
     def test_every_package_permits_at_least_one_precision(self):
-        runner = load("run_task", ROOT / "tools" / "run_task.py")
+        runner = load("run_task", ROOT / "evaluator" / "run_task.py")
         for _, task in all_packages():
             with self.subTest(task=task["id"]):
                 self.assertTrue(runner.allowed_precisions(task))
@@ -666,7 +1016,7 @@ class TensorContractTests(unittest.TestCase):
             submission = Path(scratch) / "model_new.py"
             submission.write_text("class ModelNew:\n    pass\n", encoding="utf-8")
             completed = subprocess.run(
-                [sys.executable, str(ROOT / "tools" / "run_task.py"),
+                [sys.executable, str(ROOT / "evaluator" / "run_task.py"),
                  "--task-dir", str(pilot), "--submission", str(submission), "--precision", "fp32"],
                 capture_output=True, text=True,
             )

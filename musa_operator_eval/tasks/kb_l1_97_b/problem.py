@@ -1,7 +1,7 @@
 """
 Reference implementation for the B-tier task kb_l1_97.
 
-Copied from KernelBench/level1/97_ScaledDotProductAttention.py, byte for byte, and then extended with the
+Copied from the source record named in task.json, byte for byte, and then extended with the
 tier metadata at the bottom. The B tier is graded on how the answer was
 reached, so the problem file has to state the dispatch contract somewhere;
 `kernel_static_checker.validate_library_kernel_static` consumes LIBRARY_POLICY
@@ -39,7 +39,7 @@ def get_init_inputs():
 # ============================================================================
 # Task contract metadata
 #
-# KernelBench has no place for the A/B tier distinction, so the tier and the
+# The framework's problem format has no place for the A/B tier distinction, so the tier and the
 # library policy travel with the problem file. Keep the two shared blocks below
 # identical to `library_policy` in task.json; tests/test_task_packages.py fails
 # if they drift.

@@ -38,6 +38,16 @@
       "bfloat16"
     ],
     "accumulation_dtype": "float32",
+    "layouts": [
+      "BCHW"
+    ],
+    "dynamic_axes": [
+      "B",
+      "C",
+      "H",
+      "W",
+      "channels"
+    ],
     "note": "float16 and bfloat16 only. On the target environment the fused attention path does not answer float32, so a float32 run would silently grade the composition path and call it a dispatch result."
   },
   "prohibited": [
@@ -98,21 +108,9 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 1.472776075733718,
+    "measured_geometric_mean": 1.7506372345011796,
     "threshold": 1.3,
-    "ratios": {
-      "hidden_gap_001": 0.8950974642155859,
-      "hidden_gap_002": 1.0121750973094494,
-      "hidden_gap_003": 1.0015436425252433,
-      "hidden_gap_004": 0.9983009589204932,
-      "hidden_perf_001": 3.290180175655243,
-      "hidden_perf_002": 3.9726558168679187,
-      "hidden_probe_001": 1.8696558334357836,
-      "hidden_probe_002": 0.9999404424286946
-    },
-    "measured_over": "the private case manifest, which is the set the gate is defined over",
     "measured_in": "musa-5f9d7b9dd1233a68",
-    "baseline": "musa_operator_eval/private/vision_attention_b_v0/baseline.hidden.json",
     "dispatch_note": "the problem is already written against a framework attention module, so the library path is the reference's own route",
     "gap_reason_coverage": {
       "state": "open",
@@ -127,5 +125,92 @@
       "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is embed_dim / num_heads, both now case parameters, and the fused path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path. This was measured: head_dim 32 dispatches fused at every sequence length tried from 49 to 1000, and 192 and 256 do not. layout_mismatch was the reason declared here before that measurement, and it is not a gap: the fused path accepted the contiguous, the transposed and the strided views this task produces, and refused only a three-dimensional input, which is a rank error rather than a layout the library declines, since nn.MultiheadAttention always hands it four dimensions. semantic_mismatch is unreachable: the scale is the framework default 1/sqrt(D) and there is no mask, so no row can be fully masked. multi_operator_required is unreachable: one attention op. This entry needs a second measurable category before it can meet the floor."
     },
     "how_to_read_the_mean": "The mean is diluted by the gap cases, and that is structural rather than a sign of a weak entry. Where a case's expected path is `library_composition`, the expert has nothing better to do than the naive -- both end up on the library's own non-fused path -- so the ratio is 1.0 by construction and what is left is measurement noise. Four of the eight hidden cases here are gaps and two more are probes that land on the composition path; the two perf cases are where the fused path is reachable, and they carry ratios of 3.29 and 3.97. So comparing this entry's 1.47 against kb_l3_43_b's 3.47 compares how many of each entry's cases are gaps, not how much better one expert is than the other. The measured mean moved between 1.47 and 1.51 across two runs of the same code on the same device, which is the reproducibility available here; both are above the threshold, so the decision is stable but the third digit is not."
+  },
+  "starter": {
+    "editable": [
+      {
+        "path": "starter/model_new.py",
+        "submit_as": "model_new.py",
+        "regions": [
+          "state",
+          "probe_and_dispatch",
+          "host_launch",
+          "custom_fallback",
+          "dispatch_trace"
+        ]
+      }
+    ],
+    "frozen": [
+      "PROMPT.md",
+      "problem.py",
+      "public_cases.json",
+      "semantics.json",
+      "starter/build.py",
+      "starter/cpp/abi_io.h",
+      "starter/cpp/build.sh",
+      "starter/cpp/runner.cc",
+      "task.json"
+    ],
+    "build": {
+      "command": "python musa_operator_eval/evaluator/run_task.py --task-dir musa_operator_eval/tasks/kb_l3_31_b --submission model_new.py --backend musa --precision fp16",
+      "note": "§5 step 8's order: the static audit runs before this build, so a rejected submission never spends a compile.",
+      "script": "starter/build.py"
+    },
+    "self_test": {
+      "command": "python musa_operator_eval/evaluator/run_task.py --task-dir musa_operator_eval/tasks/kb_l3_31_b --submission model_new.py --static-only",
+      "note": "Runs without a device: case overrides, golden cross-check and the source audit."
+    },
+    "abi": {
+      "inputs": "<generated-dir>/<case_id>/input/tensors.json plus one .bin per tensor",
+      "outputs": "<generated-dir>/<case_id>/golden/tensors.json plus one .bin per tensor",
+      "transport": "raw little-endian tensors plus a JSON manifest",
+      "submission": "a Python module defining ModelNew",
+      "runner": "musa_operator_eval/evaluator/run_task.py, which imports torch through the framework's evaluator",
+      "runner_imports_libtorch": true,
+      "deviation": "§4.6 asks the runner not to import libtorch, so that ATen cannot be reached from the graded process. This package does not meet that: the submission is a Python module whose forward is called in the evaluator's own process, which is where ATen lives. What enforces the tier boundary instead is the source audit -- the A tier's ban on the fused attention entry point is a check on the submission's text, not an isolation guarantee -- and the B tier's dispatch trace, which says which path earned the number. Recorded here rather than left implicit, because a reader comparing this ABI against §4.6 would otherwise have to infer it."
+    },
+    "link_whitelist": {
+      "source": "task.json:library_policy",
+      "allowed_libraries": [
+        "libmusa",
+        "libmudnn"
+      ],
+      "allowed_symbol_prefixes": [
+        "musa",
+        "mudnn"
+      ],
+      "checked_by": "musa_operator_eval/evaluator/link_whitelist.py"
+    },
+    "dispatch": {
+      "file": "model_new.py",
+      "region": "probe_and_dispatch",
+      "note": "§4.1 asks for the dispatch file. This tier's submission is one module, so the dispatch is a marked region of it rather than a file of its own: the agent fills `probe_and_dispatch` and submits the module as model_new.py. Library calls are confined to that region, `host_launch` and `custom_fallback`."
+    },
+    "cpp": {
+      "path": "starter/cpp",
+      "build": "starter/cpp/build.sh",
+      "editable": [
+        "starter/cpp/kernel.mu"
+      ],
+      "frozen": [
+        "starter/cpp/abi_io.h",
+        "starter/cpp/runner.cc",
+        "starter/cpp/build.sh"
+      ],
+      "entrypoint": "kernel_entry",
+      "abi": "the runner reads <input-dir>/tensors.json and its .bin files, calls kernel_entry, and writes <output-dir>/tensors.json and its .bin files",
+      "runner_imports_libtorch": false,
+      "links": "the MUSA runtime plus the contract's whitelist, applied through build.sh --extra-library; libtorch is not among them",
+      "command": "starter/cpp/build.sh --submission <dir with kernel.mu> --build-dir <dir> [--extra-library <name>]",
+      "regions": [
+        "probe_and_dispatch",
+        "custom_fallback",
+        "dispatch_trace",
+        "host_launch"
+      ]
+    }
+  },
+  "hyperparameters": {
+    "head_split": "D = C / H"
   }
 }

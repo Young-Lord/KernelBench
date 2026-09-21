@@ -22,7 +22,8 @@
         "C": 128,
         "H": 4
       },
-      "expected_path": "fused_library"
+      "expected_path": "fused_library",
+      "golden": "smoke_001/golden/tensors.json"
     },
     {
       "case_id": "smoke_002",
@@ -36,7 +37,8 @@
         "C": 256,
         "H": 8
       },
-      "expected_path": "fused_library"
+      "expected_path": "fused_library",
+      "golden": "smoke_002/golden/tensors.json"
     },
     {
       "case_id": "smoke_003",
@@ -50,7 +52,8 @@
         "C": 192,
         "H": 6
       },
-      "expected_path": "fused_library"
+      "expected_path": "fused_library",
+      "golden": "smoke_003/golden/tensors.json"
     }
   ]
 }

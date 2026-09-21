@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/task-contract-1.0.0.json",
   "title": "MUSA operator task contract (tasks/*/task.json)",
-  "description": "Guide §4.8: `tier` is an enum and the validator tightens or loosens the fields by its value. An A_kernel contract that carries a library policy is an error (that is a B-tier concept leaking into the tier that forbids libraries), and a B_library contract that does not define its library gap requirement is an error. The machine-readable form of the hand-written assertions in tests/test_task_packages.py.",
+  "description": "Guide \u00a74.8: `tier` is an enum and the validator tightens or loosens the fields by its value. An A_kernel contract that carries a library policy is an error (that is a B-tier concept leaking into the tier that forbids libraries), and a B_library contract that does not define its library gap requirement is an error. The machine-readable form of the hand-written assertions in tests/test_task_packages.py.",
   "$defs": {
     "gap_reason": {
       "enum": [
@@ -15,6 +15,30 @@
     "identifier": {
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "command_block": {
+      "description": "A command the inventory publishes, with the reason it is the command and not another.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "note"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 3
+        },
+        "note": {
+          "type": "string",
+          "minLength": 10
+        },
+        "script": {
+          "type": "string",
+          "description": "A package-relative script the command runs, when the command is a script rather than a tool invocation.",
+          "minLength": 3
+        }
+      }
     }
   },
   "type": "object",
@@ -35,7 +59,8 @@
     "prohibited",
     "submission",
     "attempt_budget",
-    "outputs"
+    "outputs",
+    "starter"
   ],
   "properties": {
     "schema_version": {
@@ -163,6 +188,38 @@
       "type": "string",
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.py:[A-Za-z_][A-Za-z0-9_]*$"
     },
+    "golden_oracle": {
+      "description": "Guide \u00a75 step 3. When a package ships a reference separate from problem.py, this names it, and generate_cases.py computes the golden from it instead of from the model. `returns` names the golden tensors in the order the oracle returns them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "entrypoint",
+        "returns"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 3
+        },
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "returns": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_]*$"
+          }
+        },
+        "note": {
+          "type": "string"
+        }
+      }
+    },
     "capability_reference": {
       "type": "string",
       "pattern": "^agent_reference/.+_capabilities\\.json$"
@@ -200,7 +257,7 @@
       "description": "The tolerance the case is graded at, when the task needs more room than the framework provides for its dtypes. `kernelbench.eval.resolve_tolerance` takes the larger of the framework's per-dtype value and `max_abs_error` here, so this block can loosen grading but never tighten it; `atol` and `rtol` are checked against the same floor by tools/validate_schemas.py. A task needs this lever when its own reference is the numerically unstable side, for instance a bfloat16 reference whose outputs sit at a magnitude where one step is larger than the framework's default."
     },
     "tensor_contract": {
-      "description": "Guide §4.1. The precision a task is graded at is part of the contract, not a CLI default.",
+      "description": "Guide \u00a74.1. The precision a task is graded at is part of the contract, not a CLI default.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -421,7 +478,7 @@
           "type": "string"
         },
         "gap_reason_coverage": {
-          "description": "Guide §4.3 asks for at least two gap-reason categories. A package that cannot reach two records which it reaches, which it does not, and why, so the shortfall is a decision rather than an oversight.",
+          "description": "Guide \u00a74.3 asks for at least two gap-reason categories. A package that cannot reach two records which it reaches, which it does not, and why, so the shortfall is a decision rather than an oversight.",
           "type": "object",
           "required": [
             "state",
@@ -461,11 +518,25 @@
         },
         "public_case_baseline": {
           "type": "object"
+        },
+        "measured_geometric_mean": {
+          "type": "number"
+        },
+        "measured_in": {
+          "type": "string"
+        },
+        "how_to_read_the_mean": {
+          "type": "string"
+        },
+        "also_answered": {
+          "type": "string"
         }
-      }
+      },
+      "description": "Guide \u00a74.4. The contract records the gate's outcome, and only its outcome: whether the task was admitted, at what threshold and in which environment. The per-case evidence -- each hidden case's naive/expert ratio, and where that record lives -- stays in `private/<task id>/`, because \u00a72 does not hand the agent the hidden set and a ratio table keyed by hidden case ids is a description of it.",
+      "additionalProperties": false
     },
     "library_policy": {
-      "description": "B-tier only. Guide §4.1: allowed libraries and symbol prefixes, the dispatch file, the required dispatch trace, and the library gap requirement.",
+      "description": "B-tier only. Guide \u00a74.1: allowed libraries and symbol prefixes, the dispatch file, the required dispatch trace, and the library gap requirement.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -508,7 +579,7 @@
         },
         "dispatch_file": {
           "type": "string",
-          "minLength": 1
+          "minLength": 3
         },
         "required_trace_fields": {
           "type": "array",
@@ -532,15 +603,273 @@
           "minimum": 3
         },
         "required_gap_reasons": {
-          "description": "Every reason must be one of Guide §4.3's four concepts, spelled exactly as in the family capability reference.",
+          "description": "Every reason must be one of Guide \u00a74.3's four concepts, spelled exactly as in the family capability reference.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
           "items": {
             "$ref": "#/$defs/gap_reason"
           }
+        },
+        "dispatch_file_note": {
+          "type": "string"
         }
       }
+    },
+    "starter": {
+      "description": "Guide \u00a74.6. The inventory that goes with the starter project: which files may be edited and where the marked regions sit, which files are frozen, and how the project is built and run. The evaluator reads `frozen` to decide whether a submission reached outside the scope it was given.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "editable",
+        "frozen",
+        "build",
+        "self_test",
+        "abi"
+      ],
+      "properties": {
+        "editable": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "submit_as",
+              "regions"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 3
+              },
+              "submit_as": {
+                "type": "string",
+                "minLength": 3
+              },
+              "regions": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "$ref": "#/$defs/identifier"
+                }
+              }
+            }
+          }
+        },
+        "frozen": {
+          "description": "Package-relative files a submission may not modify. Empty is not accepted: a package with nothing frozen has no boundary for the audit to draw.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "build": {
+          "$ref": "#/$defs/command_block"
+        },
+        "self_test": {
+          "$ref": "#/$defs/command_block"
+        },
+        "abi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inputs",
+            "outputs",
+            "transport",
+            "submission",
+            "runner_imports_libtorch"
+          ],
+          "properties": {
+            "inputs": {
+              "type": "string",
+              "minLength": 3
+            },
+            "outputs": {
+              "type": "string",
+              "minLength": 3
+            },
+            "transport": {
+              "type": "string",
+              "minLength": 3
+            },
+            "submission": {
+              "type": "string",
+              "minLength": 3
+            },
+            "runner": {
+              "type": "string",
+              "minLength": 3
+            },
+            "runner_imports_libtorch": {
+              "type": "boolean"
+            },
+            "deviation": {
+              "type": "string",
+              "minLength": 20
+            }
+          }
+        },
+        "link_whitelist": {
+          "description": "\u00a74.6's B-tier-only entry: the libraries the build may link, mirroring `library_policy`. A submission may not have a wider whitelist than its contract, so the two are required to agree.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "allowed_libraries",
+            "allowed_symbol_prefixes",
+            "checked_by"
+          ],
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 3
+            },
+            "allowed_libraries": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "allowed_symbol_prefixes": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "checked_by": {
+              "type": "string",
+              "minLength": 3
+            }
+          }
+        },
+        "dispatch": {
+          "description": "Guide \u00a74.1's B-tier-only dispatch-file field, expressed for a submission that is one module: the file it is submitted as, and the region of it the dispatch lives in.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "file",
+            "region",
+            "note"
+          ],
+          "properties": {
+            "file": {
+              "type": "string",
+              "minLength": 3
+            },
+            "region": {
+              "type": "string",
+              "minLength": 3
+            },
+            "note": {
+              "type": "string",
+              "minLength": 30
+            }
+          }
+        },
+        "cpp": {
+          "description": "Guide \u00a74.6's frozen ABI, realised as a compiled project: a runner that reads the input directory and writes the output directory with no libtorch, a build script that applies the contract's link whitelist, and one editable kernel. The Python module path and this one share the same tensor transport, so a golden is valid for both.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "build",
+            "editable",
+            "frozen",
+            "entrypoint",
+            "abi",
+            "runner_imports_libtorch",
+            "links",
+            "command",
+            "regions"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 3
+            },
+            "build": {
+              "type": "string",
+              "minLength": 3
+            },
+            "editable": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "frozen": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "entrypoint": {
+              "type": "string",
+              "minLength": 3
+            },
+            "abi": {
+              "type": "string",
+              "minLength": 10
+            },
+            "runner_imports_libtorch": {
+              "const": false
+            },
+            "links": {
+              "type": "string",
+              "minLength": 10
+            },
+            "command": {
+              "type": "string",
+              "minLength": 10
+            },
+            "regions": {
+              "description": "The regions the compiled source marks with `// --- BEGIN <name> ---` / `--- END <name> ---`. Guide \u00a74.6 confines a library call to the dispatch file and the Host launch file; in a single-file compiled submission the region is what distinguishes them, and the evaluator rejects a call outside the permitted ones.",
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 3
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "abi": {
+                "properties": {
+                  "runner_imports_libtorch": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "abi": {
+                "required": [
+                  "deviation"
+                ]
+              }
+            },
+            "description": "A runner that imports libtorch deviates from \u00a74.6, which is allowed here and has to be stated where a reader comparing the ABI against the guide will find it."
+          }
+        }
+      ]
     }
   },
   "allOf": [
@@ -621,6 +950,108 @@
             ]
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tier": {
+            "const": "B_library"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "starter"
+        ],
+        "properties": {
+          "starter": {
+            "required": [
+              "link_whitelist"
+            ]
+          }
+        }
+      },
+      "description": "\u00a74.6 gives the link whitelist to the B tier, and a B-tier build has to say what it may link."
+    },
+    {
+      "if": {
+        "properties": {
+          "tier": {
+            "const": "A_kernel"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "starter": {
+            "not": {
+              "required": [
+                "link_whitelist"
+              ]
+            }
+          }
+        },
+        "description": "An A-tier package has no whitelist: the tier forbids library compute outright."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tier": {
+            "const": "B_library"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "starter": {
+            "required": [
+              "dispatch"
+            ]
+          }
+        },
+        "description": "\u00a74.1 puts the dispatch file in the B-tier contract; a B-tier package names where its dispatch lives."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tier": {
+            "const": "A_kernel"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "starter": {
+            "not": {
+              "required": [
+                "dispatch"
+              ]
+            }
+          }
+        },
+        "description": "The A tier has no dispatch to declare."
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "tier": {
+            "const": "B_library"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "starter": {
+            "required": [
+              "cpp"
+            ]
+          }
+        },
+        "description": "\u00a74.6's link whitelist only means something for a build product; a B-tier package that declares one also ships the compiled path it applies to."
       }
     }
   ]

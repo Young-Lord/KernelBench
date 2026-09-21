@@ -2,114 +2,304 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/case-manifest-1.0.0.json",
   "title": "MUSA evaluation case manifest (tasks/*/public_cases.json and the private manifest)",
-  "description": "Guide §4.3. One format for both the public and the hidden list; only the content and the visibility differ. The tier decides which dispatch fields a case may carry: an A_kernel case that names an expected path or a library gap is a leak (those are B-tier concepts), and a B_library case without an expected path is not gradable. A public B manifest must not carry a gap, because that would hand the submission the configuration the task exists to make it discover.",
+  "description": "Guide \u00a74.3. One format for both the public and the hidden list; only the content and the visibility differ. The tier decides which dispatch fields a case may carry: an A_kernel case that names an expected path or a library gap is a leak (those are B-tier concepts), and a B_library case without an expected path is not gradable. A public B manifest must not carry a gap, because that would hand the submission the configuration the task exists to make it discover.",
   "$defs": {
-    "path": {"enum": ["fused_library", "library_composition", "custom_fallback"]},
+    "path": {
+      "enum": [
+        "fused_library",
+        "library_composition",
+        "custom_fallback"
+      ]
+    },
     "gap_reason": {
-      "enum": ["unsupported_shape", "semantic_mismatch", "layout_mismatch", "multi_operator_required"]
+      "enum": [
+        "unsupported_shape",
+        "semantic_mismatch",
+        "layout_mismatch",
+        "multi_operator_required"
+      ]
     },
     "shape": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": {"type": "integer", "minimum": 1}
-    },
-    "tolerance": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["atol", "rtol"],
-      "properties": {
-        "atol": {"type": "number", "minimum": 0},
-        "rtol": {"type": "number", "minimum": 0}
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1
       }
     },
     "performance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["warmup", "measurements", "rounds", "statistic"],
+      "required": [
+        "warmup",
+        "measurements",
+        "rounds",
+        "statistic"
+      ],
       "properties": {
-        "warmup": {"type": "integer", "minimum": 1},
-        "measurements": {"type": "integer", "minimum": 1},
-        "rounds": {"type": "integer", "minimum": 1},
-        "statistic": {"enum": ["median", "p50"]}
+        "warmup": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "measurements": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "rounds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "statistic": {
+          "enum": [
+            "median",
+            "p50"
+          ]
+        }
       }
     },
     "case": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["case_id", "tag", "seed", "dtype", "shape"],
+      "required": [
+        "case_id",
+        "tag",
+        "seed",
+        "dtype",
+        "shape"
+      ],
       "properties": {
-        "case_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"},
-        "tag": {"enum": ["smoke", "correctness", "boundary", "non_aligned", "extreme", "perf", "generalization"]},
-        "seed": {"type": "integer", "minimum": 0},
-        "dtype": {"enum": ["float16", "bfloat16", "float32"]},
-        "shape": {"$ref": "#/$defs/shape"},
-        "attributes": {"type": "object"},
-        "distribution": {"enum": ["normal", "uniform", "adversarial_extremes"]},
-        "tolerance": {"$ref": "#/$defs/tolerance"},
-        "golden": {"type": "string", "minLength": 1},
-        "performance": {"$ref": "#/$defs/performance"},
-        "expected_path": {"$ref": "#/$defs/path"},
+        "case_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9_]*$"
+        },
+        "tag": {
+          "enum": [
+            "smoke",
+            "correctness",
+            "boundary",
+            "non_aligned",
+            "extreme",
+            "perf",
+            "generalization"
+          ]
+        },
+        "seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dtype": {
+          "enum": [
+            "float16",
+            "bfloat16",
+            "float32"
+          ]
+        },
+        "shape": {
+          "$ref": "#/$defs/shape"
+        },
+        "attributes": {
+          "type": "object"
+        },
+        "distribution": {
+          "enum": [
+            "normal",
+            "uniform",
+            "adversarial_extremes"
+          ]
+        },
+        "golden": {
+          "type": "string",
+          "minLength": 1
+        },
+        "performance": {
+          "$ref": "#/$defs/performance"
+        },
+        "expected_path": {
+          "$ref": "#/$defs/path"
+        },
         "library_gap": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["reason", "expected_path", "evidence"],
+          "required": [
+            "reason",
+            "expected_path",
+            "evidence"
+          ],
           "properties": {
-            "reason": {"$ref": "#/$defs/gap_reason"},
-            "expected_path": {"enum": ["library_composition", "custom_fallback"]},
-            "evidence": {"type": "string", "minLength": 10}
+            "reason": {
+              "$ref": "#/$defs/gap_reason"
+            },
+            "expected_path": {
+              "enum": [
+                "library_composition",
+                "custom_fallback"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "minLength": 10
+            }
           }
         }
       },
       "allOf": [
         {
-          "if": {"required": ["tag"], "properties": {"tag": {"const": "perf"}}},
-          "then": {"required": ["performance"]}
+          "if": {
+            "required": [
+              "tag"
+            ],
+            "properties": {
+              "tag": {
+                "const": "perf"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "performance"
+            ]
+          }
         }
       ]
     }
   },
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "task_id", "tier", "visibility", "case_generation", "cases"],
+  "required": [
+    "schema_version",
+    "task_id",
+    "tier",
+    "visibility",
+    "case_generation",
+    "cases"
+  ],
   "properties": {
-    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
-    "task_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_]*$"},
-    "tier": {"enum": ["A_kernel", "B_library"]},
-    "visibility": {"enum": ["public", "private"]},
-    "set_entry": {"type": "string", "minLength": 2},
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_]*$"
+    },
+    "tier": {
+      "enum": [
+        "A_kernel",
+        "B_library"
+      ]
+    },
+    "visibility": {
+      "enum": [
+        "public",
+        "private"
+      ]
+    },
+    "set_entry": {
+      "type": "string",
+      "minLength": 2
+    },
     "case_generation": {
       "type": "object",
-      "required": ["tool", "deterministic"],
+      "required": [
+        "tool",
+        "deterministic"
+      ],
       "properties": {
-        "tool": {"type": "string", "minLength": 3},
-        "deterministic": {"const": true},
-        "outputs": {"type": "string"},
-        "note": {"type": "string"}
+        "tool": {
+          "type": "string",
+          "minLength": 3
+        },
+        "deterministic": {
+          "const": true
+        },
+        "outputs": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
       }
     },
-    "cases": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/case"}}
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/case"
+      }
+    }
   },
   "allOf": [
     {
-      "if": {"required": ["tier"], "properties": {"tier": {"const": "A_kernel"}}},
+      "if": {
+        "required": [
+          "tier"
+        ],
+        "properties": {
+          "tier": {
+            "const": "A_kernel"
+          }
+        }
+      },
       "then": {
         "properties": {
           "cases": {
             "items": {
-              "not": {"anyOf": [{"required": ["expected_path"]}, {"required": ["library_gap"]}]}
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "expected_path"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "library_gap"
+                    ]
+                  }
+                ]
+              }
             }
           }
         }
       }
     },
     {
-      "if": {"required": ["tier"], "properties": {"tier": {"const": "B_library"}}},
-      "then": {"properties": {"cases": {"items": {"required": ["expected_path"]}}}}
+      "if": {
+        "required": [
+          "tier"
+        ],
+        "properties": {
+          "tier": {
+            "const": "B_library"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "cases": {
+            "items": {
+              "required": [
+                "expected_path"
+              ]
+            }
+          }
+        }
+      }
     },
     {
       "if": {
-        "required": ["tier", "visibility"],
-        "properties": {"tier": {"const": "B_library"}, "visibility": {"const": "public"}}
+        "required": [
+          "tier",
+          "visibility"
+        ],
+        "properties": {
+          "tier": {
+            "const": "B_library"
+          },
+          "visibility": {
+            "const": "public"
+          }
+        }
       },
       "then": {
         "description": "A public B case is graded on the fused path; announcing a gap there tells the submission where the boundary is.",
@@ -117,8 +307,20 @@
           "cases": {
             "items": {
               "allOf": [
-                {"not": {"required": ["library_gap"]}},
-                {"properties": {"expected_path": {"const": "fused_library"}}}
+                {
+                  "not": {
+                    "required": [
+                      "library_gap"
+                    ]
+                  }
+                },
+                {
+                  "properties": {
+                    "expected_path": {
+                      "const": "fused_library"
+                    }
+                  }
+                }
               ]
             }
           }

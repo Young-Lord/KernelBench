@@ -5,10 +5,94 @@
   "note": "Identical to the A-tier package of this entry: §4.2 of the guide requires the two tiers of one family to share a semantic contract, or their goldens stop being interchangeable.",
   "input": "x of shape (B, C, H, W)",
   "reshape": "x is viewed as (B, C, H*W), permuted to (H*W, B, C), attended, then mapped back to (B, C, H, W)",
-  "attention": "self-attention over the H*W tokens with the framework's default 1/sqrt(D) scale and no mask",
+  "attention": {
+    "scale": "inverse_sqrt_d",
+    "accumulation_dtype": "float32",
+    "causal_alignment": "not_applicable",
+    "window": {
+      "left": "-1: this family applies no window, so every key is visible on the left",
+      "right": "-1: this family applies no window, so every key is visible on the right",
+      "unlimited_value": -1
+    },
+    "fully_masked_row": {
+      "output": "zeros",
+      "reachable": false,
+      "note": "Cannot occur here: with no explicit mask and no padding, every query row sees the whole key range, so the softmax denominator is at least one element. The convention is declared anyway, because §4.2 asks for it and because a reader cannot tell an unreachable case from an unconsidered one."
+    },
+    "softmax_max_shift": true,
+    "normalisation": "LayerNorm over the attention output plus the residual"
+  },
   "head_split": "D = C / num_heads. The problem defaults fix it at 32, and C is a case parameter, so the head dimension is what a case chooses",
   "norm": "LayerNorm over the channel axis, applied to the attention output plus the residual input",
   "residual": "the residual is added inside the norm, not before it",
-  "determinism": "no dropout, so the reference is deterministic",
-  "sequence_length": "S = H*W is a derived quantity; changing H or W changes it"
+  "determinism": {
+    "required": true,
+    "seed_source": "case_manifest"
+  },
+  "sequence_length": "S = H*W is a derived quantity; changing H or W changes it",
+  "tensors": [
+    {
+      "name": "x",
+      "role": "input",
+      "shape": [
+        "B",
+        "C",
+        "H",
+        "W"
+      ],
+      "dtypes": [
+        "bfloat16",
+        "float16",
+        "float32"
+      ],
+      "layout": "BCHW",
+      "stride": "contiguous"
+    },
+    {
+      "name": "output",
+      "role": "output",
+      "shape": [
+        "B",
+        "C",
+        "H",
+        "W"
+      ],
+      "dtypes": [
+        "bfloat16",
+        "float16",
+        "float32"
+      ],
+      "layout": "BCHW",
+      "stride": "contiguous"
+    }
+  ],
+  "dynamic_axes": {
+    "B": [
+      1,
+      8
+    ],
+    "C": [
+      64,
+      1024
+    ],
+    "H": [
+      1,
+      64
+    ],
+    "W": [
+      1,
+      97
+    ],
+    "channels": [
+      64,
+      1024
+    ]
+  },
+  "abi": {
+    "passing": "in_process_torch_tensors",
+    "layout": "contiguous",
+    "stream": "current_musa_stream",
+    "note": "runner is a ModelNew module evaluated in the same process as the reference"
+  },
+  "tier_dtypes_note": "The dtypes here are the family's, which is what §4.2's signature describes; which of them a given tier is graded at is §4.1's business and lives in task.json's tensor_contract.input_dtypes. The two tiers of this entry differ on that field alone."
 }

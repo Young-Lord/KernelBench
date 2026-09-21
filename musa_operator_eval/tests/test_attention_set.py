@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 REPO_TOP = ROOT.parent
 
-_spec = importlib.util.spec_from_file_location("collect_attention_set", ROOT / "tools" / "collect_attention_set.py")
+_spec = importlib.util.spec_from_file_location("collect_attention_set", ROOT / "evaluator" / "collect_attention_set.py")
 assert _spec is not None and _spec.loader is not None
 collector = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(collector)

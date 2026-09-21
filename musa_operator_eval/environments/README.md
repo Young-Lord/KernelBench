@@ -58,7 +58,7 @@ Two facts about it constrain what any task here can ask for:
 Capture it on the machine, which writes both projections:
 
 ```bash
-python musa_operator_eval/tools/collect_environment.py --output-dir <dir>
+python musa_operator_eval/evaluator/collect_environment.py --output-dir <dir>
 ```
 
 Then move `environment.public.json` here as `<snapshot_id>.public.json` and the

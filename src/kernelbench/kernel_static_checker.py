@@ -20,6 +20,7 @@ Usage:
     will return a tuple (valid, errors, warnings) 
 """
 
+import ast
 import re
 from typing import List, Tuple, Dict, Any, Optional, Callable, Union
 
@@ -49,29 +50,131 @@ def _strip_comments(code: str) -> str:
 # This allows them to pass tests without actually implementing the kernel.
 TRY_EXCEPT_PATTERNS = [r"\btry\s*:", r"\bexcept\s*:", r"\bexcept\s+\w+"]
 
+# --- Out-of-scope modification ---
+# Rationale: a task package is a boundary, and §4.6 records which side of it a
+# submission may touch. Rewriting the reference, the case list or the contract is
+# not solving the task; it is grading yourself. The reference is the more
+# interesting half of this, because the evaluator runs it in the same process as
+# the submission: rebinding `Model.forward` makes the answer and the thing it is
+# compared against the same object.
+#
+# The file half is matched by name rather than by path, because a submission is
+# handed a package-relative name in its prompt and may write either form. A write
+# to a file the package does not freeze is not a finding: the submission has to be
+# able to write its own artifacts.
+FROZEN_WRITE_TEMPLATES = (
+    r"open\s*\(\s*[\"']{path}[\"']\s*,\s*[\"'][^\"']*[wax+][^\"']*[\"']",
+    r"\.write_text\s*\(|\.write_bytes\s*\(|\btouch\s*\(|\.unlink\s*\(",
+    r"\bos\.remove\s*\(|\bos\.unlink\s*\(|\bos\.rename\s*\(|\bos\.replace\s*\(",
+    r"\bshutil\.copy\w*\s*\(|\bshutil\.move\s*\(",
+)
+
+# Rationale: the reference is the oracle. Rebinding it is the one bypass this
+# harness cannot see numerically -- the submission and the reference return the
+# same tensor because they are the same object.
+REFERENCE_REBIND_PATTERNS = (
+    r"\bModel\.forward\s*=",
+    r"\bModel\.__call__\s*=",
+    r"\bsetattr\s*\(\s*Model\s*,",
+)
+
+
+def check_out_of_scope_modification(
+    code: str,
+    frozen_paths: Optional[List[str]] = None,
+) -> Tuple[bool, str]:
+    """Reject a submission that modifies what §4.6 freezes.
+
+    Args:
+        code: submission source
+        frozen_paths: package-relative files the contract freezes. Empty means
+            nothing was declared out of scope, and this check then has no
+            boundary to draw rather than a boundary everything crosses.
+
+    Returns:
+        (has_issue, message)
+    """
+    source = _strip_comments(code)
+
+    for name in frozen_paths or []:
+        if not name:
+            continue
+        basename = re.escape(name.rsplit("/", 1)[-1])
+        mentioned = re.search(rf"[\"'][^\"']*{basename}[\"']", source)
+        if not mentioned:
+            continue
+        for template in FROZEN_WRITE_TEMPLATES:
+            if re.search(template.format(path=f"[^\"']*{basename}"), source):
+                return (True, f"Modifies frozen file {name} (out-of-scope modification)")
+
+    for pattern in REFERENCE_REBIND_PATTERNS:
+        if re.search(pattern, source):
+            return (True, "Rebinds the reference model (out-of-scope modification)")
+
+    return (False, "")
+
+
 # --- Pass Statement / Inheritance Bypass ---
 # Rationale: Model inherits from reference class and uses 'pass' to do nothing,
 # effectively just calling the parent implementation.
-PASS_PATTERN = r"\bpass\b"
+#
+# Read as a statement, because that is what the rationale above describes: a body
+# that does nothing. Matching the word instead rejects prose — "one profiling pass
+# per case", "passing a mask explicitly" — and every answer in this repository
+# that explains itself at all. The AST is the authority when the source parses;
+# the regex below is the fallback for source that does not, where a `pass` alone
+# on its line is the closest a textual match gets to the same reading. Comments
+# are stripped before the fallback, so a mention in a comment is not a match.
+PASS_STATEMENT_PATTERN = r"^[ \t]*pass[ \t]*(?:#.*)?$"
 
-def check_code_bypass(code: str) -> Tuple[bool, str]:
+
+def contains_pass_statement(code: str) -> bool:
+    """True when the source holds a `pass` statement, not merely the word.
+
+    Args:
+        code: submission source, unstripped — the AST needs strings intact
+    """
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, ValueError):
+        return re.search(PASS_STATEMENT_PATTERN, _strip_comments(code), re.MULTILINE) is not None
+    return any(isinstance(node, ast.Pass) for node in ast.walk(tree))
+
+def check_code_bypass(
+    code: str,
+    allow_exception_probes: bool = False,
+) -> Tuple[bool, str]:
     """
     Check for code bypass patterns (strictly prohibited).
     1. Try-Except Fallback: Models wrap incomplete CUDA in exception handlers
        that fall back to PyTorch when custom code fails.
     2. Pass Statement: Models inherit from reference and use 'pass' to do nothing,
-       effectively calling parent implementation.
-        Uses word boundary for 'pass' to avoid matching 'passed', 'bypass', etc.
+       effectively calling the parent implementation.
+
+    `allow_exception_probes` turns off the try-except half only, for a tier whose
+    premise is dispatching to a library. A library reports "this shape, dtype or
+    attribute combination is not supported" by raising, so probing it means
+    catching that exception; the B tier requires exactly that probe and forbids
+    keying dispatch on a version string instead. The `pass` half stays on in
+    every tier, because inheriting the reference and doing nothing is a bypass
+    whatever the tier. `validate_library_kernel_static` is the only caller that
+    sets it.
+
+    Args:
+        code: submission source
+        allow_exception_probes: permit exception handlers used to choose a path
     """
+    source = code
     code = _strip_comments(code)
     
     # Check for try-except fallback
-    for pattern in TRY_EXCEPT_PATTERNS:
-        if re.search(pattern, code):
-            return (True, "Contains try-except block (potential fallback bypass)")
+    if not allow_exception_probes:
+        for pattern in TRY_EXCEPT_PATTERNS:
+            if re.search(pattern, code):
+                return (True, "Contains try-except block (potential fallback bypass)")
     
     # Check for pass statement
-    if re.search(PASS_PATTERN, code):
+    if contains_pass_statement(source):
         return (True, "Contains 'pass' statement (inheritance bypass)")
     
     return (False, "")
@@ -639,6 +742,18 @@ LIBRARY_PLUMBING_ROOTS = {
     "torch",
 }
 
+# The C face of the plumbing idea. A compiled extension links the C runtime and
+# the toolchain, and on this stack the torch libraries, and none of that is a
+# library choice the task is asking about. Kept separate from
+# LIBRARY_PLUMBING_ROOTS because the two lists answer the same question at
+# different layers: one names Python modules, this one names linker sonames after
+# the `lib` prefix and the version suffix are stripped.
+LINK_PLUMBING_ROOTS = {
+    "c", "m", "pthread", "dl", "rt", "gcc_s", "stdc++", "gomp", "numa",
+    "ld-linux", "ld-linux-x86-64", "ld-musl",
+    "torch", "torch_cpu", "torch_python", "c10", "c10_cuda", "c10_musa",
+}
+
 IMPORT_PATTERNS = [
     r"^\s*import\s+([A-Za-z_][\w.]*)",
     r"^\s*from\s+([A-Za-z_][\w.]*)\s+import",
@@ -662,17 +777,64 @@ VERSION_DISPATCH_PATTERNS = [
 ]
 
 
+def normalize_library_name(library: str) -> str:
+    """Reduce a linker name to its importable root.
+
+    `libmudnn.so.2` is the `mudnn` library and `libmusa.so` is `musa`, so a
+    contract can name either the linker library or the Python module and mean the
+    same thing. Version digits are dropped from the soname: `libc.so.6` names the
+    C runtime, not a family called "6".
+    """
+    stem = re.split(r"[/\\]", library)[-1]
+    stem = stem.split(".")[0]
+    if stem.lower().startswith("lib") and len(stem) > 3:
+        stem = stem[3:]
+    return stem.lower()
+
+
 def _allowed_library_roots(allowed_libraries: Optional[List[str]]) -> set:
     """Normalize `allowed_libraries` to import-root names.
 
-    `libmudnn` is accepted as the import name `mudnn`, so a task contract can
-    name either the linker library or the Python module.
+    `libmudnn`, `mudnn` and `libmudnn.so.2` all name one library, so a contract
+    may write any of them and mean the same thing. The rule is the same one
+    `normalize_library_name` applies to a library a build product links, which is
+    what keeps the source scan and the link check agreeing about a whitelist.
     """
-    roots = set()
-    for library in allowed_libraries or []:
-        normalized = library[3:] if library.lower().startswith("lib") else library
-        roots.add(normalized.lower())
-    return roots
+    return {normalize_library_name(library) for library in allowed_libraries or []}
+
+
+def check_linked_libraries(
+    libraries: Optional[List[str]] = None,
+    allowed_libraries: Optional[List[str]] = None,
+    allowed_symbol_prefixes: Optional[List[str]] = None,
+) -> Tuple[bool, str]:
+    """Check the libraries a build product actually links against.
+
+    This is the same rule `check_library_whitelist` applies to imports, read off
+    the ELF instead of off the source. The two are not redundant: a source scan
+    sees `import mudnn` and `cdll.LoadLibrary`, while the dynamic section records
+    what the linker resolved, including a dependency pulled in by a library the
+    submission imported legally.
+
+    Args:
+        libraries: sonames, as the ELF records them (`libmudnn.so.2`)
+        allowed_libraries: the task contract's `allowed_libraries`
+        allowed_symbol_prefixes: the task contract's `allowed_symbol_prefixes`
+
+    Returns:
+        (has_issue, message)
+    """
+    allowed_roots = _allowed_library_roots(allowed_libraries)
+    prefixes = [prefix.lower() for prefix in allowed_symbol_prefixes or []]
+
+    for library in libraries or []:
+        root = normalize_library_name(library)
+        if root in LINK_PLUMBING_ROOTS or root in allowed_roots:
+            continue
+        if any(prefix in root for prefix in prefixes):
+            continue
+        return (True, f"Links non-whitelisted shared library: {library}")
+    return (False, "")
 
 
 def check_library_whitelist(
@@ -774,6 +936,7 @@ def check_dispatch_trace_emission(
 CHECK_FUNCTIONS: Dict[str, Union[Callable[[str], Tuple[bool, str]], Callable[[str, str], Tuple[bool, str]]]] = {
     # Bypass checks (strict)
     "code_bypass": check_code_bypass,
+    "out_of_scope_modification": check_out_of_scope_modification,
     "pytorch_wrap": check_pytorch_wrap,
     "timing_event_patch": check_timing_event_patch,  # clearly malicious
     
@@ -811,10 +974,24 @@ CHECK_FUNCTIONS: Dict[str, Union[Callable[[str], Tuple[bool, str]], Callable[[st
 # its kernel scope under `kernel_scope` for a reader rather than for this check.
 A_TIER_FORBIDDEN_CHECKS = [
     "attention_entry_point",
+    "out_of_scope_modification",
 ]
 
 # Checks that require additional parameters beyond just code
 PRECISION_DEPENDENT_CHECKS = {"precision_downgrade"}
+
+# Checks that need to know something about the task, not only the source text.
+# Each is called with the subset of `validate_kernel_static`'s `context` that it
+# names, so a check listed here keeps its own default when the caller passes no
+# context — which is what keeps the upstream call shape unchanged. Add a check
+# here rather than a second copy of it under another name: a duplicate would
+# report the same finding twice for the tier that keeps it strict.
+CONTEXT_DEPENDENT_CHECKS: Dict[str, Tuple[str, ...]] = {
+    # The B tier probes library capability by calling it, and a library reports
+    # "unsupported" by raising.
+    "code_bypass": ("allow_exception_probes",),
+    "out_of_scope_modification": ("frozen_paths",),
+}
 
 # Here are some presets for you to use
 # You are welcome to adapt them to your settings
@@ -860,6 +1037,7 @@ def validate_kernel_static(
     precision: str = "fp16",
     forbidden: Optional[List[str]] = None,
     warnings: Optional[List[str]] = None,
+    context: Optional[Dict[str, Any]] = None,
 ) -> Tuple[bool, List[str], List[str]]:
     """
     Validate kernel code through statically inspecting the code
@@ -872,6 +1050,9 @@ def validate_kernel_static(
         precision: "fp16", "fp32", or "bf16" (for future precision checks)
         forbidden: Check categories that cause errors (default: STRICT_CHECKS)
         warnings: Check categories that cause warnings (default: WARNING_CHECKS)
+        context: Task facts read by the checks in CONTEXT_DEPENDENT_CHECKS. Each
+            check sees only the keys it declares, so passing an empty mapping is
+            the same as passing none.
         
     Returns:
         (valid, errors, warnings)
@@ -882,6 +1063,7 @@ def validate_kernel_static(
     # Copy defaults to avoid mutating global lists
     forbidden_checks = list(forbidden) if forbidden is not None else list(STRICT_CHECKS)
     warning_checks = list(warnings) if warnings is not None else list(WARNING_CHECKS)
+    context = context or {}
     
     # Add backend implementation check if specified
     if backend in BACKEND_IMPL_CHECK:
@@ -900,6 +1082,9 @@ def validate_kernel_static(
         # Handle precision-dependent checks
         if check_name in PRECISION_DEPENDENT_CHECKS:
             has_issue, msg = CHECK_FUNCTIONS[check_name](code, precision)
+        elif check_name in CONTEXT_DEPENDENT_CHECKS:
+            keys = CONTEXT_DEPENDENT_CHECKS[check_name]
+            has_issue, msg = CHECK_FUNCTIONS[check_name](code, **{key: context[key] for key in keys if key in context})
         else:
             has_issue, msg = CHECK_FUNCTIONS[check_name](code)
         
@@ -918,6 +1103,7 @@ def validate_library_kernel_static(
     policy: dict,
     backend: str = "musa",
     precision: str = "fp16",
+    frozen_paths: Optional[List[str]] = None,
     forbidden: Optional[List[str]] = None,
     warnings: Optional[List[str]] = None,
 ) -> Tuple[bool, List[str], List[str]]:
@@ -929,6 +1115,12 @@ def validate_library_kernel_static(
 
     - calling library compute is the task, so `torch_computation_ops` and
       `pytorch_wrap` stay warnings instead of becoming errors;
+    - an exception handler is how a library reports "unsupported", and §4.5
+      makes that probe the required way to choose a path, so `code_bypass` runs
+      with `allow_exception_probes` set and its try-except half is off. Its
+      `pass` half and every other strict check stay on: a submission that
+      inherits the reference and does nothing is still a bypass, and one that
+      calls a library outside the whitelist is still an error;
     - the backend implementation check only runs when the submission actually
       defines a device kernel, since the fused and composition paths need none;
     - three B-tier rules become errors: every imported library must be
@@ -942,6 +1134,7 @@ def validate_library_kernel_static(
             `required_trace_fields`.
         backend: backend name for the optional implementation check
         precision: forwarded to the precision-dependent checks
+        frozen_paths: §4.6's frozen file list, for the out-of-scope check
         forbidden: override the strict check set
         warnings: override the warning check set
 
@@ -962,10 +1155,12 @@ def validate_library_kernel_static(
         precision=precision,
         forbidden=forbidden,
         warnings=warnings,
+        context={"allow_exception_probes": True, "frozen_paths": frozen_paths},
     )
 
     for has_issue, message in (
         check_library_whitelist(code, allowed_libraries, allowed_symbol_prefixes),
+        check_out_of_scope_modification(code, frozen_paths),
         check_version_string_dispatch(code),
         check_dispatch_trace_emission(code, required_trace_fields, trace_env_var, case_id_env_var),
     ):
@@ -1025,6 +1220,7 @@ def static_audit_kernel(
     library_policy: Optional[dict] = None,
     backend: str = "cuda",
     precision: str = "fp16",
+    frozen_paths: Optional[List[str]] = None,
     forbidden: Optional[List[str]] = None,
     warnings: Optional[List[str]] = None,
 ) -> Tuple[bool, List[str], List[str]]:
@@ -1039,6 +1235,7 @@ def static_audit_kernel(
         library_policy: required for the B tier
         backend: backend name, used by the A-tier implementation check
         precision: "fp16", "fp32" or "bf16", for the precision-dependent checks
+        frozen_paths: §4.6's frozen file list, for the out-of-scope check
         forbidden / warnings: forwarded check-set overrides
 
     Returns:
@@ -1052,6 +1249,7 @@ def static_audit_kernel(
             library_policy,
             backend=backend,
             precision=precision,
+            frozen_paths=frozen_paths,
             forbidden=forbidden,
             warnings=warnings,
         )
@@ -1071,6 +1269,7 @@ def static_audit_kernel(
         code,
         backend=backend,
         precision=precision,
+        context={"frozen_paths": frozen_paths} if frozen_paths else None,
         forbidden=forbidden,
         warnings=warnings,
     )

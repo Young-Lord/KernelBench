@@ -38,6 +38,16 @@
       "bfloat16"
     ],
     "accumulation_dtype": "float32",
+    "layouts": [
+      "BSC"
+    ],
+    "dynamic_axes": [
+      "B",
+      "C",
+      "H",
+      "S",
+      "S_max"
+    ],
     "note": "float16 and bfloat16 only. On the target environment the fused attention path does not answer float32, so a float32 run would silently grade the composition path and call it a dispatch result."
   },
   "prohibited": [
@@ -98,21 +108,9 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 2.26657050258605,
+    "measured_geometric_mean": 2.1896367888065007,
     "threshold": 1.3,
-    "ratios": {
-      "hidden_gap_001": 1.2876376983539473,
-      "hidden_gap_002": 1.5190828159273206,
-      "hidden_gap_003": 1.56559874060757,
-      "hidden_gap_004": 1.5015217481886844,
-      "hidden_perf_001": 5.349780015231601,
-      "hidden_perf_002": 6.463887523713883,
-      "hidden_probe_001": 2.15626524444383,
-      "hidden_probe_002": 2.031583786071486
-    },
-    "measured_over": "the private case manifest, which is the set the gate is defined over",
     "measured_in": "musa-5f9d7b9dd1233a68",
-    "baseline": "musa_operator_eval/private/mingpt_block_b_v0/baseline.hidden.json",
     "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",
     "dispatch_note": "two dispatchable segments rather than one: the causal attention core, and the 4C-expansion MLP projections",
     "gap_reason_coverage": {
@@ -128,5 +126,94 @@
       "basis": "§4.3 asks a task's hidden gap set to cover at least two reason categories; this task reaches one. unsupported_shape: head_dim is n_embd / n_head rather than a free parameter, and the fused attention path's head-dimension window on the measured build ends at 128, so 192 and 256 leave the flash path — measured, and independent of seq_len and dtype. multi_operator_required was declared here before it was checked, and it is not a gap. The fact behind it is real and is the same one dispatch_note records: the block is LayerNorm, attention, residual, LayerNorm, MLP, residual, and the fused attention call covers only the core, so both LayerNorms, the 4C MLP projections, the GELU and the residuals have to be composed around it. That holds for every case in the block rather than for a subset of them, so it names no configuration a submission could be graded on. It cannot be given to a hidden case either: the case schema requires a gap's expected path to be library_composition or custom_fallback, so a case whose attention core the fused kernel does serve is expected on fused_library and is not a gap, while a case the fused kernel declines is already the unsupported_shape gap — the two labels can never disagree, which is what makes it not a category. semantic_mismatch is unreachable because the scale is hard-coded to 1/sqrt(head_dim) (the only value the fused path accepts), the mask is plain top-left causal so every query row sees j <= i and none is fully masked, and the block's attn_pdrop is 0.0, so there is no dropout semantics for the two paths to disagree about. layout_mismatch is unreachable because the attention layout is contiguous BHSD, which the measurement showed still dispatches fused. Either a second measured category has to be found on the device or this entry needs a wider contract before it can meet the floor."
     },
     "also_answered": "the two performance cases run to sequence lengths of 2048 and 4096, far past the 512 the head-dimension probe covered, and both dispatch fused. That closes the open question of whether sequence length eventually moves the route; on this build it does not."
+  },
+  "starter": {
+    "editable": [
+      {
+        "path": "starter/model_new.py",
+        "submit_as": "model_new.py",
+        "regions": [
+          "state",
+          "probe_and_dispatch",
+          "host_launch",
+          "custom_fallback",
+          "dispatch_trace"
+        ]
+      }
+    ],
+    "frozen": [
+      "PROMPT.md",
+      "problem.py",
+      "public_cases.json",
+      "semantics.json",
+      "starter/build.py",
+      "starter/cpp/abi_io.h",
+      "starter/cpp/build.sh",
+      "starter/cpp/runner.cc",
+      "task.json"
+    ],
+    "build": {
+      "command": "python musa_operator_eval/evaluator/run_task.py --task-dir musa_operator_eval/tasks/kb_l3_44_b --submission model_new.py --backend musa --precision fp16",
+      "note": "§5 step 8's order: the static audit runs before this build, so a rejected submission never spends a compile.",
+      "script": "starter/build.py"
+    },
+    "self_test": {
+      "command": "python musa_operator_eval/evaluator/run_task.py --task-dir musa_operator_eval/tasks/kb_l3_44_b --submission model_new.py --static-only",
+      "note": "Runs without a device: case overrides, golden cross-check and the source audit."
+    },
+    "abi": {
+      "inputs": "<generated-dir>/<case_id>/input/tensors.json plus one .bin per tensor",
+      "outputs": "<generated-dir>/<case_id>/golden/tensors.json plus one .bin per tensor",
+      "transport": "raw little-endian tensors plus a JSON manifest",
+      "submission": "a Python module defining ModelNew",
+      "runner": "musa_operator_eval/evaluator/run_task.py, which imports torch through the framework's evaluator",
+      "runner_imports_libtorch": true,
+      "deviation": "§4.6 asks the runner not to import libtorch, so that ATen cannot be reached from the graded process. This package does not meet that: the submission is a Python module whose forward is called in the evaluator's own process, which is where ATen lives. What enforces the tier boundary instead is the source audit -- the A tier's ban on the fused attention entry point is a check on the submission's text, not an isolation guarantee -- and the B tier's dispatch trace, which says which path earned the number. Recorded here rather than left implicit, because a reader comparing this ABI against §4.6 would otherwise have to infer it."
+    },
+    "link_whitelist": {
+      "source": "task.json:library_policy",
+      "allowed_libraries": [
+        "libmusa",
+        "libmudnn"
+      ],
+      "allowed_symbol_prefixes": [
+        "musa",
+        "mudnn"
+      ],
+      "checked_by": "musa_operator_eval/evaluator/link_whitelist.py"
+    },
+    "dispatch": {
+      "file": "model_new.py",
+      "region": "probe_and_dispatch",
+      "note": "§4.1 asks for the dispatch file. This tier's submission is one module, so the dispatch is a marked region of it rather than a file of its own: the agent fills `probe_and_dispatch` and submits the module as model_new.py. Library calls are confined to that region, `host_launch` and `custom_fallback`."
+    },
+    "cpp": {
+      "path": "starter/cpp",
+      "build": "starter/cpp/build.sh",
+      "editable": [
+        "starter/cpp/kernel.mu"
+      ],
+      "frozen": [
+        "starter/cpp/abi_io.h",
+        "starter/cpp/runner.cc",
+        "starter/cpp/build.sh"
+      ],
+      "entrypoint": "kernel_entry",
+      "abi": "the runner reads <input-dir>/tensors.json and its .bin files, calls kernel_entry, and writes <output-dir>/tensors.json and its .bin files",
+      "runner_imports_libtorch": false,
+      "links": "the MUSA runtime plus the contract's whitelist, applied through build.sh --extra-library; libtorch is not among them",
+      "command": "starter/cpp/build.sh --submission <dir with kernel.mu> --build-dir <dir> [--extra-library <name>]",
+      "regions": [
+        "probe_and_dispatch",
+        "custom_fallback",
+        "dispatch_trace",
+        "host_launch"
+      ]
+    }
+  },
+  "hyperparameters": {
+    "causal_alignment": "top_left",
+    "scale": "1/sqrt(D)",
+    "dropout": "both rates 0 in every graded case"
   }
 }

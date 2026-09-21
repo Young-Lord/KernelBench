@@ -11,13 +11,14 @@ Run with:
 """
 
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
-_spec = importlib.util.spec_from_file_location("record_admission", ROOT / "tools" / "record_admission.py")
+_spec = importlib.util.spec_from_file_location("record_admission", ROOT / "evaluator" / "record_admission.py")
 assert _spec is not None and _spec.loader is not None
 recorder = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(recorder)
@@ -142,6 +143,26 @@ class AuditTests(unittest.TestCase):
     def test_a_threshold_that_disagrees_with_the_baseline_is_refused(self):
         problems, _ = recorder.audit(baseline(), admission(threshold=1.0), task())
         self.assertTrue(any("the baseline declares" in problem for problem in problems), problems)
+
+    def test_the_contract_block_carries_no_hidden_case_id(self):
+        """§2 hands the agent the contract, so the hidden set stays out of it.
+
+        A ratio table keyed by hidden case ids says which configuration is the gap
+        and what the fused path is worth when it applies. That is the finding the
+        task exists to make a submission discover, so it belongs in the private
+        record, and the contract keeps only the gate's outcome.
+        """
+        problems, measurements = recorder.audit(baseline(), admission(), task())
+        self.assertEqual(problems, [])
+        contract_block, evidence = recorder.admission_blocks(
+            measurements, baseline(), admission(), Path("private/example/admission.json")
+        )
+        self.assertNotIn("ratios", contract_block)
+        self.assertNotIn("baseline", contract_block)
+        for value in contract_block.values():
+            self.assertNotIn("hidden_", json.dumps(value, default=str))
+        self.assertEqual(sorted(evidence["ratios"]), sorted(measurements["ratios"]))
+        self.assertEqual(sorted(contract_block), sorted({"status", "decision", "measured_geometric_mean", "threshold", "measured_in"}))
 
     def test_the_geometric_mean_is_a_mean_of_ratios_not_of_latencies(self):
         """A long case and a short case have to weigh the same, which is the point."""

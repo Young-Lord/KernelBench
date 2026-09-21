@@ -8,8 +8,76 @@
   "patch_embed": "4x4 convolution with stride 4, then LayerNorm",
   "stages": "4 stages with patch merging between them; dim doubles per stage while the resolution halves",
   "window": "7x7 windows, with cyclic shift on alternating blocks and a -100 additive attention mask for the shifted ones",
-  "attention": "cosine similarity between L2-normalised q and k, scaled by a clamped learnable logit scale",
+  "attention": {
+    "scale": "learned_parameter",
+    "accumulation_dtype": "float32",
+    "causal_alignment": "not_applicable",
+    "window": {
+      "left": "window_size[1] - 1 in each window, split along the height and width axes",
+      "right": "window_size[1] - 1 in each window, split along the height and width axes",
+      "unlimited_value": -1
+    },
+    "fully_masked_row": {
+      "output": "zeros",
+      "reachable": false,
+      "note": "Cannot occur: the image is partitioned into non-overlapping windows and every token of a window attends to every other token of the same window, so no row is empty."
+    },
+    "softmax_max_shift": true,
+    "bias": "a learned relative-position bias table, indexed by the (h, w) offset inside the window",
+    "scale_note": "the score is multiplied by a learned logit scale rather than by 1/sqrt(D); it is initialised so that the product starts near ten, which is what makes its value a fact about the weights rather than about the shape"
+  },
   "bias": "a continuous relative position bias produced by a small MLP over the relative coordinate table, then 16*sigmoid",
-  "determinism": "dropout and stochastic depth are at 0 in the problem defaults",
-  "image_size": "pinned at 224. The reference builds its inputs from the module-level image_size but constructs Model() with no arguments, so the constructor's own default of 224 is what the model is built at; the two agree at 224 and at nothing else. Only window_size 7 divides every stage resolution anyway, since they are 56, 28, 14 and 7, so 224 is the usable image for this reference and a case cannot move it."
+  "determinism": {
+    "required": true,
+    "seed_source": "case_manifest"
+  },
+  "image_size": "pinned at 224. The reference builds its inputs from the module-level image_size but constructs Model() with no arguments, so the constructor's own default of 224 is what the model is built at; the two agree at 224 and at nothing else. Only window_size 7 divides every stage resolution anyway, since they are 56, 28, 14 and 7, so 224 is the usable image for this reference and a case cannot move it.",
+  "tensors": [
+    {
+      "name": "x",
+      "role": "input",
+      "shape": [
+        "B",
+        "C",
+        "H",
+        "W"
+      ],
+      "dtypes": [
+        "float32"
+      ],
+      "layout": "BCHW",
+      "stride": "contiguous"
+    },
+    {
+      "name": "output",
+      "role": "output",
+      "shape": [
+        "B",
+        "C",
+        "H",
+        "W"
+      ],
+      "dtypes": [
+        "float32"
+      ],
+      "layout": "BCHW",
+      "stride": "contiguous"
+    }
+  ],
+  "dynamic_axes": {
+    "B": [
+      1,
+      4
+    ],
+    "image": [
+      224,
+      224
+    ]
+  },
+  "abi": {
+    "passing": "in_process_torch_tensors",
+    "layout": "contiguous",
+    "stream": "current_musa_stream",
+    "note": "runner is a ModelNew module evaluated in the same process as the reference"
+  }
 }

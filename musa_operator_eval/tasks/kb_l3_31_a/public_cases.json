@@ -21,7 +21,8 @@
         "channels": 128,
         "H": 32,
         "W": 32
-      }
+      },
+      "golden": "smoke_001/golden/tensors.json"
     },
     {
       "case_id": "smoke_002",
@@ -34,7 +35,8 @@
         "channels": 128,
         "H": 64,
         "W": 64
-      }
+      },
+      "golden": "smoke_002/golden/tensors.json"
     },
     {
       "case_id": "smoke_003",
@@ -47,7 +49,8 @@
         "channels": 128,
         "H": 33,
         "W": 65
-      }
+      },
+      "golden": "smoke_003/golden/tensors.json"
     }
   ]
 }

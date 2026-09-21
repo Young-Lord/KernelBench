@@ -122,7 +122,7 @@ def get_inputs():
 # ============================================================================
 # Task contract metadata
 #
-# KernelBench has no place for the A/B tier distinction, so the tier and the
+# The framework's problem format has no place for the A/B tier distinction, so the tier and the
 # library policy travel with the problem file. `kernel_static_checker`'s
 # `validate_library_kernel_static` consumes LIBRARY_POLICY directly.
 #
