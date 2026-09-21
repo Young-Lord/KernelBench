@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/evaluation-report-1.0.0.json",
   "title": "MUSA evaluation report (tools/run_task.py --output)",
-  "description": "Guide \u00a74.7/\u00a74.8. run_task.py emits two report shapes from one entry point: `static` (audit, case-override and golden checks, no device) and `full` (every case evaluated). The mode decides which stage blocks are present, so it is validated by value the same way the task tier is. The report is a derived artifact produced by a tool this schema does not own, so the properties are permissive: the invariants pinned here are the mode, the tier, and the fact that `summary.passed_overall` is always present and always agrees with `summary.exit_code`.",
+  "description": "Guide §4.7/§4.8. run_task.py emits two report shapes from one entry point: `static` (audit, case-override and golden checks, no device) and `full` (every case evaluated). The mode decides which stage blocks are present, so it is validated by value the same way the task tier is. The report is a derived artifact produced by a tool this schema does not own, so the properties are permissive: the invariants pinned here are the mode, the tier, and the fact that `summary.passed_overall` is always present and always agrees with `summary.exit_code`.",
   "$defs": {
     "case_row": {
       "type": "object",
@@ -112,7 +112,7 @@
           }
         },
         "stability": {
-          "description": "Guide \u00a74.7's stability re-run: whether the case agreed with itself when it was run again with the same seed and the same inputs.",
+          "description": "Guide §4.7's stability re-run: whether the case agreed with itself when it was run again with the same seed and the same inputs.",
           "type": "object",
           "required": [
             "reruns",
@@ -143,6 +143,55 @@
             "number",
             "null"
           ]
+        },
+        "model_state": {
+          "description": "What the compiled path staged beyond the case's own tensors. The reference's state is a function of the case's seed and the framework's construction order, so a torch-free submission cannot rebuild it: the evaluator materializes it, stages it beside the case's inputs and records here whether it did and what it produced. `digest` covers the whole state, so a drift (a different torch, a changed construction) is a named mismatch rather than a wrong number.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "materialized"
+          ],
+          "properties": {
+            "materialized": {
+              "type": "boolean"
+            },
+            "digest": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "tensors": {
+              "type": "integer"
+            },
+            "dtype": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "seed": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "tensor_prefix": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "reason": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
         }
       }
     },
@@ -198,7 +247,7 @@
       "minLength": 1
     },
     "build": {
-      "description": "Guide \u00a74.7. The build stage: whether the submission compiled, and the compiler output when it did not. \u00a75's step 8 puts it after the audit so a rejected submission never spends a compile, and before the link check because that check reads what the build produced.",
+      "description": "Guide §4.7. The build stage: whether the submission compiled, and the compiler output when it did not. §5's step 8 puts it after the audit so a rejected submission never spends a compile, and before the link check because that check reads what the build produced.",
       "type": "object",
       "properties": {
         "passed": {
@@ -278,7 +327,7 @@
       }
     },
     "link_whitelist": {
-      "description": "Guide \u00a74.7's B-tier-only stage: which libraries the build products actually link, read off their dynamic sections. `checked` counts the artifacts whose dynamic section could be read; an artifact that could not be read is an error rather than a skip, because \"could not read it\" and \"links nothing\" are different facts.",
+      "description": "Guide §4.7's B-tier-only stage: which libraries the build products actually link, read off their dynamic sections. `checked` counts the artifacts whose dynamic section could be read; an artifact that could not be read is an error rather than a skip, because \"could not read it\" and \"links nothing\" are different facts.",
       "type": "object",
       "properties": {
         "ran": {

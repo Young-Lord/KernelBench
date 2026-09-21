@@ -96,14 +96,27 @@ appears only for the B tier. The build script gets `--extra-library` for whateve
 the contract whitelists and the machine can resolve, so what is linked and what is
 checked are the same list.
 
-The compiled path grades what a case's input manifest carries and nothing else, which
-bounds it in a way worth knowing before writing an adapter: a task whose reference
-builds weights in `__init__` cannot be graded this way, because those weights come
-from the case seed and the init arguments rather than from the input directory. Two
-packages are in scope today, both in the level-1 family whose three inputs are the
-whole model: `kb_l1_97_a` (the worked kernel below) and `kb_l1_97_b` (the worked
-adapter below). `tests/test_private_assets.py::CompiledAnswerScopeTests` asks each
-reference whether it carries state and fails if an answer exists outside that scope.
+The compiled path grades what a case's input directory holds and nothing else, which is
+the one thing to know before writing an adapter. A reference that keeps weights in
+`__init__` cannot be rebuilt by a torch-free submission -- they come from the case's
+seed and the construction order -- so for those eight packages the evaluator
+materializes the state with the framework's own construction, stages it beside the
+case's tensors as `state_*`, and records a digest per case row:
+
+    "model_state": {"materialized": true, "digest": "4f861e01...", "tensors": 5,
+                    "dtype": "float16", "seed": 91001, "tensor_prefix": "state_"}
+
+Names are the module's own keys behind the prefix, so a submission reads
+`state_c_attn.weight`, `state_c_attn.bias`, `state_c_proj.weight`, `state_c_proj.bias`
+and the causal `state_bias` buffer of a MiniGPT attention layer. The digest covers the
+whole state: two runs of one case must agree on it, and a disagreement means the
+materialization drifted (a different torch, a changed construction) rather than that a
+kernel is wrong. A case whose reference has no state stages nothing and reports
+`materialized: false`, and the runner is handed the case's own input directory.
+
+`tests/test_materialize_model_state.py` holds both halves: the driver's staging against
+a stand-in materializer (no torch needed), and, on a machine with the framework, the
+tool's state against the state the framework's own loader builds from the same seed.
 
 `private/scaled_dot_product_attention_b_v0/compiled` is the B tier's worked
 submission -- the one that shows the compiled path can score, not just build:

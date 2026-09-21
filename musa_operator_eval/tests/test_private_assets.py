@@ -234,18 +234,18 @@ class GapCoverageTests(unittest.TestCase):
 
 @unittest.skipUnless(MAINTAINER_TREE_MOUNTED, "the maintainer tree is not mounted: the hidden lists and baselines live only there")
 class CompiledAnswerScopeTests(unittest.TestCase):
-    """§4.6's compiled path grades a case out of the tensors in its input manifest.
+    """§4.6's compiled path grades a case out of the tensors its input directory holds.
 
-    That is the whole interface: a torch-free process reads `<input-dir>`, runs the
-    submission, and writes `<output-dir>`. A task whose reference carries weights
-    cannot be graded that way -- they are a function of the case's seed and the
-    module's construction, which §4.3 keeps as parameters rather than tensors, so
-    nothing in the input directory determines them. The worked answers under
-    `private/<task id>/compiled/` are therefore only legitimate where the reference
-    has none, which is the one claim about them a test can settle: ask the reference.
+    That is the whole interface, so a compiled answer is legitimate exactly where the
+    task supplies what a torch-free submission cannot build for itself: the case's own
+    tensors, plus -- for a reference that keeps weights in `__init__` -- the state the
+    evaluator materializes and stages (see `tests/test_materialize_model_state.py`,
+    which checks on the device that the declaration matches what each reference holds).
+    The rule this holds is mechanical: a package may not ship a compiled answer while
+    neither of those is true.
 
-    Skipped when torch is unavailable, like the other tests that have to build a
-    model; the device is where the answers are graded anyway.
+    Skipped when torch is unavailable, since the question it asks about a reference is
+    whether that reference carries state at all.
     """
 
     PRIVATE = ROOT / "private"
@@ -269,37 +269,20 @@ class CompiledAnswerScopeTests(unittest.TestCase):
         return len(list(model.parameters())) + len(list(model.buffers()))
 
     @unittest.skipUnless(torch is not None, "requires torch to count the reference's parameters")
-    def test_a_compiled_answer_only_exists_where_the_reference_has_no_weights(self):
+    def test_a_compiled_answer_only_exists_where_the_task_supplies_what_it_needs(self):
         answers = sorted(self.PRIVATE.glob("*/compiled/kernel.mu"))
         self.assertTrue(answers, "no compiled answer is mounted: the maintainer tree is absent")
         by_id = {task["id"]: directory for directory, task in self.packages()}
         for answer in answers:
             task_id = answer.parent.parent.name
+            task = next(task for _d, task in self.packages() if task["id"] == task_id)
+            declared = ((task.get("starter") or {}).get("cpp") or {}).get("model_state")
             with self.subTest(task=task_id):
                 count = self.reference_parameter_count(by_id[task_id])
-                self.assertEqual(
-                    count,
-                    0,
-                    f"{task_id} ships a compiled answer and its reference carries {count} tensors of "
-                    "state, which no torch-free submission can reconstruct from the input manifest",
-                )
-
-    @unittest.skipUnless(torch is not None, "requires torch to count the reference's parameters")
-    def test_every_weight_free_package_is_accounted_for(self):
-        """The scope is a decision, not an accident: a weight-free task either has an
-        answer or shares its family with one that does."""
-        entries = list(self.packages())
-        answers = {task["id"] for _d, task in entries if (self.PRIVATE / task["id"] / "compiled" / "kernel.mu").is_file()}
-        families = {task["family"] for _d, task in entries if task["id"] in answers}
-        for directory, task in entries:
-            if task["id"] in answers:
-                continue
-            with self.subTest(task=task["id"]):
-                weight_free = self.reference_parameter_count(directory) == 0
                 self.assertTrue(
-                    not weight_free or task["family"] in families,
-                    f"{task['id']} needs no weights and has no compiled answer, and no other package in "
-                    f"its family ({task['family']}) has one either",
+                    count == 0 or declared,
+                    f"{task_id} ships a compiled answer and its reference carries {count} tensors of state, "
+                    "which no torch-free submission can reconstruct unless the contract stages it",
                 )
 
 

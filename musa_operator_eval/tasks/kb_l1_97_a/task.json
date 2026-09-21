@@ -148,7 +148,8 @@
       "regions": [
         "device_kernel",
         "host_launch"
-      ]
+      ],
+      "model_state": null
     }
   },
   "hyperparameters": {

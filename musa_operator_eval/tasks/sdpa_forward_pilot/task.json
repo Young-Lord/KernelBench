@@ -221,7 +221,8 @@
         "custom_fallback",
         "dispatch_trace",
         "host_launch"
-      ]
+      ],
+      "model_state": null
     }
   }
 }

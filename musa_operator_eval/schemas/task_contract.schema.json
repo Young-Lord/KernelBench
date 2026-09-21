@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/task-contract-1.0.0.json",
   "title": "MUSA operator task contract (tasks/*/task.json)",
-  "description": "Guide \u00a74.8: `tier` is an enum and the validator tightens or loosens the fields by its value. An A_kernel contract that carries a library policy is an error (that is a B-tier concept leaking into the tier that forbids libraries), and a B_library contract that does not define its library gap requirement is an error. The machine-readable form of the hand-written assertions in tests/test_task_packages.py.",
+  "description": "Guide §4.8: `tier` is an enum and the validator tightens or loosens the fields by its value. An A_kernel contract that carries a library policy is an error (that is a B-tier concept leaking into the tier that forbids libraries), and a B_library contract that does not define its library gap requirement is an error. The machine-readable form of the hand-written assertions in tests/test_task_packages.py.",
   "$defs": {
     "gap_reason": {
       "enum": [
@@ -189,7 +189,7 @@
       "pattern": "^[A-Za-z_][A-Za-z0-9_]*\\.py:[A-Za-z_][A-Za-z0-9_]*$"
     },
     "golden_oracle": {
-      "description": "Guide \u00a75 step 3. When a package ships a reference separate from problem.py, this names it, and generate_cases.py computes the golden from it instead of from the model. `returns` names the golden tensors in the order the oracle returns them.",
+      "description": "Guide §5 step 3. When a package ships a reference separate from problem.py, this names it, and generate_cases.py computes the golden from it instead of from the model. `returns` names the golden tensors in the order the oracle returns them.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -257,7 +257,7 @@
       "description": "The tolerance the case is graded at, when the task needs more room than the framework provides for its dtypes. `kernelbench.eval.resolve_tolerance` takes the larger of the framework's per-dtype value and `max_abs_error` here, so this block can loosen grading but never tighten it; `atol` and `rtol` are checked against the same floor by tools/validate_schemas.py. A task needs this lever when its own reference is the numerically unstable side, for instance a bfloat16 reference whose outputs sit at a magnitude where one step is larger than the framework's default."
     },
     "tensor_contract": {
-      "description": "Guide \u00a74.1. The precision a task is graded at is part of the contract, not a CLI default.",
+      "description": "Guide §4.1. The precision a task is graded at is part of the contract, not a CLI default.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -478,7 +478,7 @@
           "type": "string"
         },
         "gap_reason_coverage": {
-          "description": "Guide \u00a74.3 asks for at least two gap-reason categories. A package that cannot reach two records which it reaches, which it does not, and why, so the shortfall is a decision rather than an oversight.",
+          "description": "Guide §4.3 asks for at least two gap-reason categories. A package that cannot reach two records which it reaches, which it does not, and why, so the shortfall is a decision rather than an oversight.",
           "type": "object",
           "required": [
             "state",
@@ -532,11 +532,11 @@
           "type": "string"
         }
       },
-      "description": "Guide \u00a74.4. The contract records the gate's outcome, and only its outcome: whether the task was admitted, at what threshold and in which environment. The per-case evidence -- each hidden case's naive/expert ratio, and where that record lives -- stays in `private/<task id>/`, because \u00a72 does not hand the agent the hidden set and a ratio table keyed by hidden case ids is a description of it.",
+      "description": "Guide §4.4. The contract records the gate's outcome, and only its outcome: whether the task was admitted, at what threshold and in which environment. The per-case evidence -- each hidden case's naive/expert ratio, and where that record lives -- stays in `private/<task id>/`, because §2 does not hand the agent the hidden set and a ratio table keyed by hidden case ids is a description of it.",
       "additionalProperties": false
     },
     "library_policy": {
-      "description": "B-tier only. Guide \u00a74.1: allowed libraries and symbol prefixes, the dispatch file, the required dispatch trace, and the library gap requirement.",
+      "description": "B-tier only. Guide §4.1: allowed libraries and symbol prefixes, the dispatch file, the required dispatch trace, and the library gap requirement.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -603,7 +603,7 @@
           "minimum": 3
         },
         "required_gap_reasons": {
-          "description": "Every reason must be one of Guide \u00a74.3's four concepts, spelled exactly as in the family capability reference.",
+          "description": "Every reason must be one of Guide §4.3's four concepts, spelled exactly as in the family capability reference.",
           "type": "array",
           "minItems": 1,
           "uniqueItems": true,
@@ -617,7 +617,7 @@
       }
     },
     "starter": {
-      "description": "Guide \u00a74.6. The inventory that goes with the starter project: which files may be edited and where the marked regions sit, which files are frozen, and how the project is built and run. The evaluator reads `frozen` to decide whether a submission reached outside the scope it was given.",
+      "description": "Guide §4.6. The inventory that goes with the starter project: which files may be edited and where the marked regions sit, which files are frozen, and how the project is built and run. The evaluator reads `frozen` to decide whether a submission reached outside the scope it was given.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -716,7 +716,7 @@
           }
         },
         "link_whitelist": {
-          "description": "\u00a74.6's B-tier-only entry: the libraries the build may link, mirroring `library_policy`. A submission may not have a wider whitelist than its contract, so the two are required to agree.",
+          "description": "§4.6's B-tier-only entry: the libraries the build may link, mirroring `library_policy`. A submission may not have a wider whitelist than its contract, so the two are required to agree.",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -751,7 +751,7 @@
           }
         },
         "dispatch": {
-          "description": "Guide \u00a74.1's B-tier-only dispatch-file field, expressed for a submission that is one module: the file it is submitted as, and the region of it the dispatch lives in.",
+          "description": "Guide §4.1's B-tier-only dispatch-file field, expressed for a submission that is one module: the file it is submitted as, and the region of it the dispatch lives in.",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -775,7 +775,7 @@
           }
         },
         "cpp": {
-          "description": "Guide \u00a74.6's frozen ABI, realised as a compiled project: a runner that reads the input directory and writes the output directory with no libtorch, a build script that applies the contract's link whitelist, and one editable kernel. The Python module path and this one share the same tensor transport, so a golden is valid for both.",
+          "description": "Guide §4.6's frozen ABI, realised as a compiled project: a runner that reads the input directory and writes the output directory with no libtorch, a build script that applies the contract's link whitelist, and one editable kernel. The Python module path and this one share the same tensor transport, so a golden is valid for both.",
           "type": "object",
           "additionalProperties": false,
           "required": [
@@ -833,13 +833,51 @@
               "minLength": 10
             },
             "regions": {
-              "description": "The regions the compiled source marks with `// --- BEGIN <name> ---` / `--- END <name> ---`. Guide \u00a74.6 confines a library call to the dispatch file and the Host launch file; in a single-file compiled submission the region is what distinguishes them, and the evaluator rejects a call outside the permitted ones.",
+              "description": "The regions the compiled source marks with `// --- BEGIN <name> ---` / `--- END <name> ---`. Guide §4.6 confines a library call to the dispatch file and the Host launch file; in a single-file compiled submission the region is what distinguishes them, and the evaluator rejects a call outside the permitted ones.",
               "type": "array",
               "minItems": 1,
               "uniqueItems": true,
               "items": {
                 "type": "string",
                 "minLength": 3
+              }
+            },
+            "model_state": {
+              "description": "What the compiled path receives beyond the case's own tensors. A reference that builds weights in `__init__` holds state that a torch-free submission cannot reconstruct -- it is a function of the case's seed and the construction order, and §4.3 keeps a case to parameters and seeds rather than tensors -- so the evaluator materializes it with the framework's own construction and stages it beside the case's inputs under `tensor_prefix`. Null (or absent) means the reference carries no state and the compiled path reads the case's inputs alone.",
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "source",
+                "materialized_by",
+                "tensor_prefix"
+              ],
+              "properties": {
+                "source": {
+                  "description": "Where the tensors come from, named so a reader can check it.",
+                  "type": "string",
+                  "minLength": 3
+                },
+                "materialized_by": {
+                  "description": "The evaluator tool that produces them, relative to musa_operator_eval/.",
+                  "type": "string",
+                  "minLength": 3
+                },
+                "tensor_prefix": {
+                  "description": "The name prefix every materialized tensor carries in the staged input directory.",
+                  "type": "string",
+                  "minLength": 3
+                },
+                "seeded_by": {
+                  "description": "Where the values' determinism comes from.",
+                  "type": "string",
+                  "minLength": 3
+                },
+                "note": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -866,7 +904,7 @@
                 ]
               }
             },
-            "description": "A runner that imports libtorch deviates from \u00a74.6, which is allowed here and has to be stated where a reader comparing the ABI against the guide will find it."
+            "description": "A runner that imports libtorch deviates from §4.6, which is allowed here and has to be stated where a reader comparing the ABI against the guide will find it."
           }
         }
       ]
@@ -972,7 +1010,7 @@
           }
         }
       },
-      "description": "\u00a74.6 gives the link whitelist to the B tier, and a B-tier build has to say what it may link."
+      "description": "§4.6 gives the link whitelist to the B tier, and a B-tier build has to say what it may link."
     },
     {
       "if": {
@@ -1011,7 +1049,7 @@
             ]
           }
         },
-        "description": "\u00a74.1 puts the dispatch file in the B-tier contract; a B-tier package names where its dispatch lives."
+        "description": "§4.1 puts the dispatch file in the B-tier contract; a B-tier package names where its dispatch lives."
       }
     },
     {
@@ -1051,7 +1089,7 @@
             ]
           }
         },
-        "description": "\u00a74.6's link whitelist only means something for a build product; a B-tier package that declares one also ships the compiled path it applies to."
+        "description": "§4.6's link whitelist only means something for a build product; a B-tier package that declares one also ships the compiled path it applies to."
       }
     }
   ]

@@ -156,7 +156,13 @@
       "regions": [
         "device_kernel",
         "host_launch"
-      ]
+      ],
+      "model_state": {
+        "source": "problem.py:Model.state_dict()",
+        "materialized_by": "evaluator/materialize_model_state.py",
+        "tensor_prefix": "state_",
+        "seeded_by": "case.seed, in the framework's construction order (set_seed, get_init_inputs, set_seed, Model)"
+      }
     }
   },
   "hyperparameters": {

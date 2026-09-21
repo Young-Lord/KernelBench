@@ -202,22 +202,33 @@ Through `evaluator/run_binary.py` over the ten hidden cases it exits 0 with 10 o
 passed, every recorded path equal to its expected one, and the artifact's dynamic
 section naming `libmudnn` and no torch.
 
-**The scope of the compiled path, and why it stops where it does.** It grades a case
-out of the tensors in its input manifest -- that is the whole interface -- so it can
-only grade tasks whose reference has no weights to reconstruct. Six of the eleven
-packages are not those: their reference builds `nn.Linear` or `nn.LayerNorm` in
-`__init__`, so the golden is a function of the case's seed and the init arguments,
-and §4.3 deliberately keeps a case to "parameters and seeds, not tensors". Nothing in
-the input directory determines those weights and a torch-free submission has no way
-to obtain them, so their B-tier evidence is the Python path, where the five experts
-pass their hidden sets end to end (10 of 10 each, 8 of 8 for the pilot).
+**The compiled path's input set, and what decides it.** It grades a case out of the
+tensors in its input directory -- that is the whole interface -- and eight of the
+eleven packages are references that build weights in `__init__`, which a torch-free
+submission cannot reconstruct: they are a function of the case's seed and the
+construction order, and §4.3 deliberately keeps a case to "parameters and seeds, not
+tensors". So the evaluator materializes that state with the framework's own
+construction -- seed, `get_init_inputs()`, seed, `Model(*init)`, cast to the case's
+dtype, the order `kernelbench.eval` uses -- stages it beside the case's own tensors
+under `state_*` names, and records a digest of the whole state on every case row.
 
-The boundary is enforced rather than described:
-`tests/test_private_assets.py::CompiledAnswerScopeTests` builds each reference and
-fails if a package ships a compiled answer while its reference carries state, and it
-fails if a weight-free package has none while no package in its family does either.
-Both run on the device. The level-1 family -- where the manifest's three tensors are
-the whole model -- is where the compiled path is graded, on both tiers.
+The generated tree is never written to: the runner reads a staged copy, so the case's
+own inputs stay what they were and the Python path, which builds its own model, reads
+nothing new. No golden was regenerated for this, because the state comes from the same
+seed stream the golden was produced from. `task.json:starter.cpp.model_state` declares
+the arrangement per package (`tensor_prefix`, `materialized_by`, where the seeding
+comes from) or is null for a reference that carries nothing.
+
+The scope is therefore a property of what each task hands over rather than of the
+tiers: `kb_l1_97_a` and `kb_l1_97_b` are graded from their three tensors alone, and the
+other nine from their inputs plus staged state. What is still missing for the
+dispatch-shaped families is not the mechanism but the submissions -- a compiled
+adapter that routes projection, attention and the surrounding block through muDNN
+operators -- and those are per-family work, verified on the device like the level-1
+one. `tests/test_private_assets.py::CompiledAnswerScopeTests` fails if an answer exists
+where neither the case's inputs nor a declaration covers it, and
+`tests/test_materialize_model_state.py` checks on the device that each declaration
+matches what its reference actually holds.
 
 The anti-cheating half holds independently of that: the artifact is built, its
 dynamic section is read, and a submission linking outside the whitelist is refused

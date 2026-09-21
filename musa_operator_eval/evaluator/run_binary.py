@@ -36,6 +36,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -375,6 +376,99 @@ def build_submission(
     return {"passed": True, "environment_missing": False, "detail": detail, "build_dir": str(build_dir), "script": script}
 
 
+# The tool that turns a reference's state into tensors a submission can read. It is a
+# separate process on purpose: it needs torch, and this driver stays importable
+# without it, which is what lets a stateless task's compiled path run on a machine
+# that has no framework at all.
+MATERIALIZE_TOOL = EVALUATOR_DIR / "materialize_model_state.py"
+
+
+class StagingError(Exception):
+    """A case's inputs could not be produced for the compiled path."""
+
+
+def stage_case_inputs(
+    task: dict, task_dir: Path, case: dict, generated_dir: Path, stage_root: Path, precision: str
+) -> Tuple[Path, dict]:
+    """The input directory a compiled submission reads, and what was staged into it.
+
+    A case's own tensors are what they always were. When the contract declares that
+    the reference carries state -- weights a torch-free process cannot rebuild -- the
+    evaluator materializes that state with the framework's own construction and hands
+    it over beside the case's tensors, under names the contract names. The generated
+    tree is never written to: the staged copy is what the runner reads.
+    """
+    case_id = case["case_id"]
+    source = generated_dir / case_id / "input"
+    if not source.is_dir():
+        raise StagingError(f"no generated input at {source}")
+    declaration = ((task.get("starter") or {}).get("cpp") or {}).get("model_state")
+    if not declaration:
+        return source, {"materialized": False, "reason": "the contract declares no model state"}
+
+    staged = stage_root / case_id / "input"
+    if staged.exists():
+        shutil.rmtree(staged)
+    staged.mkdir(parents=True)
+    for entry in source.iterdir():
+        if entry.is_file():
+            shutil.copy2(entry, staged / entry.name)
+
+    command = [
+        sys.executable,
+        str(MATERIALIZE_TOOL),
+        "--task-dir",
+        str(task_dir),
+        "--seed",
+        str(int(case.get("seed", 42))),
+        "--precision",
+        precision,
+        "--output-dir",
+        str(staged),
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, timeout=1800, cwd=str(REPO_TOP))
+    except (OSError, subprocess.SubprocessError) as error:
+        raise StagingError(f"the state could not be materialized: {error}") from error
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()[-2000:]
+        raise StagingError(f"materializing the reference's state failed: {detail}")
+    try:
+        materialized = json.loads(completed.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError) as error:
+        raise StagingError(f"the materializer's report could not be read: {error}") from error
+
+    prefix = declaration.get("tensor_prefix", "state_")
+    for record in materialized.get("tensors", []):
+        if not str(record.get("name", "")).startswith(prefix):
+            raise StagingError(
+                f"the materializer wrote {record.get('name')!r}, and the contract says its tensors are named {prefix!r}..."
+            )
+    if materialized.get("tensors"):
+        manifest_path = staged / "tensors.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        case_names = {record["name"] for record in manifest.get("tensors", [])}
+        overlap = case_names & {record["name"] for record in materialized["tensors"]}
+        if overlap:
+            raise StagingError(f"the materialized state collides with the case's own tensors: {sorted(overlap)}")
+        manifest["tensors"] = list(manifest.get("tensors", [])) + list(materialized["tensors"])
+        manifest_path.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        return staged, {
+            "materialized": True,
+            "digest": materialized.get("digest"),
+            "tensors": len(materialized["tensors"]),
+            "dtype": materialized.get("dtype"),
+            "seed": materialized.get("seed"),
+            "tensor_prefix": prefix,
+        }
+    shutil.rmtree(staged, ignore_errors=True)
+    return source, {
+        "materialized": False,
+        "digest": materialized.get("digest"),
+        "reason": "the reference holds no state",
+    }
+
+
 def run_binary_case(
     task: dict,
     binary: Path,
@@ -383,16 +477,20 @@ def run_binary_case(
     stability_reruns: int = 1,
     timeout: int = 900,
     tolerance: Optional[dict] = None,
+    input_dir: Optional[Path] = None,
+    model_state: Optional[dict] = None,
 ) -> dict:
     """Run one case through the compiled runner and grade it against its golden."""
     case_id = case["case_id"]
     row: dict = {"case_id": case_id, "tag": case.get("tag"), "tier": task.get("tier"), "compiled": True}
     if tolerance is not None:
         row["tolerance_used"] = tolerance
+    if model_state is not None:
+        row["model_state"] = model_state
     if case.get("expected_path"):
         row["expected_path"] = case["expected_path"]
 
-    input_dir = generated_dir / case_id / "input"
+    input_dir = input_dir or (generated_dir / case_id / "input")
     golden_record = case.get("golden")
     if not golden_record:
         row.update({"skipped": True, "passed": False, "reason": "the case names no golden"})
@@ -656,12 +754,32 @@ def _build_check_and_evaluate(
     report["stages"].append("evaluation")
     tolerance = resolve_case_tolerance(task, report.get("precision") or DEFAULT_PRECISION)
     report["tolerance_used"] = tolerance
+    stage_root = build_dir / "cases"
     rows = []
     for case in cases:
         if verbose:
             print(f"[binary] {case['case_id']}", file=sys.stderr)
+        try:
+            case_inputs, model_state = stage_case_inputs(
+                task, task_dir, case, generated_dir, stage_root, report.get("precision") or DEFAULT_PRECISION
+            )
+        except StagingError as error:
+            return fail(
+                report,
+                exit_codes.EXIT_CASE_GENERATION_FAILED,
+                [f"{case['case_id']}: {error}"],
+            )
         rows.append(
-            run_binary_case(task, binary, case, generated_dir, stability_reruns=stability_reruns, tolerance=tolerance)
+            run_binary_case(
+                task,
+                binary,
+                case,
+                generated_dir,
+                stability_reruns=stability_reruns,
+                tolerance=tolerance,
+                input_dir=case_inputs,
+                model_state=model_state,
+            )
         )
     report["cases"] = rows
 
