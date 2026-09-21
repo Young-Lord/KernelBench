@@ -394,6 +394,59 @@ class HiddenCaseListTests(unittest.TestCase):
                     self.assertEqual(row["latency_ms_stats"]["mean"], row["latency_ms"])
                     self.assertEqual(row["latency_ms_stats"]["num_trials"], len(samples))
 
+    def test_an_a_tier_library_row_is_measured_wherever_the_family_has_a_b_track(self):
+        """§4.4's roster, checked against the thing that decides whether it can be built.
+
+        The A tier's roster names `torch_musa_sdpa` and `mudnn_fused` alongside its own
+        implementations. Those rows used to carry one shared reason -- "the tier is
+        graded at float32, where the fused path does not answer" -- which is true of the
+        fused kernel and false of the library's entry point: at float32
+        `F.scaled_dot_product_attention` answers, through
+        `aten::_scaled_dot_product_attention_math_musa`. So the rule is:
+
+        * `mudnn_fused` is unbuildable on this tier, and its reason has to be the
+          measurement rather than a claim about the tier (the library's own words are
+          "Unsupport Type FLOAT");
+        * a family whose ledger entry has a B track has a library implementation this
+          repository can run, so `torch_musa_sdpa` must be a measured row there;
+        * a family whose ledger entry has no B track records why, quoting the ledger
+          rather than the tier's precision.
+        """
+        ledger = {
+            entry["entry_id"]: entry
+            for entry in json.loads((ROOT / "sets" / "attention" / "attention_set.json").read_text(encoding="utf-8"))["entries"]
+        }
+        checked = 0
+        for _directory, task in self.packages():
+            if task["tier"] != "A_kernel":
+                continue
+            entry = ledger[task["set_entry"].split("/")[-1]]
+            baseline = json.loads((self.PRIVATE / task["id"] / "baseline.hidden.json").read_text(encoding="utf-8"))
+            statuses = {}
+            reasons = {}
+            for row in baseline["results"]:
+                statuses.setdefault(row["implementation"], set()).add(row["status"])
+                if row.get("reason"):
+                    reasons.setdefault(row["implementation"], row["reason"])
+            with self.subTest(task=task["id"]):
+                fused = reasons.get("mudnn_fused", "")
+                self.assertIn("Unsupport Type FLOAT", fused,
+                              f"{task['id']} does not record the measured reason the fused op gives for FLOAT")
+                self.assertIn("measured", fused, f"{task['id']}'s fused reason is not a measurement")
+                library = statuses.get("torch_musa_sdpa", set())
+                if entry["tier"]["B_library"].get("eligible"):
+                    self.assertIn("pass", library,
+                                  f"{task['id']} has a B track, so the library's entry point answers this "
+                                  f"family and its row has to be measured rather than unavailable: {library}")
+                else:
+                    self.assertEqual(library, {"unavailable"},
+                                     f"{task['id']} has no B track, so a measured library row would be a "
+                                     f"different operator: {library}")
+                    self.assertIn("ledger", reasons.get("torch_musa_sdpa", ""),
+                                  f"{task['id']} should quote the ledger's reason for having no B track")
+            checked += 1
+        self.assertEqual(checked, 6, "the A tier has six packages")
+
     def test_every_package_names_the_denominator_its_tier_is_scored_against(self):
         """§4.4: the A tier's is the upstream implementation, the B tier's the expert."""
         expected = {"A_kernel": "upstream_musa", "B_library": "expert_dispatch"}

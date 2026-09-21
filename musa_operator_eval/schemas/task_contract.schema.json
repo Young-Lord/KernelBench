@@ -879,6 +879,30 @@
                   "type": "string"
                 }
               }
+            },
+            "case_configuration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "source",
+                "args"
+              ],
+              "description": "What the reference's construction needs beyond the case's tensors. The evaluator stages the case's own values as `case.json` in the compiled path's input directory, because a torch-free submission cannot rebuild them and a case re-binds module constants (so two cases of one task can differ here).",
+              "properties": {
+                "source": {
+                  "type": "string"
+                },
+                "args": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "The names `get_init_inputs()` returns, in order; `case.json` maps them onto the case's values. Empty means the reference takes no arguments."
+                },
+                "note": {
+                  "type": "string"
+                }
+              }
             }
           }
         }

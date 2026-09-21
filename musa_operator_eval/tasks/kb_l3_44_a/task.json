@@ -161,7 +161,18 @@
         "source": "problem.py:Model.state_dict()",
         "materialized_by": "evaluator/materialize_model_state.py",
         "tensor_prefix": "state_",
-        "seeded_by": "case.seed, in the framework's construction order (set_seed, get_init_inputs, set_seed, Model)"
+        "seeded_by": "the case's seed and its own parameters, in the framework's construction order (set_seed, get_init_inputs, set_seed, Model), specialized with the case's overrides exactly as run_task.py and generate_cases.py specialize it -- two cases of one task can need differently shaped weights"
+      },
+      "case_configuration": {
+        "source": "problem.py:get_init_inputs()",
+        "args": [
+          "n_embd",
+          "n_head",
+          "attn_pdrop",
+          "resid_pdrop",
+          "max_seqlen"
+        ],
+        "note": "A case re-binds module constants, and the reference's construction reads them, so the evaluator stages the case's own arguments as `case.json` beside its tensors: a torch-free submission cannot recover them from the input tensors, and two cases of one task can differ here. Empty means this reference takes no arguments."
       }
     }
   },

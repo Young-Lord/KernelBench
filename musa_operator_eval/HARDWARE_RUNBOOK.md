@@ -160,6 +160,16 @@ kernel is wrong. A case whose reference has no state stages nothing and reports
 a stand-in materializer (no torch needed), and, on a machine with the framework, the
 tool's state against the state the framework's own loader builds from the same seed.
 
+**What a stateful case's input directory holds.** Beyond the case's own tensors, the
+evaluator stages the reference's state (`state_*`: the module's own state-dict keys behind
+the prefix) when the contract declares `starter.cpp.model_state`. It is built from the
+case's own entry -- its seed *and* its parameters, specialized exactly as `run_task.py`
+and `generate_cases.py` specialize it -- because two cases of one task can need
+differently shaped weights, and a state built from the problem file's defaults belongs to
+a different model. The report's `model_state` block records the `case_id`, the
+`init_inputs` it used and one digest over the whole state; the digest is a drift check
+rather than a kernel judgement.
+
 ### What `runtime` measures here, and why it needed a flag
 
 A compiled case runs in a process that starts cold. Measured on the target device: the

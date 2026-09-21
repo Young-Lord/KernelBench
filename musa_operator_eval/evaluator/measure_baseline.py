@@ -425,12 +425,18 @@ def main() -> int:
         # §4.4's A tier: the upstream implementation is the speedup denominator and
         # the library paths are reference points beside it. The roster is supplied
         # because which module stands for `upstream_musa` is a per-package fact.
+        #
+        # An entry that cannot be built may be declared either way: a path that is not a
+        # file, with the reason as its note, or an entry in the `--unavailable` map. Both
+        # are read here, because reading only the first one meant a run that passed
+        # `--unavailable` recorded no unavailable rows at all -- silently, and with a
+        # record that looked complete.
         implementations = {}
-        unavailable = {}
+        unavailable = dict(load_unavailable(args.unavailable))
         for role, path, note in args.implementation or []:
             if path.is_file():
                 implementations[role] = load_model_class(path)
-            else:
+            elif role not in unavailable:
                 unavailable[role] = note or f"no implementation at {path}"
         if not implementations:
             print("[baseline] the A tier needs at least one --implementation ROLE=PATH", file=sys.stderr)

@@ -84,37 +84,48 @@ def dtype_name(dtype) -> str:
     raise ValueError(f"the state holds {dtype}, which the tensor manifest cannot spell")
 
 
-def build_state(task_dir: Path, seed: int, dtype) -> Dict[str, object]:
-    """The reference's state, built the way the framework builds it.
+def build_state(task_dir: Path, case: dict, task: dict, problem_source: str, dtype) -> Dict[str, object]:
+    """The reference's state, built the way the framework builds it -- for THIS case.
+
+    The case re-binds module constants (`case_parameters` maps a case field onto the
+    name a problem reads), so the model a case's golden came from is the one built
+    from the *specialized* source, not from `problem.py` as written. Building the
+    raw file here was wrong for every case whose configuration differs from the
+    problem's defaults: `kb_l3_43_b`'s cases re-bind `n_embd`/`n_head`/`max_seqlen`,
+    and `nn.Linear`'s weight shapes follow `n_embd`, so eight of its ten cases were
+    handed a state of the wrong shape -- and a compiled submission that read it would
+    have been graded as a wrong kernel rather than as a staging failure.
 
     Seeded as `kernelbench.eval` seeds it and cast to the case's dtype, because that
     is the state the graded model holds -- the reference and the submission are both
     cast before they run.
     """
-    import importlib.util
-
     import torch
 
     sys.path.insert(0, str(REPO_TOP / "src"))
+    sys.path.insert(0, str(REPO_TOP / "musa_operator_eval"))
     from kernelbench.eval import set_seed
+    from tools.case_specialization import case_source
 
-    spec = importlib.util.spec_from_file_location("materialize_problem", task_dir / "problem.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # One more place that has to specialize a case exactly the way the grader does:
+    # if this disagreed with `run_task.py` or `generate_cases.py`, the handed-over
+    # state would describe a case nobody runs, and it would still look like a model.
+    namespace: dict = {}
+    exec(case_source(problem_source, case, task.get("case_parameters") or {}), namespace)
 
-    set_seed(int(seed))
-    init_inputs = module.get_init_inputs()
-    set_seed(int(seed))
+    set_seed(int(case["seed"]))
+    init_inputs = namespace["get_init_inputs"]()
+    set_seed(int(case["seed"]))
     with torch.no_grad():
-        model = module.Model(*init_inputs)
+        model = namespace["Model"](*init_inputs)
         model = model.to(dtype=dtype)
-    return {key: value for key, value in model.state_dict().items()}
+    return {key: value for key, value in model.state_dict().items()}, list(init_inputs)
 
 
-def materialize(task_dir: Path, seed: int, dtype, output_dir: Path) -> dict:
+def materialize(task_dir: Path, case: dict, task: dict, problem_source: str, dtype, output_dir: Path) -> dict:
     """Write the state to `output_dir` and describe it."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    state = build_state(task_dir, seed, dtype)
+    state, init_inputs = build_state(task_dir, case, task, problem_source, dtype)
     records: List[dict] = []
     for key in sorted(state):
         payload = raw_bytes(state[key])
@@ -136,15 +147,27 @@ def materialize(task_dir: Path, seed: int, dtype, output_dir: Path) -> dict:
         "state_dict_keys": len(state),
         "tensors": records,
         "digest": state_digest(records),
-        "seed": int(seed),
+        "seed": int(case["seed"]),
+        "case_id": case["case_id"],
+        # Which configuration the state was built from, so a reader can see that the
+        # case's parameters were used rather than the problem file's defaults.
+        "init_inputs": [_plain(value) for value in init_inputs],
         "dtype": dtype_name(dtype),
     }
+
+
+def _plain(value):
+    """The init arguments as JSON: `get_init_inputs` returns numbers, and nothing else here."""
+    if isinstance(value, (bool, int, float, str)) or value is None:
+        return value
+    raise SystemExit(f"a case's init argument is a {type(value).__name__}, which has no place in a manifest")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Materialize a reference's state as case inputs")
     parser.add_argument("--task-dir", required=True, help="the task package whose problem.py builds the model")
-    parser.add_argument("--seed", required=True, type=int, help="the case's seed")
+    parser.add_argument("--cases", type=Path, required=True, help="the case manifest the case comes from")
+    parser.add_argument("--case", required=True, help="the case id to build the state for")
     parser.add_argument("--precision", default="fp16", choices=["fp16", "bf16", "fp32"])
     parser.add_argument("--output-dir", required=True, help="where the state's .bin files go")
     return parser
@@ -153,10 +176,24 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     sys.path.insert(0, str(REPO_TOP / "src"))
+    sys.path.insert(0, str(REPO_TOP / "musa_operator_eval"))
     from kernelbench.eval import get_torch_dtype_from_string
+    from tools.case_specialization import load_task
 
     dtype = get_torch_dtype_from_string(args.precision)
-    result = materialize(Path(args.task_dir), args.seed, dtype, Path(args.output_dir))
+    # The case does not travel as a bare seed: the construction depends on the case's
+    # parameters as well, so the manifest it came from has to be the one it is built
+    # from. `--case` is required for the same reason -- building some case's state
+    # from the problem's defaults is what this tool used to do, silently.
+    task, cases_manifest, problem_source = load_task(Path(args.task_dir), args.cases)
+    case = None
+    for entry in cases_manifest.get("cases", []):
+        if entry.get("case_id") == args.case:
+            case = entry
+            break
+    if case is None:
+        raise SystemExit(f"the manifest declares no case {args.case!r}")
+    result = materialize(Path(args.task_dir), case, task, problem_source, dtype, Path(args.output_dir))
     sys.stdout.write(json.dumps(result) + "\n")
     return 0
 

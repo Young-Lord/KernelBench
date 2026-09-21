@@ -162,13 +162,30 @@ cache costs the most, and no decision moved with them:
 | `mingpt_block_b_v0` | 2.190 | 2.124 |
 | `sdpa_forward_b_v0` (the pilot) | 7.811 | 6.152 |
 
-**Shortfall, stated.** Not every roster entry could be built honestly here. The A
-tier records `mudnn_fused` and `torch_musa_sdpa` as `unavailable` (the tier is graded
-at float32, where the fused path does not answer), and the four entry-scoped B
-packages record `upstream_musa`, `mudnn_fused` and `torch_musa_eager` as
-`unavailable`. The measurement tool records an implementation it cannot honestly
-build as unavailable with a reason rather than substituting a lookalike; a baseline
-under a real implementation's name would be worse than a gap.
+**Shortfall, stated.** Not every roster entry could be built honestly here, and each
+gap now carries the measurement that produced it rather than a claim about the tier.
+
+The A tier records `mudnn_fused` as `unavailable` for one measured reason: this tier is
+graded at float32, and `musa::dnn::ScaledDotProductAttention::RunFlash` refuses it with
+the library's own words -- `Unsupport Type FLOAT` -- at every shape tried (head dim
+32/64/128/160/192, sequence 1/128/512/1024), while the same call succeeds at float16.
+`torch_musa_sdpa` is **measured** on the four A families whose ledger entry has a B
+track: at float32 the entry point answers, dispatching to
+`aten::_scaled_dot_product_attention_math_musa`, and the implementation measured under
+that name is the module the B tier's own expert is. The two A families with no B track
+record why the entry point is not a faithful implementation of their reference at all,
+quoting the ledger's measurements: `swin_transformer_v2_a_v0`'s only remaining lever was
+a head dimension out of reach of a byte-identical reference, and
+`relu_causal_attention_a_v0`'s reference applies ReLU to the scores, which no library
+path expresses. `tests/test_private_assets.py` holds that rule against the ledger, so a
+family with a B track cannot come back with an unmeasured library row.
+
+The four entry-scoped B packages record `upstream_musa`, `mudnn_fused` and
+`torch_musa_eager` as `unavailable`: no upstream answer exists in this checkout for
+them, the Python roster reaches muDNN only through torch_musa, and eager PyTorch is
+what the reference already is. The measurement tool records an implementation it cannot
+honestly build as unavailable with a reason rather than substituting a lookalike; a
+baseline under a real implementation's name would be worse than a gap.
 
 Also worth recording: the A tier's upstream implementation refuses most hidden shapes
 with `RuntimeError: Tile divisibility` and, for `vision_attention_a_v0`, agrees with
@@ -234,6 +251,20 @@ fused path or the library's non-fused path and records which one produced the nu
 Through `evaluator/run_binary.py` over the ten hidden cases it exits 0 with 10 of 10
 passed, every recorded path equal to its expected one, and the artifact's dynamic
 section naming `libmudnn` and no torch.
+
+**The state is materialized for the case, not for the problem file's defaults.** The
+first version of this tool loaded `problem.py` as written and built the model from
+`get_init_inputs()`. That is the wrong model whenever a case re-binds a constant the
+construction reads: `kb_l3_43_b`'s cases map `shape.C`/`shape.H`/`shape.S_max` onto
+`n_embd`/`n_head`/`max_seqlen`, so eight of its ten cases were handed a state of the
+wrong shape -- `c_attn.weight` at 2304x768 where the case needs 192x64 -- reported as
+materialized, with a digest of its own to match it. The tool now specializes the source
+with the case's own entry, through the same `case_source` helper `run_task.py` and
+`generate_cases.py` use, and it takes the case id and the manifest rather than a bare
+seed so a call that does not identify the case is a usage error instead of a silent
+rebuild. The row records `case_id` and `init_inputs` beside the digest, so which
+configuration the state came from is in the report rather than in the command that
+produced it.
 
 **The compiled path's input set, and what decides it.** It grades a case out of the
 tensors in its input directory -- that is the whole interface -- and eight of the

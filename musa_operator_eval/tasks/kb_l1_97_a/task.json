@@ -149,7 +149,12 @@
         "device_kernel",
         "host_launch"
       ],
-      "model_state": null
+      "model_state": null,
+      "case_configuration": {
+        "source": "problem.py:get_init_inputs()",
+        "args": [],
+        "note": "A case re-binds module constants, and the reference's construction reads them, so the evaluator stages the case's own arguments as `case.json` beside its tensors: a torch-free submission cannot recover them from the input tensors, and two cases of one task can differ here. Empty means this reference takes no arguments."
+      }
     }
   },
   "hyperparameters": {

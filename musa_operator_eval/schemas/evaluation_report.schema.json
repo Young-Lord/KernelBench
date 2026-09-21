@@ -145,7 +145,7 @@
           ]
         },
         "model_state": {
-          "description": "What the compiled path staged beyond the case's own tensors. The reference's state is a function of the case's seed and the framework's construction order, so a torch-free submission cannot rebuild it: the evaluator materializes it, stages it beside the case's inputs and records here whether it did and what it produced. `digest` covers the whole state, so a drift (a different torch, a changed construction) is a named mismatch rather than a wrong number.",
+          "description": "What the compiled path staged beyond the case's own tensors. The reference's state is a function of the case's seed, its parameters and the framework's construction order, so a torch-free submission cannot rebuild it: the evaluator materializes it for that case, stages it beside the case's inputs and records here whether it did, what it produced and which configuration it built from. `digest` covers the whole state, so a drift (a different torch, a changed construction) is a named mismatch rather than a wrong number.",
           "type": [
             "object",
             "null"
@@ -190,6 +190,29 @@
                 "string",
                 "null"
               ]
+            },
+            "case_id": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The case the state was built for. Its parameters, not the problem file's defaults, decide the construction."
+            },
+            "init_inputs": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "integer",
+                  "number",
+                  "boolean",
+                  "string",
+                  "null"
+                ]
+              },
+              "description": "The reference's `get_init_inputs()` for this case, as the state was built. Two cases of one task can differ here (a case re-binds module constants), which is why the state is per case."
             }
           }
         },

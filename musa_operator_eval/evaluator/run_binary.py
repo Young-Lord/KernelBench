@@ -445,7 +445,13 @@ def read_timing(stdout: str) -> Optional[dict]:
 
 
 def stage_case_inputs(
-    task: dict, task_dir: Path, case: dict, generated_dir: Path, stage_root: Path, precision: str
+    task: dict,
+    task_dir: Path,
+    case: dict,
+    cases_manifest_path: Path,
+    generated_dir: Path,
+    stage_root: Path,
+    precision: str,
 ) -> Tuple[Path, dict]:
     """The input directory a compiled submission reads, and what was staged into it.
 
@@ -459,9 +465,16 @@ def stage_case_inputs(
     source = generated_dir / case_id / "input"
     if not source.is_dir():
         raise StagingError(f"no generated input at {source}")
-    declaration = ((task.get("starter") or {}).get("cpp") or {}).get("model_state")
-    if not declaration:
-        return source, {"materialized": False, "reason": "the contract declares no model state"}
+    cpp = ((task.get("starter") or {}).get("cpp") or {})
+    declaration = cpp.get("model_state")
+    configuration = cpp.get("case_configuration") or {}
+    # A compiled submission needs what the contract declares it cannot rebuild: the
+    # reference's state when there is one, and the case's construction arguments
+    # (`n_head`, `max_seqlen`, a default scale) when the construction reads them. Either
+    # one means the case's own input directory is not enough, so both go through the
+    # stage copy; neither means the case directory is handed over untouched.
+    if not declaration and not (configuration.get("args") or []):
+        return source, {"materialized": False, "reason": "the contract declares no model state or configuration"}
 
     staged = stage_root / case_id / "input"
     if staged.exists():
@@ -476,8 +489,14 @@ def stage_case_inputs(
         str(MATERIALIZE_TOOL),
         "--task-dir",
         str(task_dir),
-        "--seed",
-        str(int(case.get("seed", 42))),
+        # The case, by identity and with the list it came from: the reference's
+        # construction depends on the case's parameters, not only on its seed, so a
+        # bare seed would build the problem file's default model and hand over a state
+        # that belongs to a different case.
+        "--cases",
+        str(cases_manifest_path),
+        "--case",
+        str(case_id),
         "--precision",
         precision,
         "--output-dir",
@@ -494,6 +513,42 @@ def stage_case_inputs(
         materialized = json.loads(completed.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError) as error:
         raise StagingError(f"the materializer's report could not be read: {error}") from error
+
+    if configuration.get("args"):
+        names = list(configuration["args"])
+        values = materialized.get("init_inputs")
+        if not isinstance(values, list) or len(values) != len(names):
+            raise StagingError(
+                f"the contract declares {len(names)} construction arguments and the reference returns "
+                f"{values!r}: a compiled submission would be handed the wrong configuration"
+            )
+        (staged / "case.json").write_text(
+            json.dumps(
+                {
+                    "case_id": case_id,
+                    "configuration": {name: value for name, value in zip(names, values)},
+                    "source": configuration.get("source"),
+                    "note": (
+                        "The case's own construction arguments, by the names the contract declares. They are "
+                        "not tensors and a torch-free process cannot rebuild them; two cases of one task can "
+                        "differ here."
+                    ),
+                },
+                indent=2,
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    if declaration is None:
+        # Configuration without state: the case's own tensors plus case.json, and no
+        # state tensors to merge.
+        return staged, {
+            "materialized": False,
+            "reason": "the contract declares no model state",
+            "configuration": {name: value for name, value in zip(list(configuration.get("args") or []), materialized.get("init_inputs") or [])},
+        }
 
     prefix = declaration.get("tensor_prefix", "state_")
     for record in materialized.get("tensors", []):
@@ -517,6 +572,13 @@ def stage_case_inputs(
             "dtype": materialized.get("dtype"),
             "seed": materialized.get("seed"),
             "tensor_prefix": prefix,
+            # The case's own entry decided the construction, so the row says which case
+            # and which init arguments the state was built from: a case whose
+            # configuration differs from the problem file's defaults is the normal
+            # situation, and a state built from the defaults would be shaped like a
+            # different model.
+            "case_id": materialized.get("case_id", case_id),
+            "init_inputs": materialized.get("init_inputs"),
         }
     shutil.rmtree(staged, ignore_errors=True)
     return source, {
@@ -569,6 +631,11 @@ def run_binary_case(
         environment[policy["trace_env_var"]] = str(trace_path)
     if policy.get("case_id_env_var"):
         environment[policy["case_id_env_var"]] = case_id
+    # The tensors arrive as arguments, so a submission cannot know which directory they
+    # came from -- and the staged case directory is where the contract's declaration puts
+    # what is not a tensor: the case's construction arguments. Nothing about the path
+    # reveals the case's expected path or its golden; those stay with the evaluator.
+    environment["KB_CASE_INPUT_DIR"] = str(input_dir)
 
     output_dir = generated_dir / f"{case_id}.binary_output"
     if output_dir.exists():
@@ -793,7 +860,7 @@ def evaluate_binary_task(
         return fail(report, exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API, findings)
 
     return _build_check_and_evaluate(
-        task, task_dir, submission, build_dir, generated_dir, cases, report,
+        task, task_dir, submission, build_dir, generated_dir, cases, Path(cases_manifest), report,
         stability_reruns, verbose, warmup, repeat,
     )
 
@@ -805,6 +872,10 @@ def _build_check_and_evaluate(
     build_dir: Path,
     generated_dir: Path,
     cases: List[dict],
+    # The manifest the cases came from travels with them: staging the reference's
+    # state needs the case's own entry, and rebuilding it from the problem file's
+    # defaults produced a state belonging to a different case.
+    cases_manifest: Path,
     report: dict,
     stability_reruns: int,
     verbose: bool,
@@ -847,7 +918,8 @@ def _build_check_and_evaluate(
             print(f"[binary] {case['case_id']}", file=sys.stderr)
         try:
             case_inputs, model_state = stage_case_inputs(
-                task, task_dir, case, generated_dir, stage_root, report.get("precision") or DEFAULT_PRECISION
+                task, task_dir, case, cases_manifest, generated_dir, stage_root,
+                report.get("precision") or DEFAULT_PRECISION,
             )
         except StagingError as error:
             return fail(
