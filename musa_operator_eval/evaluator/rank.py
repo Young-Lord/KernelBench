@@ -23,8 +23,10 @@ report's `runtime` divides into it directly. A tool that trusted the comment wou
 report every ratio a thousand times too high.
 
 A ratio is only about the work when both sides measure the work. The Python path's
-`runtime` is a warm measurement; the compiled path's is the median of the calls its
-runner timed after a warmup, and a row that carries a `timing` block is one of those.
+`runtime` and a baseline's `latency_ms` come from `kernelbench.timing`; the compiled
+path's comes from the frozen runner, which now takes the same measurement -- a MUSA
+event pair around each call, the L2 cache flushed before each one, the first timed call
+discarded, the mean of the rest -- and a row that carries a `timing` block says so.
 A compiled row without it (`timing: null`) reports a process wall clock -- the device's
 first-call initialisation, mapping a library the size of muDNN, and the case's files --
 and its ratio is about startup rather than about the submission. Rows like that are

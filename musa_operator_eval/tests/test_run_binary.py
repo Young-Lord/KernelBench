@@ -326,7 +326,14 @@ raw = b"".join(struct.pack("<f", value) for value in values)
 if os.environ.get("FAKE_TIMING"):
     print(json.dumps({"warmup": int(os.environ.get("FAKE_WARMUP", 0)),
                       "repeat": int(os.environ.get("FAKE_REPEAT", 3)),
+                      "discarded": int(os.environ.get("FAKE_DISCARDED", 1)),
+                      "timer": os.environ.get("FAKE_TIMER", "musa_event"),
+                      "l2_thrash_bytes": int(os.environ.get("FAKE_THRASH", 268435456)),
                       "per_call_ms": [float(v) for v in os.environ["FAKE_TIMING"].split()]}))
+if os.environ.get("FAKE_WARM_TIMING"):
+    print(json.dumps({"warmup": 0, "repeat": 2, "discarded": 0, "timer": "host_clock",
+                      "l2_thrash_bytes": 0,
+                      "per_call_ms": [float(v) for v in os.environ["FAKE_WARM_TIMING"].split()]}))
 if os.environ.get("KB_TRACE") and not os.environ.get("FAKE_NO_TRACE"):
     with open(os.environ["KB_TRACE"], "a", encoding="utf-8") as trace:
         trace.write(json.dumps({
@@ -637,7 +644,7 @@ class TimingTests(unittest.TestCase):
     """What `runtime` means on the compiled path, and why it is not the wall clock.
 
     The runner owns the clock and reports one number per timed call; the driver owns
-    the statistic. Both halves are here: the median and the report reader as pure
+    the statistic. Both halves are here: the mean and the report reader as pure
     functions, and one case end to end with a runner that reports times.
     """
 
@@ -645,21 +652,35 @@ class TimingTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
 
-    def test_the_median_is_the_middle_and_not_the_mean(self):
-        self.assertEqual(run_binary.median([3.0, 1.0, 2.0]), 2.0)
-        self.assertEqual(run_binary.median([1.0, 2.0, 3.0, 4.0]), 2.5)
-        self.assertEqual(run_binary.median([1.0]), 1.0)
+    def test_the_statistic_is_the_framework_s_mean_in_the_format_it_reports(self):
+        """`get_timing_stats` renders `f"{mean:.3g}"`, so this reproduces that."""
+        self.assertEqual(run_binary.framework_mean([1.0, 2.0, 3.0]), 2.0)
+        self.assertEqual(run_binary.framework_mean([1.0]), 1.0)
+        # Three significant digits, not three decimals: 1.2719768 is reported as 1.27.
+        self.assertEqual(run_binary.framework_mean([1.2719768, 1.2719768]), 1.27)
+        self.assertEqual(run_binary.framework_mean([0.1288391]), 0.129)
 
     def test_the_runner_report_is_read_from_its_last_json_line(self):
-        stdout = 'noise\n{"warmup": 1, "repeat": 2, "per_call_ms": [1.0, 3.0]}\n'
+        stdout = ('noise\n{"warmup": 1, "repeat": 2, "discarded": 1, "timer": "musa_event", '
+                  '"l2_thrash_bytes": 268435456, "per_call_ms": [1.0, 3.0]}\n')
         report = run_binary.read_timing(stdout)
         self.assertEqual(report["repeat"], 2)
         self.assertEqual(report["per_call_ms"], [1.0, 3.0])
+        self.assertEqual(report["timer"], "musa_event")
+        self.assertEqual(report["cache"], "cold")
         self.assertIsNone(run_binary.read_timing("no report at all\n"))
         self.assertIsNone(run_binary.read_timing('{"per_call_ms": []}\n'))
         self.assertIsNone(run_binary.read_timing('{"per_call_ms": ["slow"]}\n'))
 
-    def test_a_case_records_the_steady_state_median_and_the_wall_clock(self):
+    def test_a_runner_that_cannot_flush_says_the_number_is_warm(self):
+        """A protocol is recorded, not assumed: no flush buffer, no cold-cache claim."""
+        report = run_binary.read_timing(
+            '{"warmup": 0, "repeat": 1, "timer": "host_clock", "l2_thrash_bytes": 0, "per_call_ms": [2.0]}\n'
+        )
+        self.assertEqual(report["cache"], "warm")
+        self.assertEqual(report["timer"], "host_clock")
+
+    def test_a_case_records_the_steady_state_mean_and_the_wall_clock(self):
         runner = self.tmp / "runner"
         runner.write_text(FAKE_RUNNER, encoding="utf-8")
         runner.chmod(0o755)
@@ -674,9 +695,15 @@ class TimingTests(unittest.TestCase):
             {"tier": "A_kernel"}, runner, {"case_id": "c1", "golden": "c1/golden/tensors.json"}, generated, stability_reruns=0
         )
         self.assertTrue(row["passed"], row)
-        self.assertEqual(row["runtime"], 4.0, "the median of 10, 4 and 2")
-        self.assertEqual(row["timing"], {"warmup": 0, "repeat": 3, "median_ms": 4.0, "min_ms": 2.0})
+        self.assertEqual(row["runtime"], 5.33, "the mean of 10, 4 and 2")
+        self.assertEqual(row["timing"], {
+            "warmup": 0, "repeat": 3, "discarded": 1, "timer": "musa_event", "cache": "cold",
+            "l2_thrash_bytes": 268435456, "mean_ms": 5.33, "min_ms": 2.0, "samples": [10.0, 4.0, 2.0],
+        })
         self.assertGreater(row["wall_ms"], 0.0)
+        # The number the row grades on is the mean of the samples it carries.
+        self.assertEqual(row["runtime"], row["timing"]["mean_ms"])
+        self.assertAlmostEqual(row["runtime"], sum(row["timing"]["samples"]) / 3, places=2)
 
     def test_a_runner_with_no_report_falls_back_to_the_wall_clock(self):
         """An older runner is still graded; the row says which number it is."""

@@ -377,7 +377,11 @@ def build_submission(
 
 
 # The framework's measurement protocol, in calls: warm up, then time this many.
-DEFAULT_WARMUP = 10
+# The framework's own call counts: `kernelbench.timing` warms up three times and then
+# runs a hundred trials, which is what `measure_baseline.py` measures the denominators
+# with and what `run_task.py`'s reports carry. The runner defaults to them so that a
+# compiled number and a Python number are the same number measured the same way.
+DEFAULT_WARMUP = 3
 DEFAULT_REPEAT = 100
 
 # The tool that turns a reference's state into tensors a submission can read. It is a
@@ -391,13 +395,20 @@ class StagingError(Exception):
     """A case's inputs could not be produced for the compiled path."""
 
 
-def median(values: Sequence[float]) -> float:
-    """The middle of a set of measurements, which is the one the mean lets a hiccup move."""
-    ordered = sorted(values)
-    middle = len(ordered) // 2
-    if len(ordered) % 2:
-        return ordered[middle]
-    return (ordered[middle - 1] + ordered[middle]) / 2.0
+def framework_mean(values: Sequence[float]) -> float:
+    """The mean as `kernelbench.timing.get_timing_stats` reports it.
+
+    That function renders its summary as `f"{value:.3g}"` -- three significant digits,
+    not three decimals -- so a baseline's `latency_ms` is a mean in that format. The
+    statistic a compiled `runtime` records has to be the same one for the same reason
+    the baselines were re-measured: a ratio between a mean and a median is a ratio
+    between two summaries. Reproducing the format keeps a compiled row and a baseline
+    row readable side by side.
+    """
+    total = 0.0
+    for value in values:
+        total += value
+    return float(f"{total / len(values):.3g}")
 
 
 def read_timing(stdout: str) -> Optional[dict]:
@@ -406,6 +417,9 @@ def read_timing(stdout: str) -> Optional[dict]:
     The clock is in the frozen runner and the statistic is here: a runner that chose
     the number would be choosing a grade, and a driver that timed the whole process
     would be timing the device's first-call initialisation instead of the submission.
+    The protocol fields travel with the samples so the record says how the number was
+    taken -- a warm-cache host clock and a cold-cache event pair are not the same
+    measurement, and only the runner knows which one it made.
     """
     for line in reversed(stdout.splitlines()):
         stripped = line.strip()
@@ -417,9 +431,14 @@ def read_timing(stdout: str) -> Optional[dict]:
             continue
         calls = report.get("per_call_ms")
         if isinstance(calls, list) and calls and all(isinstance(value, (int, float)) for value in calls):
+            thrash = int(report.get("l2_thrash_bytes", 0) or 0)
             return {
                 "warmup": int(report.get("warmup", 0)),
                 "repeat": int(report.get("repeat", len(calls))),
+                "discarded": int(report.get("discarded", 0) or 0),
+                "timer": str(report.get("timer", "host_clock")),
+                "l2_thrash_bytes": thrash,
+                "cache": "cold" if thrash else "warm",
                 "per_call_ms": [float(value) for value in calls],
             }
     return None
@@ -576,9 +595,10 @@ def run_binary_case(
         except (OSError, subprocess.SubprocessError) as error:
             row.update({"passed": False, "errors": [f"the runner could not be run: {error}"]})
             return row
-        # `runtime` is the submission's own work at steady state, in milliseconds: the
-        # median of the calls the runner timed after its warmup, which is the unit and
-        # the meaning `run_task`'s reports carry. `wall_ms` is what the process took
+        # `runtime` is the submission's own work at steady state, in milliseconds, taken
+        # the way the framework takes it and a baseline is measured: a MUSA event pair
+        # around each call, the L2 cache flushed before each one, the first timed call
+        # discarded, and the mean of what is left. `wall_ms` is what the process took
         # end to end -- device initialisation, library mapping, reading the case and
         # writing the answer included -- and it is kept because a reader comparing two
         # numbers deserves to know which one is which.
@@ -588,12 +608,17 @@ def run_binary_case(
             row["wall_ms"] = round(elapsed_ms, 3)
             if timing:
                 calls = timing["per_call_ms"]
-                row["runtime"] = round(median(calls), 3)
+                row["runtime"] = framework_mean(calls)
                 row["timing"] = {
                     "warmup": timing["warmup"],
                     "repeat": timing["repeat"],
-                    "median_ms": round(median(calls), 3),
+                    "discarded": timing["discarded"],
+                    "timer": timing["timer"],
+                    "cache": timing["cache"],
+                    "l2_thrash_bytes": timing["l2_thrash_bytes"],
+                    "mean_ms": framework_mean(calls),
                     "min_ms": round(min(calls), 3),
+                    "samples": [round(value, 6) for value in calls],
                 }
             else:
                 row["runtime"] = round(elapsed_ms, 3)

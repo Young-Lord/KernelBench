@@ -60,7 +60,7 @@
           ]
         },
         "runtime": {
-          "description": "The submission's own work at steady state, in milliseconds: the median of the calls the runner timed after its warmup, which is the meaning `run_task`'s rows carry. Not the process's wall clock -- that is `wall_ms`, and it is dominated by the device's first-call initialisation and by mapping a library the size of muDNN.",
+          "description": "The submission's own work at steady state, in milliseconds, taken the way the framework takes it and a baseline is measured: a MUSA event pair around each call, the L2 cache flushed before each one, the first timed call discarded, and the mean of what is left. Not the process's wall clock -- that is `wall_ms`, and it is dominated by the device's first-call initialisation and by mapping a library the size of muDNN.",
           "type": [
             "number",
             "null"
@@ -210,20 +210,60 @@
           "required": [
             "warmup",
             "repeat",
-            "median_ms"
+            "discarded",
+            "timer",
+            "cache",
+            "l2_thrash_bytes",
+            "mean_ms",
+            "min_ms",
+            "samples"
           ],
           "properties": {
             "warmup": {
-              "type": "integer"
+              "type": "integer",
+              "minimum": 0,
+              "description": "Calls made to bring the process and the device to a steady state before any timed call."
             },
             "repeat": {
-              "type": "integer"
-            },
-            "median_ms": {
-              "type": "number"
+              "type": "integer",
+              "minimum": 1,
+              "description": "How many timed calls the submission was measured over; `samples` holds them."
             },
             "min_ms": {
               "type": "number"
+            },
+            "discarded": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Timed calls thrown away before the recorded ones, as the framework discards its first trial."
+            },
+            "timer": {
+              "type": "string",
+              "description": "What took the time: `musa_event` is a MUSA event pair around the call, as the framework uses, and `host_clock` is an older runner."
+            },
+            "cache": {
+              "type": "string",
+              "enum": [
+                "cold",
+                "warm"
+              ],
+              "description": "`cold` when the runner flushed the L2 cache before every timed call, as the framework does; `warm` when it could not allocate the buffer."
+            },
+            "l2_thrash_bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "How many bytes the runner wrote to evict the cache before each timed call; zero means it did not."
+            },
+            "mean_ms": {
+              "type": "number",
+              "description": "The mean of `samples`, in the format `kernelbench.timing.get_timing_stats` uses."
+            },
+            "samples": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "description": "Every timed call, so a reader can re-derive the number the row carries."
             }
           }
         }

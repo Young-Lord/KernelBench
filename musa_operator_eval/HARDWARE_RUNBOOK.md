@@ -57,10 +57,12 @@ tolerance that only one grader read.
 Two consequences worth stating plainly:
 
 * A number measured by a *different* protocol is not comparable with these, and the
-  case manifests no longer offer one to be measured by. The compiled path is the one
-  place where the timer still differs -- it is a host clock around a submission call,
-  with the ABI's own host-to-device copies inside the timed region -- which is why a
-  compiled case is only ranked against another compiled case until that is aligned.
+  case manifests no longer offer one to be measured by. The compiled path's runner now
+  takes the same measurement (event pair, per-call L2 flush, first trial discarded,
+  mean) and says so in the `timing` block of every case row, so a compiled number is
+  comparable with a baseline; what still separates the two forms is not the clock but
+  the ABI, whose host-to-device copies sit inside the measured interval, which is why a
+  compiled case is only ranked against another compiled case.
 * Upstream KernelBench's numbers are cold-cache and mean-based, like ours, so they are
   the same kind of number; but a number from a warm-cache tool (this repository's own
   earlier records, for instance) is not.
@@ -167,14 +169,26 @@ depending on size (about 110 MB/s); the attention call itself is **0.5 ms** the 
 time and **under 0.1 ms** after that. A wall clock around the process is therefore 99.9%
 startup and disk, and it is not the quantity the Python path's `runtime` reports.
 
-The runner takes `--warmup W --repeat N` (defaults 10 and 100, the framework's own
-protocol): it reads the inputs once, calls `kernel_entry` W times to settle, times the
-next N with its own clock, and prints one line of per-call times. The driver takes the
-**median** and records it as `runtime`, keeping the process's wall clock as `wall_ms`.
+The runner takes `--warmup W --repeat N` (defaults 3 and 100, the framework's own call
+counts): it reads the inputs once, calls `kernel_entry` W times to settle, then takes
+`repeat + 1` timed calls -- a MUSA event pair around each one, the L2 cache flushed
+before each one, the first discarded -- and prints one line of per-call times. The
+driver takes the **mean** the framework's `get_timing_stats` takes and records it as
+`runtime`, keeping the process's wall clock as `wall_ms`.
 
-    "runtime": 1.28,                     # median of the timed calls, milliseconds
+    "runtime": 1.28,                     # mean of the timed calls, milliseconds
     "wall_ms": 553.1,                    # the whole process: start, load, read, write
-    "timing": {"warmup": 10, "repeat": 100, "median_ms": 1.28, "min_ms": 1.19}
+    "timing": {"warmup": 3, "repeat": 100, "discarded": 1, "timer": "musa_event",
+               "cache": "cold", "l2_thrash_bytes": 268435456,
+               "mean_ms": 1.28, "min_ms": 1.19, "samples": [1.28, 1.31, ...]}
+
+The protocol travels with the number: `timer`, `cache` and `l2_thrash_bytes` say how it
+was taken, so a row cannot claim a cold-cache event measurement it did not make (an
+older runner, or a device where the 256 MB flush buffer could not be allocated, records
+`cache: "warm"`). One boundary is worth knowing here: the events are recorded on the
+default stream, so a submission that launches on a stream of its own and does not
+synchronize is timed as if it had done nothing. Every worked answer and skeleton uses
+the default stream, which is the pattern the ABI documents.
 
 Two rules follow from that shape. A submission that re-initialises the device inside
 every call is measured paying for it -- hoisting it into a function-local static is the

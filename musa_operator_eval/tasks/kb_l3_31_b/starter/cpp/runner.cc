@@ -18,10 +18,32 @@
 // that only wants an answer should ask for. The clock lives here rather than in the
 // submission for the obvious reason: a submission that reported its own runtime
 // would be reporting its own grade.
+//
+// The measurement is the *framework's* protocol, not one of this file's own making,
+// so that a compiled number and a baseline's `latency_ms` -- which
+// `kernelbench.timing` produces -- are the same kind of number:
+//
+//   * the clock is a pair of MUSA events around the call, as upstream's
+//     `time_execution_with_cuda_event` uses, not a host clock;
+//   * the L2 cache is flushed before every timed call (a 256 MB fill, which is what
+//     upstream's `clear_l2_cache` is), so the numbers are cold-cache numbers; the
+//     fill is queued before the start event, so its own duration is outside the
+//     measured interval;
+//   * the first timed call is discarded, as `discard_first=1` does upstream;
+//   * the samples are reported and the *statistic* is the caller's, because the
+//     driver takes the mean the framework's `get_timing_stats` takes -- this file
+//     reports what each call took, not what a grade should be.
+//
+// The one boundary worth knowing before reading a number from here: the events are
+// recorded on the default stream, so a submission that launches its work on a stream
+// of its own and does not synchronize will be timed as if it had done nothing. Every
+// worked answer and every skeleton uses the default stream, which is why the ABI
+// documents the submission's own allocations and copies as the pattern to follow.
 #include <musa_runtime.h>
 
-#include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -33,12 +55,23 @@ extern "C" int kernel_entry(const std::vector<abi::Tensor>& inputs, std::vector<
 
 namespace {
 
-double milliseconds(std::chrono::steady_clock::time_point from, std::chrono::steady_clock::time_point to) {
-    return std::chrono::duration<double, std::milli>(to - from).count();
-}
+// Upstream's `clear_l2_cache` allocates a 32 x 1024 x 1024 int64 tensor and fills
+// it: 256 MB written to capacity, which is the point of it.
+constexpr size_t THRASH_BYTES = 256ull * 1024 * 1024;
 
 void usage(const char* program) {
     std::fprintf(stderr, "usage: %s <input-dir> <output-dir> [--warmup N] [--repeat N]\n", program);
+}
+
+// A buffer whose only purpose is to evict what the previous call left in the cache.
+// A failed allocation is not fatal: the run is still a run, it is a warm-cache one,
+// and the reported `l2_thrash_bytes` says so rather than leaving it to be guessed.
+size_t prepare_thrash_buffer(void** buffer) {
+    if (musaMalloc(buffer, THRASH_BYTES) != musaSuccess) {
+        *buffer = nullptr;
+        return 0;
+    }
+    return THRASH_BYTES;
 }
 
 }  // namespace
@@ -70,20 +103,54 @@ int main(int argc, char** argv) {
     try {
         std::vector<abi::Tensor> inputs = abi::read_tensors(input_dir);
         std::vector<abi::Tensor> outputs;
+
+        void* thrash = nullptr;
+        const size_t thrash_bytes = prepare_thrash_buffer(&thrash);
+        musaEvent_t start = nullptr;
+        musaEvent_t end = nullptr;
+        const bool timed = repeat > 0;
+        if (timed && (musaEventCreate(&start) != musaSuccess || musaEventCreate(&end) != musaSuccess)) {
+            std::fprintf(stderr, "cannot create the timing events\n");
+            return 5;
+        }
+        // The first timed call is a discarded one, so the reported samples are all
+        // of a warmed cache: one extra call is enqueued and dropped. A single-call
+        // run (`--repeat 1`, and the no-flags default) has nothing to warm, so it
+        // stays one call and one write, which is what the header promises.
+        const int discarded = repeat > 1 ? 1 : 0;
+        const int calls = warmup + repeat + discarded;
         std::vector<double> timings;
         timings.reserve(static_cast<size_t>(repeat));
-        for (int call = 0; call < warmup + repeat; ++call) {
+        for (int call = 0; call < calls; ++call) {
             // The submission fills the vector completely on every call, so it starts
             // empty each time rather than accumulating outputs across calls.
             outputs.clear();
-            // The previous call's device work is finished before the clock starts,
-            // so a call is timed for its own work rather than for whatever the call
-            // before it left running.
-            musaDeviceSynchronize();
-            const auto started = std::chrono::steady_clock::now();
+            const bool measure_this_call = call >= warmup + discarded;
+            double elapsed = 0.0;
+            if (measure_this_call) {
+                // The device is idle before the flush is queued, so the interval
+                // that follows holds this call's work and the wait for the eviction
+                // is stream-ordered behind it rather than inside it.
+                musaDeviceSynchronize();
+                if (thrash != nullptr) {
+                    musaMemset(thrash, 42, thrash_bytes);
+                }
+                musaEventRecord(start, 0);
+            }
             const int status = kernel_entry(inputs, outputs);
-            musaDeviceSynchronize();
-            const double elapsed = milliseconds(started, std::chrono::steady_clock::now());
+            if (measure_this_call) {
+                musaEventRecord(end, 0);
+                musaEventSynchronize(end);
+                float milliseconds = 0.0f;
+                if (musaEventElapsedTime(&milliseconds, start, end) == musaSuccess) {
+                    elapsed = milliseconds;
+                }
+                timings.push_back(elapsed);
+            } else {
+                // A warmup call is not timed, but its device work has to be finished
+                // before the next call starts, or the next one would be waiting for it.
+                musaDeviceSynchronize();
+            }
             if (status != 0) {
                 std::fprintf(stderr, "kernel_entry returned %d\n", status);
                 return 3;
@@ -92,12 +159,24 @@ int main(int argc, char** argv) {
                 std::fprintf(stderr, "kernel_entry produced no output\n");
                 return 3;
             }
-            if (call >= warmup) timings.push_back(elapsed);
         }
+        // The output belongs to the last call, and the copy back has to have landed
+        // before it is read out of the host-side tensor.
+        musaDeviceSynchronize();
         abi::write_tensors(output_dir, outputs);
+        if (thrash != nullptr) musaFree(thrash);
+        if (timed) {
+            musaEventDestroy(start);
+            musaEventDestroy(end);
+        }
         // One line on stdout, and the statistic is the caller's to compute: this
-        // reports what each timed call took, not what a grade should be.
-        std::printf("{\"warmup\": %d, \"repeat\": %d, \"per_call_ms\": [", warmup, repeat);
+        // reports what each timed call took, not what a grade should be. The fields
+        // that describe the protocol travel with the samples, so a record cannot
+        // claim a cold-cache event measurement it did not make.
+        std::printf(
+            "{\"warmup\": %d, \"repeat\": %d, \"discarded\": %d, \"timer\": \"musa_event\", "
+            "\"l2_thrash_bytes\": %zu, \"per_call_ms\": [",
+            warmup, repeat, discarded, thrash_bytes);
         for (size_t i = 0; i < timings.size(); ++i) {
             std::printf("%s%.6f", i ? ", " : "", timings[i]);
         }

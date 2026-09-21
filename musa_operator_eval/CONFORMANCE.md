@@ -308,26 +308,47 @@ that process is therefore 99.9% startup and I/O, and comparing it with the Pytho
 path's `runtime` -- which is measured in a warm process with the tensors already on the
 device -- compares two different quantities.
 
-So the frozen runner takes `--warmup W --repeat N`: it reads the inputs once, calls
-`kernel_entry` W times to settle the process and the device, times the next N calls with
-its own clock, and reports each one. The driver takes the median of those N and records
-it as `runtime`, keeping the process wall clock as `wall_ms`; the clock is in the frozen
-half, so a submission cannot report its own grade, and the statistic is in the driver,
-where a test can hold it. The defaults are the framework's trial count (a hundred
-measurements, after a warmup that is ten calls here rather than the framework's three).
-A runner that reports no timings still grades, with `runtime` falling back to the wall
-clock and `timing` null, which is what an older starter does.
+So the frozen runner takes `--warmup W --repeat N` (defaults 3 and 100, the framework's
+own call counts): it reads the inputs once, calls `kernel_entry` W times to settle the
+process and the device, then takes `repeat + 1` timed calls and reports each one. The
+clock is in the frozen half, so a submission cannot report its own grade, and the
+statistic is in the driver, where a test can hold it.
 
-What that number is *not* is the framework's protocol, and the difference is recorded
-rather than glossed: §4.4's baselines are now measured by
-`kernelbench.timing` -- device events, one pass of a hundred trials, an L2 thrash before
-each so the number is cold-cache, the mean -- while this path times calls with a host
-clock, does not flush a cache between them, and reports the median. Adding the flush and
-moving the clock inside a MUSA event pair is the mechanical way to close the gap (it is
-roughly the same fifty lines), and until it is closed a compiled row's ratio is a ratio
-between this path and itself. That is why `rank.py`'s docstring says a compiled case is
-only ranked against another compiled case, and why the timer difference is written down
-in `HARDWARE_RUNBOOK.md` beside the protocol it differs from.
+**The measurement is the framework's protocol, not one this path invented.** The same
+commit that moved the baselines onto `kernelbench.timing` moved the runner onto the same
+measurement, so that a compiled `runtime` and a baseline's `latency_ms` divide each other
+as like by like: a MUSA **event pair** around each call rather than a host clock, the
+**L2 cache flushed before every timed call** (a 256 MB fill, which is what upstream's
+`clear_l2_cache` is) so the numbers are cold-cache numbers, the **first timed call
+discarded** as `discard_first=1` discards it, and the **mean** of what is left, in the
+three-significant-digit format `get_timing_stats` renders. The flush is queued outside
+the measured interval, and the fields that describe the protocol travel in the row --
+`timer`, `cache`, `l2_thrash_bytes`, `samples` -- so a row cannot claim a measurement it
+did not make: a runner that could not allocate the flush buffer records `cache: "warm"`,
+and a runner that reports no timings at all still grades, with `runtime` falling back to
+the process wall clock and `timing` null, which is what an older starter does.
+
+Two boundaries are stated rather than left to be discovered. The events are recorded on
+the device's default stream, so a submission that launches on a stream of its own and
+does not synchronize is timed as if it had done nothing; every worked answer and every
+skeleton uses the default stream, which is the pattern the ABI documents. And a compiled
+case is still only ever ranked against another compiled case, because the forms differ by
+their overheads -- the ABI's host-to-device copies are inside this interval by design --
+rather than by their clocks.
+
+**What aligning the two clocks cost, measured.** Both compiled rows were re-measured
+under the framework's protocol (event pair, per-call L2 flush, first trial discarded,
+mean) and both still pass -- the worked A kernel 9 of 9, the B adapter 10 of 10 -- but
+they moved by different amounts, and the difference is the interesting part. The worked
+kernel's smallest case went from 3.8 ms to 10.7 ms, a factor of 2.8 with a *tight*
+distribution (100 samples spanning 10.68-10.84 ms), because that kernel is compute- and
+cache-bound and a flushed cache is exactly what it feels. The B adapter barely moved:
+0.501 ms to 0.496 ms on the single-token case, 24.356 ms to 23.8 ms on the widest one,
+because those rows are the ABI's host-to-device transport rather than cache behaviour
+(§4.7's arithmetic: 98% of that case is the copy). A protocol change that had only moved
+the small case would have been a change in the timer; the fact that it moved the
+cache-sensitive row and left the transport-bound row alone is evidence it did what it
+says.
 
 **Defect found and fixed by that run.** The stage selected build products by suffix
 (`.so`, `.o`), and a linker's final product is an executable with no suffix at all,
@@ -369,8 +390,8 @@ The device readings, each against the baseline measured the framework's way:
 
 | report | ratio | cases compared |
 |---|---|---|
-| A tier: the worked compiled kernel (fp32, steady state) | `x0.05187` | 2 of 9 |
-| B tier: the compiled muDNN adapter | `x0.08007` | 10 of 10 |
+| A tier: the worked compiled kernel (fp32, steady state) | `x0.05306` | 2 of 9 |
+| B tier: the compiled muDNN adapter | `x0.08565` | 10 of 10 |
 | B tier: the five Python experts | `x0.99586` to `x1.00842` | 48 of 48 |
 
 Three readings from that session are worth keeping. A B-tier Python report now lands

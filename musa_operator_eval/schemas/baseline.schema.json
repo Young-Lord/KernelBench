@@ -95,7 +95,7 @@
             "number",
             "null"
           ],
-          "description": "Invocations of the case's operation per second, derived from the median."
+          "description": "Invocations of the case's operation per second, derived from `latency_ms`, which is the framework's mean of the trials."
         },
         "latency_ms_samples": {
           "description": "The samples the statistic and the quantiles were derived from: the trials the framework's timing loop ran, minus its discarded first one. Named for samples rather than rounds because the framework's loop has one pass, and calling a trial a round would describe a structure it does not have.",
