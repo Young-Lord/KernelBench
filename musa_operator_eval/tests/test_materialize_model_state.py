@@ -20,6 +20,15 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+try:
+    import torch
+
+    _TORCH = True
+except ImportError:  # the device has it; a laptop without a GPU stack does not
+    torch = None
+    _TORCH = False
+
 sys.path.insert(0, str(ROOT))
 
 SPEC = importlib.util.spec_from_file_location(
@@ -65,6 +74,43 @@ class DigestTests(unittest.TestCase):
     def test_an_empty_state_has_a_digest_too(self):
         """A stateless reference still records one, so a report is uniform."""
         self.assertEqual(MATERIALIZE.state_digest([]), MATERIALIZE.state_digest([]))
+
+
+@unittest.skipUnless(_TORCH, "requires torch: bfloat16 is a torch dtype")
+class Bfloat16StorageTests(unittest.TestCase):
+    """bfloat16 has no numpy dtype, so its storage is read as 16 bits and must survive."""
+
+    def test_a_bfloat16_tensor_keeps_its_bits(self):
+        if not hasattr(torch, "bfloat16"):
+            self.skipTest("this torch has no bfloat16")
+        values = torch.tensor([0.5, -1.25, 3.0, 0.0], dtype=torch.bfloat16)
+        payload = MATERIALIZE.raw_bytes(values)
+        self.assertEqual(len(payload), values.numel() * 2)
+        # The bytes are the tensor's own storage, read back as 16-bit integers.
+        expected = values.view(torch.int16).numpy().tobytes()
+        self.assertEqual(payload, expected)
+        self.assertNotEqual(payload, b"\x00" * len(payload))
+
+    def test_the_reader_is_asked_for_a_dtype_this_torch_has(self):
+        """The bug this class exists for: `torch.uint16` is not a dtype here."""
+        self.assertFalse(hasattr(torch, "uint16"), "if torch grows uint16, this note can go")
+
+
+class PrecisionVocabularyTests(unittest.TestCase):
+    """A case names its dtype in torch's spelling; the drivers use a short one."""
+
+    def test_both_spellings_reach_the_same_dtype(self):
+        self.assertEqual(MATERIALIZE.normalize_precision("bfloat16"), "bf16")
+        self.assertEqual(MATERIALIZE.normalize_precision("float16"), "fp16")
+        self.assertEqual(MATERIALIZE.normalize_precision("float32"), "fp32")
+        self.assertEqual(MATERIALIZE.normalize_precision("bf16"), "bf16")
+        self.assertEqual(MATERIALIZE.normalize_precision("FP16"), "fp16")
+
+    def test_something_that_is_not_a_precision_is_refused(self):
+        import argparse
+
+        with self.assertRaises(argparse.ArgumentTypeError):
+            MATERIALIZE.normalize_precision("int8")
 
 
 class StagingTests(unittest.TestCase):
@@ -161,6 +207,33 @@ class StagingTests(unittest.TestCase):
             ["input_0"],
         )
         self.assertFalse((self.case_input / "state_c_attn.weight.bin").exists())
+
+    def test_the_state_is_cast_to_the_case_s_dtype_and_not_the_run_s(self):
+        """A case carries its dtype, so the state is cast to it.
+
+        The driver used to pass the run's `--precision` through, which gave every
+        bfloat16 case a state cast to float16 while the case's own tensors were bfloat16:
+        the submission read those bytes as bfloat16 and computed with weights that were
+        not the reference's, from a file that said they were.
+        """
+        seen = self.tmp / "seen_precision.txt"
+        self.fake.write_text(
+            "import argparse, json, pathlib, sys\n"
+            "parser = argparse.ArgumentParser()\n"
+            "parser.add_argument('--task-dir'); parser.add_argument('--precision')\n"
+            "parser.add_argument('--cases'); parser.add_argument('--case')\n"
+            "parser.add_argument('--output-dir')\n"
+            "args = parser.parse_args()\n"
+            f"pathlib.Path({str(seen)!r}).write_text(args.precision)\n"
+            "json.dump({'digest': 'd', 'tensors': []}, sys.stdout)\n",
+            encoding="utf-8",
+        )
+        case = dict(self.case())
+        case["dtype"] = "bfloat16"
+        RUN_BINARY.stage_case_inputs(
+            self.task(True), self.task_dir, case, self.manifest, self.generated, self.tmp / "stage", "fp16"
+        )
+        self.assertEqual(seen.read_text(encoding="utf-8"), "bfloat16")
 
     def test_a_stateless_reference_with_arguments_is_staged_for_its_configuration(self):
         """No state, but the construction still reads the case's own arguments.
@@ -278,15 +351,6 @@ class StagingTests(unittest.TestCase):
                 "fp16",
             )
         self.assertIn("collides", str(raised.exception))
-
-
-try:
-    import torch
-
-    _TORCH = True
-except ImportError:  # the device has it; a laptop without a GPU stack does not
-    torch = None
-    _TORCH = False
 
 
 @unittest.skipUnless(_TORCH, "requires torch: the construction under test is the framework's")

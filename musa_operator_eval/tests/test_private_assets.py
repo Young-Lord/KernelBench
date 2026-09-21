@@ -285,6 +285,26 @@ class CompiledAnswerScopeTests(unittest.TestCase):
                     "which no torch-free submission can reconstruct unless the contract stages it",
                 )
 
+    def test_a_compiled_answer_declares_the_inputs_it_reads(self):
+        """Both halves of what a compiled answer needs have to be declared, not implied.
+
+        The answers for the projection-and-attention families read two things beyond the
+        case's tensors: the reference's state, and the case's construction arguments --
+        `n_head` decides how the qkv buffer splits, in a way no tensor's shape carries. The
+        evaluator stages each only because the contract declares it, so a package that
+        ships an answer without declaring them is an answer whose inputs nobody hands over,
+        and it would fail on the device with a staging error rather than here.
+        """
+        answers = sorted(self.PRIVATE.glob("*/compiled/kernel.mu"))
+        for answer in answers:
+            task_id = answer.parent.parent.name
+            task = next(task for _d, task in self.packages() if task["id"] == task_id)
+            cpp = ((task.get("starter") or {}).get("cpp") or {})
+            with self.subTest(task=task_id):
+                self.assertIn("case_configuration", cpp,
+                              f"{task_id} ships a compiled answer and declares no construction arguments")
+                self.assertIsInstance(cpp["case_configuration"].get("args"), list)
+
 
 class HiddenCaseListTests(unittest.TestCase):
     """§4.3: every package is graded on a hidden list, and the list follows the rules.

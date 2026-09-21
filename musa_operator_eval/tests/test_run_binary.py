@@ -705,6 +705,37 @@ class TimingTests(unittest.TestCase):
         self.assertEqual(row["runtime"], row["timing"]["mean_ms"])
         self.assertAlmostEqual(row["runtime"], sum(row["timing"]["samples"]) / 3, places=2)
 
+    def test_a_stale_trace_from_an_earlier_run_does_not_decide_this_one(self):
+        """The trace is this run's evidence, so the case's file starts empty.
+
+        The check reads every record for the case and fails if any of them names a path
+        other than the expected one. A trace file left behind by an earlier submission --
+        or by an earlier build of the same one, which is how this was found -- therefore
+        failed a case whose own records were correct.
+        """
+        runner = self.tmp / "runner"
+        runner.write_text(FAKE_RUNNER, encoding="utf-8")
+        runner.chmod(0o755)
+        generated = self.tmp / "generated"
+        write_tensor_dir(generated / "c1" / "input", [("input_0", "float32", (2,), [1.0, 2.0])])
+        write_tensor_dir(generated / "c1" / "golden", [("output", "float32", (2,), [1.0, 2.0])], reference="cpu_fp64_reference")
+        stale = generated / "c1.trace.jsonl"
+        stale.write_text(
+            json.dumps({"case_id": "c1", "selected_path": "custom_fallback", "probe_status": "stale"}) + "\n",
+            encoding="utf-8",
+        )
+        os.environ["FAKE_SELECTED"] = "fused_library"
+        self.addCleanup(os.environ.pop, "FAKE_SELECTED", None)
+        row = run_binary.run_binary_case(
+            {"tier": "B_library", "library_policy": {"trace_env_var": "KB_TRACE", "case_id_env_var": "KB_CASE",
+                                                      "required_trace_fields": ["case_id", "selected_path", "probe_status"]}},
+            runner, {"case_id": "c1", "golden": "c1/golden/tensors.json", "expected_path": "fused_library"},
+            generated, stability_reruns=0,
+        )
+        self.assertTrue(row.get("dispatch_trace_passed"), row.get("errors"))
+        records = [json.loads(line) for line in stale.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self.assertEqual([record["selected_path"] for record in records], ["fused_library"])
+
     def test_a_runner_with_no_report_falls_back_to_the_wall_clock(self):
         """An older runner is still graded; the row says which number it is."""
         runner = self.tmp / "runner"

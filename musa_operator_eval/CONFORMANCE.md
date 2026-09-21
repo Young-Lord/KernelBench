@@ -248,9 +248,37 @@ this family. It asks the library first and reads the answer rather than predicti
 it: on this build the fused kernel answers head dimension up to 160 and refuses above
 it (*"Flash Attention 2 Not Support HeadDim > 160 Now"*), so the adapter takes the
 fused path or the library's non-fused path and records which one produced the number.
-Through `evaluator/run_binary.py` over the ten hidden cases it exits 0 with 10 of 10
-passed, every recorded path equal to its expected one, and the artifact's dynamic
-section naming `libmudnn` and no torch.
+
+**Four families have a compiled answer, and every one of them was verified end to end.**
+The three beyond level-1 are the families whose reference builds weights in `__init__`,
+which the staging above is what makes possible at all. Each is a worked submission under
+`private/`, each links only `libmudnn` and `libmusart`, and each was driven through
+`evaluator/run_binary.py` over its whole hidden set on the device:
+
+| family | result | worst error against the golden | recorded paths |
+|---|---|---|---|
+| `kb_l1_97_a` (A tier: hand-written kernel) | 9 of 9 | 2.2e-06 | no trace on this tier |
+| `kb_l1_97_b` (SDPA through the library) | 10 of 10 | 4.9e-4 / 3.9e-3 | fused 6, composition 4 |
+| `kb_l3_31_b` (ViT attention, layer-normed) | 10 of 10 | 1.2e-3 - 3.1e-2 | fused 6, composition 4 |
+| `kb_l3_43_b` (minGPT causal attention) | 10 of 10 | 2.4e-4 - 3.9e-3 | fused 6, composition 4 |
+| `kb_l3_44_b` (minGPT block: attention + MLP) | 10 of 10 | 2.0e-3 | fused 6, composition 4 |
+
+Every recorded path equals the case's expected one, which is what the trace check
+enforces, and every artifact's dynamic section names `libmudnn` and no torch.
+
+**The library's behaviour shaped each answer, and every claim here was measured on the
+device rather than read off a header.** `RunWithBiasAdd` at bfloat16 with a 768-wide
+output returns SUCCESS and computes the product *without* the bias (768 where 770 was
+due) while the same call at 8x32x64 adds it; muDNN's `Binary` add writes the bias alone
+when its output and left operand are the same tensor; `RunMath` ignores `SetCausal` (a row
+comes out as the mean over every key) and refuses the strided `[B, H, T, D]` view over a
+`[B*T, 3C]` buffer that the fused kernel accepts (*"Validate q stride"*); `Permute`
+produces the wrong elements -- with `SUCCESS` -- unless both sides are contiguous with the
+permutation configured through `ConfigDimStride`, and its three-axis rotation is not its
+own inverse. The answers therefore add every bias by a separate broadcast add into its own
+buffer, pass the causal mask explicitly to whichever path answers, project into contiguous
+buffers, and name each layout change at its call site. `HARDWARE_RUNBOOK.md` records the
+same list for anyone writing a submission.
 
 **The state is materialized for the case, not for the problem file's defaults.** The
 first version of this tool loaded `problem.py` as written and built the model from
@@ -283,16 +311,31 @@ seed stream the golden was produced from. `task.json:starter.cpp.model_state` de
 the arrangement per package (`tensor_prefix`, `materialized_by`, where the seeding
 comes from) or is null for a reference that carries nothing.
 
-The scope is therefore a property of what each task hands over rather than of the
-tiers: `kb_l1_97_a` and `kb_l1_97_b` are graded from their three tensors alone, and the
-other nine from their inputs plus staged state. What is still missing for the
-dispatch-shaped families is not the mechanism but the submissions -- a compiled
-adapter that routes projection, attention and the surrounding block through muDNN
-operators -- and those are per-family work, verified on the device like the level-1
-one. `tests/test_private_assets.py::CompiledAnswerScopeTests` fails if an answer exists
-where neither the case's inputs nor a declaration covers it, and
-`tests/test_materialize_model_state.py` checks on the device that each declaration
-matches what its reference actually holds.
+**The construction arguments are the other half of that.** A case re-binds module
+constants (`case_parameters`), so `n_head` decides how the qkv projection's output splits
+-- and no tensor's shape carries it, because the projection's width is `3C` either way.
+Every contract now declares `starter.cpp.case_configuration` (the names `get_init_inputs()`
+returns, extracted from each problem), the evaluator stages the case's own values as
+`case.json` beside its tensors, and the driver exports the staged directory as
+`KB_CASE_INPUT_DIR`, because the tensors arrive as arguments and the path is not implied by
+them. A contract that declares a different number of names than the reference returns is a
+staging error rather than a submission's wrong number.
+
+**The scope, as a property of the declarations rather than a backlog.** A compiled answer
+is legitimate exactly where the task hands over everything a torch-free process needs: the
+case's tensors, the reference's state when it has one, and the construction arguments. Four
+of the eleven packages meet that and have an answer (the two level-1 families, the
+layer-normed ViT attention and the two minGPT families). What does not is stated with its
+reason: `swin_transformer_v2_a_v0` and `relu_causal_attention_a_v0` have no B track in the
+ledger at all, so a library-path answer for them would measure something the ledger already
+decided is not a task; and the A tiers of the ViT and minGPT families cannot use library
+calls even in principle, so their compiled path would mean hand-writing the projection,
+attention, MLP and normalisation kernels rather than dispatching -- a different job from
+this one, and one the tier does not require of a submission.
+`tests/test_private_assets.py::CompiledAnswerScopeTests` fails if an answer exists where
+neither the case's inputs nor a declaration covers it, and if an answer's contract does not
+declare both halves of what it reads; `tests/test_materialize_model_state.py` checks on the
+device that each declaration matches what its reference actually holds.
 
 The anti-cheating half holds independently of that: the artifact is built, its
 dynamic section is read, and a submission linking outside the whitelist is refused
@@ -422,8 +465,20 @@ The device readings, each against the baseline measured the framework's way:
 | report | ratio | cases compared |
 |---|---|---|
 | A tier: the worked compiled kernel (fp32, steady state) | `x0.05306` | 2 of 9 |
-| B tier: the compiled muDNN adapter | `x0.08565` | 10 of 10 |
 | B tier: the five Python experts | `x0.99586` to `x1.00842` | 48 of 48 |
+| B tier: the compiled level-1 answer | `x0.08565` | 10 of 10 |
+| B tier: the compiled causal-attention answer (`kb_l3_43_b`) | `x0.12306` | 10 of 10 |
+| B tier: the compiled transformer-block answer (`kb_l3_44_b`) | `x0.16590` | 10 of 10 |
+| B tier: the compiled ViT-attention answer (`kb_l3_31_b`) | `x0.24325` | 10 of 10 |
+
+The compiled answers sit four to twelve times behind their Python counterparts, and the
+gap is the form rather than the dispatch decision: the Python path is handed device
+tensors and hands them to one library call, while a compiled submission is handed host
+bytes, copies them up itself, and pays for the layout changes (`Permute`) that the
+framework's own bindings do invisibly. The ABI's host-to-device copies are inside the
+timed region by design, which is why a compiled case is only ever ranked against another
+compiled case -- the four rows above are comparable with each other and with the compiled
+A-tier row, and the Python experts' rows are comparable with theirs.
 
 Three readings from that session are worth keeping. A B-tier Python report now lands
 within 0.4% of its own baseline, because the report and the baseline are the same

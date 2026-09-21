@@ -66,9 +66,34 @@ def raw_bytes(tensor) -> bytes:
 
     tensor = tensor.detach().cpu().contiguous()
     if tensor.dtype == torch.bfloat16:
-        # numpy has no bfloat16; the same bits read as uint16 keep the storage exact.
-        return tensor.view(torch.uint16).numpy().tobytes()
+        # numpy has no bfloat16, so the same bits are read as a 16-bit integer and written
+        # back unchanged. The view has to name a dtype this torch actually has: `uint16`
+        # is not one of them, and asking for it raised AttributeError, so a bfloat16 case's
+        # state was never materialized at all -- it failed loudly, which is why no bf16
+        # compiled run had ever got past staging.
+        return tensor.view(torch.int16).numpy().tobytes()
     return tensor.numpy().tobytes()
+
+
+#: The two vocabularies this argument arrives in: the drivers' short one (`fp16`) and the
+#: one the cases and manifests use (`bfloat16`). A caller that has a case in hand should
+#: pass the case's own dtype, and the tool reads either spelling rather than making every
+#: caller translate.
+PRECISION_ALIASES = {
+    "fp16": "fp16", "float16": "fp16", "half": "fp16",
+    "bf16": "bf16", "bfloat16": "bf16",
+    "fp32": "fp32", "float32": "fp32", "float": "fp32",
+}
+
+
+def normalize_precision(value: str) -> str:
+    """The driver's spelling of a precision the case may have named in torch's."""
+    try:
+        return PRECISION_ALIASES[str(value).lower()]
+    except KeyError:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is not a precision; expected one of {sorted(set(PRECISION_ALIASES))}"
+        )
 
 
 def dtype_name(dtype) -> str:
@@ -168,7 +193,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task-dir", required=True, help="the task package whose problem.py builds the model")
     parser.add_argument("--cases", type=Path, required=True, help="the case manifest the case comes from")
     parser.add_argument("--case", required=True, help="the case id to build the state for")
-    parser.add_argument("--precision", default="fp16", choices=["fp16", "bf16", "fp32"])
+    parser.add_argument("--precision", default="fp16", type=normalize_precision,
+                        help="the case's dtype; fp16/bf16/fp32 and float16/bfloat16/float32 are both accepted")
     parser.add_argument("--output-dir", required=True, help="where the state's .bin files go")
     return parser
 

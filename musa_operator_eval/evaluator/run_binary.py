@@ -497,8 +497,13 @@ def stage_case_inputs(
         str(cases_manifest_path),
         "--case",
         str(case_id),
+        # The case's own dtype, not the run's flag. A case carries its dtype in the
+        # manifest and its tensors were generated in it, so the state has to be cast the
+        # same way: passing the run's precision here handed every bfloat16 case a state
+        # cast to float16, and the submission read those bytes as bfloat16 -- weights that
+        # are not the reference's weights, in a file that says they are.
         "--precision",
-        precision,
+        str(case.get("dtype") or precision),
         "--output-dir",
         str(staged),
     ]
@@ -626,6 +631,12 @@ def run_binary_case(
 
     policy = task.get("library_policy") or {}
     trace_path = generated_dir / f"{case_id}.trace.jsonl"
+    # A trace file that outlives its run turns a stale record into this run's verdict: the
+    # check reads every record for the case, so a path recorded by an earlier submission or
+    # by an earlier build of this one would fail a case whose own trace is correct. The
+    # trace is this run's evidence, so it starts empty.
+    if trace_path.exists():
+        trace_path.unlink()
     environment = dict(os.environ)
     if policy.get("trace_env_var"):
         environment[policy["trace_env_var"]] = str(trace_path)

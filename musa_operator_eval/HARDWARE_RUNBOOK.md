@@ -129,9 +129,15 @@ and the C runtime.
     # B: the same driver, where the link check finally has a real artifact to read
     python musa_operator_eval/evaluator/run_binary.py \
         --task-dir musa_operator_eval/tasks/kb_l3_43_b \
-        --submission musa_operator_eval/tasks/kb_l3_43_b/starter/cpp \
+        --submission musa_operator_eval/private/mingpt_causal_attention_b_v0/compiled \
         --cases musa_operator_eval/private/mingpt_causal_attention_b_v0/cases.private.json \
         --generated-dir musa_operator_eval/private/generated/mingpt_causal_attention_b_v0
+
+`kb_l3_44_b` (the minGPT block) and `kb_l3_31_b` (the layer-normed ViT attention) have
+worked answers the same way, under `private/mingpt_block_b_v0/compiled` and
+`private/vision_attention_b_v0/compiled`. Every one of the four passes its whole hidden set:
+9 of 9 for the A tier's hand-written kernel and 10 of 10 for each of the three library
+answers, with the dispatch trace naming the expected path on every case.
 
 Two things to know about it. The stage list is §4.7's, and `link_whitelist_check`
 appears only for the B tier. The build script gets `--extra-library` for whatever
@@ -249,6 +255,27 @@ The library is on the machine and needs no framework. What it takes to use it:
 A minimal standalone probe -- outside the harness, no torch, a few dozen lines -- is
 the fastest way to learn a descriptor's rules; `RunFlash` returning `SUCCESS` on a
 tiny case is what settled the `SetEmbedDim` question above.
+
+**Five traps worth knowing before calling muDNN yourself.** Each was measured on the
+target device while writing the compiled answers, and each returns `SUCCESS` while doing
+the wrong thing, which is why they are listed rather than described:
+
+* `RunWithBiasAdd` at bfloat16 with a 768-wide output computes the product **without the
+  bias** (768 where 770 was due); the same call at 8x32x64 adds it. Add the bias with a
+  separate `Binary` add instead -- and note the bias tensor can be broadcast by giving it
+  a zero row stride, `[1, features]` with strides `{0, 1}`.
+* `Binary::Run` with `out` and the left operand the **same tensor** returns `SUCCESS` and
+  writes the right operand alone. Use two buffers.
+* `RunMath` **ignores `SetCausal(true)`**: a row comes out as the mean over every key
+  rather than over the keys up to it. An explicit additive attention mask works on both
+  paths, so pass the mask and leave `SetCausal` off.
+* `RunMath` also refuses the strided `[B, H, T, D]` view over a `[B*T, 3C]` buffer that
+  `RunFlash` accepts ("Validate q stride"), so a submission that wants both paths has to
+  project into contiguous buffers.
+* `Permute` needs both sides contiguous *and* its permutation configured through
+  `Permute::ConfigDimStride`; with a strided source it returns `SUCCESS` and produces the
+  wrong elements, and a three-axis rotation is not its own inverse, so the way back is a
+  different list.
 
 ## Four traps worth knowing before reading a number
 
