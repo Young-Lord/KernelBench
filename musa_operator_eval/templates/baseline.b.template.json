@@ -3,10 +3,31 @@
   "task_id": "REPLACE_WITH_TASK_ID",
   "tier": "B_library",
   "environment_snapshot": "REPLACE_WITH_SNAPSHOT_ID",
-  "measurement_protocol": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median", "timer": "musa_event"},
+  "measurement_protocol": {
+    "timer": "cuda_event",
+    "warmup": 3,
+    "measurements": 100,
+    "discard_first": 1,
+    "statistic": "mean",
+    "cache": "cold",
+    "rounds": 1,
+    "source": "kernelbench.timing.time_execution_with_cuda_event"
+  },
   "weight_alignment": "re-seed and rebuild, as kernelbench.eval does; no state dict is copied",
   "tolerance_source": "kernelbench.eval.resolve_tolerance",
-  "implementations": ["expert_dispatch", "mudnn_fused", "naive_library_composition", "reference_model", "torch_musa_eager", "upstream_musa"],
+  "implementations": [
+    "expert_dispatch",
+    "mudnn_fused",
+    "naive_library_composition",
+    "reference_model",
+    "torch_musa_eager",
+    "upstream_musa"
+  ],
   "results": [],
-  "scoring": {"speedup_denominator": "expert_dispatch", "reference_implementation": "naive_library_composition", "correctness_gate": "all_hidden_cases", "minimum_naive_to_expert_ratio": 1.3}
+  "scoring": {
+    "speedup_denominator": "expert_dispatch",
+    "reference_implementation": "naive_library_composition",
+    "correctness_gate": "all_hidden_cases",
+    "minimum_naive_to_expert_ratio": 1.3
+  }
 }

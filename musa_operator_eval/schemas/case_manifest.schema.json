@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/case-manifest-1.0.0.json",
   "title": "MUSA evaluation case manifest (tasks/*/public_cases.json and the private manifest)",
-  "description": "Guide \u00a74.3. One format for both the public and the hidden list; only the content and the visibility differ. The tier decides which dispatch fields a case may carry: an A_kernel case that names an expected path or a library gap is a leak (those are B-tier concepts), and a B_library case without an expected path is not gradable. A public B manifest must not carry a gap, because that would hand the submission the configuration the task exists to make it discover.",
+  "description": "Guide §4.3. One format for both the public and the hidden list; only the content and the visibility differ. The tier decides which dispatch fields a case may carry: an A_kernel case that names an expected path or a library gap is a leak (those are B-tier concepts), and a B_library case without an expected path is not gradable. A public B manifest must not carry a gap, because that would hand the submission the configuration the task exists to make it discover.",
   "$defs": {
     "path": {
       "enum": [
@@ -25,36 +25,6 @@
       "additionalProperties": {
         "type": "integer",
         "minimum": 1
-      }
-    },
-    "performance": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "warmup",
-        "measurements",
-        "rounds",
-        "statistic"
-      ],
-      "properties": {
-        "warmup": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "measurements": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "rounds": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "statistic": {
-          "enum": [
-            "median",
-            "p50"
-          ]
-        }
       }
     },
     "case": {
@@ -111,9 +81,6 @@
           "type": "string",
           "minLength": 1
         },
-        "performance": {
-          "$ref": "#/$defs/performance"
-        },
         "expected_path": {
           "$ref": "#/$defs/path"
         },
@@ -141,26 +108,7 @@
             }
           }
         }
-      },
-      "allOf": [
-        {
-          "if": {
-            "required": [
-              "tag"
-            ],
-            "properties": {
-              "tag": {
-                "const": "perf"
-              }
-            }
-          },
-          "then": {
-            "required": [
-              "performance"
-            ]
-          }
-        }
-      ]
+      }
     }
   },
   "type": "object",

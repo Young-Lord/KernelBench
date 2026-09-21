@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kernelbench.local/musa/schemas/baseline-1.0.0.json",
   "title": "MUSA task baseline (private/*/baseline.json)",
-  "description": "Guide \u00a74.4. A baseline is only meaningful against the environment it was measured in, so the snapshot id is required and every row has to say which implementation it belongs to. The B tier adds two implementations that the A tier does not have -- the naive library composition (the lower bound) and the expert dispatch (the speedup denominator), so for B_library the scoring denominator is pinned to the expert dispatch.",
+  "description": "Guide §4.4. A baseline is only meaningful against the environment it was measured in, so the snapshot id is required and every row has to say which implementation it belongs to. The B tier adds two implementations that the A tier does not have -- the naive library composition (the lower bound) and the expert dispatch (the speedup denominator), so for B_library the scoring denominator is pinned to the expert dispatch.",
   "$defs": {
     "result": {
       "type": "object",
@@ -82,7 +82,7 @@
             "number",
             "null"
           ],
-          "description": "Guide \u00a74.4's quantiles: the nearest-rank 10th percentile of the per-round means."
+          "description": "Guide §4.4's quantiles: the nearest-rank 10th percentile of the measured trials."
         },
         "latency_ms_p90": {
           "type": [
@@ -90,18 +90,63 @@
             "null"
           ]
         },
-        "latency_ms_rounds": {
-          "type": "array",
-          "items": {
-            "type": "number"
-          }
-        },
         "throughput_per_second": {
           "type": [
             "number",
             "null"
           ],
           "description": "Invocations of the case's operation per second, derived from the median."
+        },
+        "latency_ms_samples": {
+          "description": "The samples the statistic and the quantiles were derived from: the trials the framework's timing loop ran, minus its discarded first one. Named for samples rather than rounds because the framework's loop has one pass, and calling a trial a round would describe a structure it does not have.",
+          "type": "array",
+          "items": {
+            "type": "number"
+          }
+        },
+        "latency_ms_stats": {
+          "description": "The framework's own summary of the same trials (`kernelbench.timing.get_timing_stats`), kept so a reader can see the spread the mean came from.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "mean",
+            "std",
+            "min",
+            "max",
+            "num_trials"
+          ],
+          "properties": {
+            "mean": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "std": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "min": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "max": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "num_trials": {
+              "type": "integer"
+            }
+          }
         }
       }
     }
@@ -171,7 +216,33 @@
             "boolean",
             "null"
           ],
-          "description": "Guide \u00a74.4 asks the protocol to say whether the clock was pinned. Null means the platform does not expose it, which is a fact about the machine rather than a missing field."
+          "description": "Guide §4.4 asks the protocol to say whether the clock was pinned. Null means the platform does not expose it, which is a fact about the machine rather than a missing field."
+        },
+        "cache": {
+          "description": "The cache state the protocol measures in. The framework thrashes L2 before every trial, so its numbers are cold-cache numbers and a warm-cache number cannot be compared with them.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "description": "The function that defines the protocol, so a reader can check it rather than trust the block.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "discard_first": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "note": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       }
     },

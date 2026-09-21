@@ -71,7 +71,29 @@ from kernelbench.eval import (  # noqa: E402
     set_seed,
 )
 
-PROTOCOL = {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median", "timer": "musa_event"}
+# The framework's own protocol, taken from `kernelbench.timing` rather than
+# re-derived. This block used to be a hand-rolled one -- warmup 10, five rounds of a
+# hundred calls, the median of the round means, and no cache flush -- which meant a
+# baseline's `latency_ms` and the `runtime` a `run_task.py` report records for the same
+# implementation were two numbers from two protocols, and every ratio between them was
+# a ratio between those protocols. Upstream's loop is the one the reports come from, so
+# it is the one the denominators are measured with: warm up, empty the allocator, then
+# one pass of `measurements` trials, each preceded by an L2 thrash so the number is a
+# cold-cache number, with the first trial discarded and the mean taken.
+PROTOCOL = {
+    "timer": "cuda_event",
+    "warmup": 3,
+    "measurements": 100,
+    "discard_first": 1,
+    "statistic": "mean",
+    "cache": "cold",
+    "rounds": 1,
+    "source": "kernelbench.timing.time_execution_with_cuda_event",
+    "note": (
+        "one pass, as the framework runs it; the samples a record carries are its trials, and "
+        "the quantiles are over those trials rather than over round means"
+    ),
+}
 
 DTYPES = {"float16": torch.float16, "bfloat16": torch.bfloat16, "float32": torch.float32}
 DEVICE = torch.device("musa")
@@ -181,37 +203,39 @@ def percentile(samples, fraction):
     return ordered[rank - 1]
 
 
-def time_samples(fn, warmup=PROTOCOL["warmup"], measurements=PROTOCOL["measurements"], rounds=PROTOCOL["rounds"]):
-    """MUSA-event timing: one number per round, each the mean of its measurements.
+def time_samples(fn):
+    """The framework's timing loop, called rather than reimplemented.
 
-    Returned as the sample list rather than as a summary, because §4.4's record
-    asks for quantiles and only the caller knows which to derive. `PROTOCOL` says
-    whether the clock was pinned; the timer is MUSA events throughout, which is
-    the protocol's `timer` field, so a wall clock cannot flatter a short case.
+    `kernelbench.timing.time_execution_with_cuda_event` is what `run_task.py`'s
+    reports are produced by, so a denominator measured with it is the same kind of
+    number as the runtime it will be divided into: same timer, same warmup, same
+    trial count, same cache state, same statistic.
+
+    Returns `(samples, peak_before, peak_after)`; the peak counters are read around
+    the loop because §4.4 asks the record for memory, and the framework's loop does
+    not report it.
     """
-    for _ in range(warmup):
-        fn()
-    torch.musa.synchronize()
+    from kernelbench.timing import time_execution_with_cuda_event
 
-    samples = []
     peak_before = torch.musa.max_memory_allocated() if hasattr(torch.musa, "max_memory_allocated") else None
-    for _ in range(rounds):
-        start = torch.musa.Event(enable_timing=True)
-        end = torch.musa.Event(enable_timing=True)
-        start.record()
-        for _ in range(measurements):
-            fn()
-        end.record()
-        torch.musa.synchronize()
-        samples.append(start.elapsed_time(end) / measurements)
+    samples = time_execution_with_cuda_event(
+        fn,
+        (),
+        num_warmup=PROTOCOL["warmup"],
+        num_trials=PROTOCOL["measurements"],
+        discard_first=PROTOCOL["discard_first"],
+        device=DEVICE,
+    )
     peak_after = torch.musa.max_memory_allocated() if hasattr(torch.musa, "max_memory_allocated") else None
     return samples, peak_before, peak_after
 
 
-def time_median(fn, **kwargs):
-    """The median of the per-round means, which is what the gate is defined on."""
-    samples, _before, _after = time_samples(fn, **kwargs)
-    return sorted(samples)[len(samples) // 2]
+def time_statistic(fn):
+    """What the gate divides by: the framework's own summary of the same trials."""
+    from kernelbench.timing import get_timing_stats
+
+    samples, _before, _after = time_samples(fn)
+    return float(get_timing_stats(samples)["mean"])
 
 
 def _measure(name, call, expected, tolerance, trace=None, must_trace=False, required_fields=None):
@@ -242,10 +266,17 @@ def _measure(name, call, expected, tolerance, trace=None, must_trace=False, requ
             return row
         with torch.no_grad():
             samples, peak_before, peak_after = time_samples(call)
-        row["latency_ms"] = sorted(samples)[len(samples) // 2]
+        from kernelbench.timing import get_timing_stats
+
+        stats = get_timing_stats(samples)
+        # The mean, because that is what the framework records as a submission's
+        # `runtime`: a denominator has to be the same statistic as the thing it
+        # divides, or the ratio carries the difference between two summaries.
+        row["latency_ms"] = float(stats["mean"])
+        row["latency_ms_stats"] = {key: stats[key] for key in ("mean", "std", "min", "max", "num_trials")}
         row["latency_ms_p90"] = percentile(samples, 0.90)
         row["latency_ms_p10"] = percentile(samples, 0.10)
-        row["latency_ms_rounds"] = [round(value, 6) for value in samples]
+        row["latency_ms_samples"] = [round(value, 6) for value in samples]
         row["throughput_per_second"] = (
             round(1000.0 / row["latency_ms"], 4) if row["latency_ms"] else None
         )

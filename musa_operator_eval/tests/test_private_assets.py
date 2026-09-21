@@ -361,9 +361,38 @@ class HiddenCaseListTests(unittest.TestCase):
                 # not a single number.
                 measured = [row for row in baseline["results"] if row.get("latency_ms")]
                 self.assertTrue(measured, f"{task['id']}'s baseline measured nothing")
+                # One protocol, and it is the framework's: `run_task.py`'s reports are
+                # produced by `kernelbench.timing`, so a denominator measured any other
+                # way makes every ratio a ratio between two protocols. The record has to
+                # say so, and the statistic has to be the one the reports carry.
+                protocol = baseline["measurement_protocol"]
+                self.assertEqual(
+                    protocol.get("source"),
+                    "kernelbench.timing.time_execution_with_cuda_event",
+                    f"{task['id']}'s baseline does not name the framework's timing loop",
+                )
+                self.assertEqual(protocol.get("statistic"), "mean")
+                self.assertEqual(protocol.get("cache"), "cold")
                 for row in measured:
                     self.assertIn("latency_ms_p90", row)
                     self.assertIn("throughput_per_second", row)
+                    self.assertIn("latency_ms_samples", row)
+                    samples = row["latency_ms_samples"]
+                    self.assertTrue(samples, f"{task['id']}/{row['implementation']} records no samples")
+                    # The number and the samples agree: `latency_ms` is the mean of the
+                    # trials, which is what the framework records as a `runtime`.
+                    # `latency_ms` is the framework's own summary of its own trials:
+                    # `get_timing_stats` renders the mean as `f"{mean:.3g}"`, which is
+                    # three SIGNIFICANT digits, so "1.27" is the mean 1.2719768 and not
+                    # a mean that was rounded to two decimals. The samples here are the
+                    # same trials to six decimals, hence the relative slack.
+                    expected = float(f"{sum(samples) / len(samples):.3g}")
+                    self.assertAlmostEqual(
+                        row["latency_ms"], expected, delta=abs(expected) * 1e-3,
+                        msg=f"{task['id']}/{row['case_id']}/{row['implementation']}",
+                    )
+                    self.assertEqual(row["latency_ms_stats"]["mean"], row["latency_ms"])
+                    self.assertEqual(row["latency_ms_stats"]["num_trials"], len(samples))
 
     def test_every_package_names_the_denominator_its_tier_is_scored_against(self):
         """§4.4: the A tier's is the upstream implementation, the B tier's the expert."""

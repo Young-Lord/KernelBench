@@ -108,7 +108,7 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 1.7506372345011796,
+    "measured_geometric_mean": 1.7116607734609492,
     "threshold": 1.3,
     "measured_in": "musa-5f9d7b9dd1233a68",
     "dispatch_note": "the problem is already written against a framework attention module, so the library path is the reference's own route",

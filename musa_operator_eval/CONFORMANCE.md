@@ -129,6 +129,39 @@ latency, `p10`/`p90`, throughput, peak memory and status, and a `scoring` block
 naming the denominator: `upstream_musa` for the A tier, `expert_dispatch` for the B
 tier.
 
+**One protocol, and it is the framework's.** A baseline's `latency_ms` is a denominator
+and a `run_task.py` report's `runtime` is a numerator, so the two have to be the same
+kind of number. They were not: the tool carried its own protocol -- warmup 10, five
+rounds of a hundred calls, the median of the round means, no cache flush -- while the
+reports come from `kernelbench.timing`, whose loop warms up, empties the allocator, then
+runs one pass of a hundred trials with an L2 thrash before each (so its numbers are
+cold-cache numbers), discards the first trial and reports the **mean**. Every ratio was
+consequently a ratio between two protocols, and the fact that they agreed to within a
+tenth was luck rather than design.
+
+The tool now calls that loop instead of imitating it:
+`kernelbench.timing.time_execution_with_cuda_event` measures, `get_timing_stats`
+summarises, and the record's `measurement_protocol` names both. `latency_ms` is the mean
+of the trials, `latency_ms_samples` is the trials themselves (renamed from
+`latency_ms_rounds`, because the framework's loop has one pass and calling a trial a
+round described a structure it does not have), and `latency_ms_stats` keeps the spread
+the mean came from. `tests/test_private_assets.py` fails if a record does not name that
+loop or if its number is not the mean of its own samples.
+
+The A tier's roster is unchanged: upstream implementation plus `reference_model`, with
+the library paths recorded as `unavailable` for the reason that tier has.
+
+The numbers moved when the protocol did, most of all on the small shapes where a flushed
+cache costs the most, and no decision moved with them:
+
+| package | before | after |
+|---|---|---|
+| `scaled_dot_product_attention_b_v0` (level 1, B) | 3.834 | 3.213 |
+| `vision_attention_b_v0` | 1.751 | 1.712 |
+| `mingpt_causal_attention_b_v0` | 3.691 | 3.447 |
+| `mingpt_block_b_v0` | 2.190 | 2.124 |
+| `sdpa_forward_b_v0` (the pilot) | 7.811 | 6.152 |
+
 **Shortfall, stated.** Not every roster entry could be built honestly here. The A
 tier records `mudnn_fused` and `torch_musa_sdpa` as `unavailable` (the tier is graded
 at float32, where the fused path does not answer), and the four entry-scoped B
@@ -280,9 +313,21 @@ So the frozen runner takes `--warmup W --repeat N`: it reads the inputs once, ca
 its own clock, and reports each one. The driver takes the median of those N and records
 it as `runtime`, keeping the process wall clock as `wall_ms`; the clock is in the frozen
 half, so a submission cannot report its own grade, and the statistic is in the driver,
-where a test can hold it. The defaults are the framework's own protocol (warmup 10,
-repeat 100). A runner that reports no timings still grades, with `runtime` falling back
-to the wall clock and `timing` null, which is what an older starter does.
+where a test can hold it. The defaults are the framework's trial count (a hundred
+measurements, after a warmup that is ten calls here rather than the framework's three).
+A runner that reports no timings still grades, with `runtime` falling back to the wall
+clock and `timing` null, which is what an older starter does.
+
+What that number is *not* is the framework's protocol, and the difference is recorded
+rather than glossed: §4.4's baselines are now measured by
+`kernelbench.timing` -- device events, one pass of a hundred trials, an L2 thrash before
+each so the number is cold-cache, the mean -- while this path times calls with a host
+clock, does not flush a cache between them, and reports the median. Adding the flush and
+moving the clock inside a MUSA event pair is the mechanical way to close the gap (it is
+roughly the same fifty lines), and until it is closed a compiled row's ratio is a ratio
+between this path and itself. That is why `rank.py`'s docstring says a compiled case is
+only ranked against another compiled case, and why the timer difference is written down
+in `HARDWARE_RUNBOOK.md` beside the protocol it differs from.
 
 **Defect found and fixed by that run.** The stage selected build products by suffix
 (`.so`, `.o`), and a linker's final product is an executable with no suffix at all,
@@ -309,30 +354,34 @@ measured and gated; the evaluator assembled and the tracks kept separate.
 
 **Met.** §5 step 8's "separately split, separately ranked" is enforced in two places:
 the scoring blocks and case lists never mix tiers, and `evaluator/rank.py` produces
-the two tables — never a combined figure, because a single number across a device
+the two tables -- never a combined figure, because a single number across a device
 kernel and a library dispatch is a number about nothing. Each ratio is the tier's
 own denominator, read from the baseline's `scoring.speedup_denominator`
 (`upstream_musa` for A, `expert_dispatch` for B), computed per case over the cases
 where the reference has a passing measurement on the same case, and summarised as a
-geometric mean. Both sides of a ratio are milliseconds, and both are steady-state numbers:
-`run_task`'s `runtime` is measured in a warm process, and the compiled path's is the
-median of the calls the runner timed after its warmup, with the process's own wall clock
-kept beside it as `wall_ms`. A compiled case and a Python case are still never ranked
-against each other -- they are two forms of submission, and a form's overheads are part
-of the form -- so `rank.py` reports the two tiers and a reader compares like with like.
-On the device it produces two tables, and the numbers changed the day the compiled path
-started timing calls instead of processes: the B tier's `mingpt_block_b_v0` at `x0.9112`
-over ten of ten cases, re-measured through `run_task.py` against the baseline that task
-already recorded (a ratio near 1 is the expected reading there, because the report and
-the baseline measure the same expert); and, once steady-state timing existed, the A
-tier's worked compiled kernel at `x0.0504` over the two of nine hidden cases where the
-upstream hand-written kernel has a passing measurement -- about twenty times slower than
-the upstream answer, which is what an unoptimised kernel that proves the ABI should read
-like. The same kernel measured through a process wall clock had read `x0.002615`, four
-hundred times slower, because that number was startup and disk; and the B tier's compiled
-adapter reads `x0.0618` over ten of ten, about sixteen times behind the expert, which is
-the host-side staging the ABI asks a submission to do rather than the library call. Those
-last two readings are the reason a compiled case is only ranked against another compiled
-case: the forms differ by their overheads, and now the overheads are visible. Both sides of a ratio are milliseconds: the framework's dataclass
-comment says microseconds and the recorded values say otherwise, so the unit that
-matters is the one the baseline is in -- `HARDWARE_RUNBOOK.md` records the trap.
+geometric mean. Both sides of a ratio are milliseconds, and since §4.4's change both
+come from the framework's own timing loop, so a ratio is between two implementations
+rather than between two protocols. The unit is the one the baseline is in: the
+framework's dataclass comment says microseconds and the recorded values say otherwise,
+so `HARDWARE_RUNBOOK.md` records the trap.
+
+The device readings, each against the baseline measured the framework's way:
+
+| report | ratio | cases compared |
+|---|---|---|
+| A tier: the worked compiled kernel (fp32, steady state) | `x0.05187` | 2 of 9 |
+| B tier: the compiled muDNN adapter | `x0.08007` | 10 of 10 |
+| B tier: the five Python experts | `x0.99586` to `x1.00842` | 48 of 48 |
+
+Three readings from that session are worth keeping. A B-tier Python report now lands
+within 0.4% of its own baseline, because the report and the baseline are the same
+expert measured by the same loop; the same comparison read `x0.9112` and `x0.892` while
+the two sides were measured differently, and that nearness to 1 was luck rather than a
+property of the measurement. The compiled adapter reads `x0.08007`, twelve and a half
+times behind the expert, which is the host-side staging the ABI asks a submission to do
+rather than the library call. And the A tier's worked kernel reads `x0.05187`, about
+twenty times slower than the upstream answer -- where the same kernel measured through a
+process wall clock had read `x0.002615`, four hundred times slower, because that number
+was process startup, device initialisation and disk. The last pair is why a compiled case
+is only ever ranked against another compiled case: the forms differ by their overheads,
+and the overheads are now visible instead of being the measurement.

@@ -106,7 +106,7 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 3.8341819455482136,
+    "measured_geometric_mean": 3.2131602391276224,
     "threshold": 1.3,
     "measured_in": "musa-5f9d7b9dd1233a68",
     "dispatch_note": "a plain unmasked attention over already-split Q/K/V is the shape a fused library answers most directly, so the dispatch question here is only whether the library's dtype and head-dimension window covers the case",

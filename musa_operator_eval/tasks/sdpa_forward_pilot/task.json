@@ -107,7 +107,7 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 7.811062572491602,
+    "measured_geometric_mean": 6.151518902238975,
     "threshold": 1.3,
     "measured_in": "musa-5f9d7b9dd1233a68"
   },

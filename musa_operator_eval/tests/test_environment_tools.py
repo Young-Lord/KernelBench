@@ -246,7 +246,7 @@ class PrivateManifestGoldenPathTests(unittest.TestCase):
          "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 64, "S_kv": 64, "D": 16},
          "attributes": {"scale": 0.25, "causal": False, "window_left": -1, "window_right": -1},
          "distribution": "normal", "expected_path": "fused_library",
-         "performance": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median"}},
+         },
         {"case_id": "hidden_probe_001", "role": "probe", "tag": "generalization", "seed": 95, "dtype": "float16",
          "shape": {"B": 1, "H_q": 2, "H_kv": 2, "S_q": 128, "S_kv": 128, "D": 16},
          "attributes": {"scale": 0.25, "causal": False, "window_left": -1, "window_right": -1},

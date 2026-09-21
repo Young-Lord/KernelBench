@@ -31,6 +31,11 @@ and its ratio is about startup rather than about the submission. Rows like that 
 ranked anyway, because dropping a submission silently is worse, but the tables' reading
 should start from whether the numbers mean the same thing.
 
+The denominators are measured by `kernelbench.timing` (see
+`measure_baseline.py`), so a report whose numbers come from a different protocol -- a
+wall clock, a warm cache, a hand-picked statistic -- is not dividing like by like even
+when both sides name milliseconds.
+
 Usage:
 
     rank.py --report /tmp/report_a.json --report /tmp/report_b.json \

@@ -416,8 +416,20 @@ class CaseManifestRuleTests(unittest.TestCase):
         errors = validator.validate_instance_stdlib(document, "case_manifest")
         self.assertTrue(any("unsupported_dtype" in error for error in errors), errors)
 
-    def test_a_perf_case_must_carry_its_protocol(self):
-        document = manifest_document("B_library", "public", [case(tag="perf", expected_path="fused_library")])
+    def test_a_case_may_not_declare_a_timing_protocol_of_its_own(self):
+        """The protocol lives in one place, and it is the framework's timing loop.
+
+        A case used to be able to carry a `performance` block naming a warmup, a
+        number of rounds and a statistic. Nothing read it -- the graders take their
+        protocol from `kernelbench.timing` -- and it had drifted to a different
+        protocol than the one every number was measured under, so a reader could
+        have believed a case was measured the way the block described. The rule is
+        the same one `tolerances_source` follows: one declaring place, or the second
+        one drifts.
+        """
+        documented = case(tag="perf", expected_path="fused_library")
+        documented["performance"] = {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median"}
+        document = manifest_document("B_library", "public", [documented])
         errors = validator.validate_instance_stdlib(document, "case_manifest")
         self.assertTrue(any("performance" in error for error in errors), errors)
 
@@ -548,7 +560,8 @@ class BaselineRuleTests(unittest.TestCase):
             "task_id": "example_b_v0",
             "tier": tier,
             "environment_snapshot": "musa-5f9d7b9dd1233a68",
-            "measurement_protocol": {"warmup": 10, "measurements": 100, "rounds": 5, "statistic": "median"},
+            "measurement_protocol": {"timer": "cuda_event", "warmup": 3, "measurements": 100,
+                                  "discard_first": 1, "statistic": "mean", "cache": "cold", "rounds": 1},
             "implementations": [
                 "reference_model", "upstream_musa", "mudnn_fused",
                 "naive_library_composition", "expert_dispatch",

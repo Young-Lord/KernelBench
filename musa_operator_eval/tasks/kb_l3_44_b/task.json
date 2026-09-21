@@ -108,7 +108,7 @@
   "admission": {
     "status": "measured",
     "decision": "admit",
-    "measured_geometric_mean": 2.1896367888065007,
+    "measured_geometric_mean": 2.1237697153418966,
     "threshold": 1.3,
     "measured_in": "musa-5f9d7b9dd1233a68",
     "reason": "the hidden set was measured on the target environment. Both halves of §4.4's gate hold: every hidden case passes correctness, and every dispatch trace names the path the case expects.",

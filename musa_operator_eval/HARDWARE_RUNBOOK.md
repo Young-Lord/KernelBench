@@ -5,7 +5,6 @@ or drive a case is described by the tool that does it -- repeating any of that
 here would only create a copy that drifts away from the source.
 
 ## Measurements belong to an environment
-
 Every measurement is tied to a snapshot from `tools/collect_environment.py`. The
 snapshot carries two identifiers because two different things can change:
 
@@ -24,6 +23,47 @@ A container image digest is recorded when the platform exposes one and set to
 `null` with an `image_digest_unavailable_reason` otherwise. A missing digest is
 not an error -- it would not have covered the host-side driver, the GPU identity
 or the cgroup limits, all of which are collected directly.
+
+## How a number is measured
+
+`measure_baseline.py` does not carry its own timing loop: it calls
+`kernelbench.timing.time_execution_with_cuda_event` and `get_timing_stats`, the same
+two functions a `run_task.py` report is produced by. That matters because a baseline's
+`latency_ms` is a denominator and a report's `runtime` is a numerator -- two protocols
+would make every ratio a ratio between protocols rather than between implementations.
+
+What the framework's loop does, and therefore what every recorded number means:
+
+* warm up the callable, empty the caching allocator, then run **one pass** of
+  `num_trials` (100) trials;
+* **thrash L2 before every trial** (a 256 MB fill), so the numbers are **cold-cache**
+  numbers;
+* discard the first trial (`discard_first=1`);
+* time each trial with device events, not a host clock;
+* report the **mean** of the trials, which is what `KernelExecResult.runtime` is.
+
+`get_timing_stats` renders its summary as `f"{value:.3g}"` -- three **significant**
+digits, not three decimals -- so a recorded `latency_ms` of `1.27` is the mean
+`1.2719768`, and `0.129` is `0.1288391`. Comparing a recorded number against a sample
+list means reproducing that format rather than rounding to three decimals.
+
+A record says this in its `measurement_protocol` block and names the function that
+defines it (`source`), carries the trials it used (`latency_ms_samples`) and the
+framework's summary of them (`latency_ms_stats`). A case manifest no longer declares a
+protocol of its own: the `performance` block it used to carry was read by nothing and
+had drifted to a different protocol, which is the same failure mode as the per-case
+tolerance that only one grader read.
+
+Two consequences worth stating plainly:
+
+* A number measured by a *different* protocol is not comparable with these, and the
+  case manifests no longer offer one to be measured by. The compiled path is the one
+  place where the timer still differs -- it is a host clock around a submission call,
+  with the ABI's own host-to-device copies inside the timed region -- which is why a
+  compiled case is only ranked against another compiled case until that is aligned.
+* Upstream KernelBench's numbers are cold-cache and mean-based, like ours, so they are
+  the same kind of number; but a number from a warm-cache tool (this repository's own
+  earlier records, for instance) is not.
 
 ## The hidden case set
 A submission is graded on the hidden set; the public one exists so something can
