@@ -202,12 +202,22 @@ Through `evaluator/run_binary.py` over the ten hidden cases it exits 0 with 10 o
 passed, every recorded path equal to its expected one, and the artifact's dynamic
 section naming `libmudnn` and no torch.
 
-**What remains of the shortfall.** Three of the five B packages -- the causal
-attention entry, the vision entry and the transformer block -- have no compiled
-adapter, so their B-tier evidence is still the Python path, where the five experts
-pass their hidden sets end to end. The block is more than one attention call, so its
-compiled path would have to compose several library ops, which no case at the other
-entries requires.
+**The scope of the compiled path, and why it stops where it does.** It grades a case
+out of the tensors in its input manifest -- that is the whole interface -- so it can
+only grade tasks whose reference has no weights to reconstruct. Six of the eleven
+packages are not those: their reference builds `nn.Linear` or `nn.LayerNorm` in
+`__init__`, so the golden is a function of the case's seed and the init arguments,
+and §4.3 deliberately keeps a case to "parameters and seeds, not tensors". Nothing in
+the input directory determines those weights and a torch-free submission has no way
+to obtain them, so their B-tier evidence is the Python path, where the five experts
+pass their hidden sets end to end (10 of 10 each, 8 of 8 for the pilot).
+
+The boundary is enforced rather than described:
+`tests/test_private_assets.py::CompiledAnswerScopeTests` builds each reference and
+fails if a package ships a compiled answer while its reference carries state, and it
+fails if a weight-free package has none while no package in its family does either.
+Both run on the device. The level-1 family -- where the manifest's three tensors are
+the whole model -- is where the compiled path is graded, on both tiers.
 
 The anti-cheating half holds independently of that: the artifact is built, its
 dynamic section is read, and a submission linking outside the whitelist is refused

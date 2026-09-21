@@ -40,6 +40,11 @@ MAINTAINER_ONLY_NAMES = {"cases.private.json", "baseline.hidden.json", "admissio
 #: that read them skip in the checkout the agent gets rather than failing in it.
 MAINTAINER_TREE_MOUNTED = (ROOT / "private" / "mingpt_block_b_v0" / "cases.private.json").is_file()
 
+try:
+    import torch
+except ImportError:  # torch is not installed
+    torch = None
+
 
 def git(*args):
     return subprocess.run(["git", *args], cwd=REPO_TOP, capture_output=True, text=True)
@@ -228,6 +233,76 @@ class GapCoverageTests(unittest.TestCase):
 
 
 @unittest.skipUnless(MAINTAINER_TREE_MOUNTED, "the maintainer tree is not mounted: the hidden lists and baselines live only there")
+class CompiledAnswerScopeTests(unittest.TestCase):
+    """§4.6's compiled path grades a case out of the tensors in its input manifest.
+
+    That is the whole interface: a torch-free process reads `<input-dir>`, runs the
+    submission, and writes `<output-dir>`. A task whose reference carries weights
+    cannot be graded that way -- they are a function of the case's seed and the
+    module's construction, which §4.3 keeps as parameters rather than tensors, so
+    nothing in the input directory determines them. The worked answers under
+    `private/<task id>/compiled/` are therefore only legitimate where the reference
+    has none, which is the one claim about them a test can settle: ask the reference.
+
+    Skipped when torch is unavailable, like the other tests that have to build a
+    model; the device is where the answers are graded anyway.
+    """
+
+    PRIVATE = ROOT / "private"
+
+    def packages(self):
+        for directory in sorted((ROOT / "tasks").iterdir()):
+            task_path = directory / "task.json"
+            if not task_path.is_file():
+                continue
+            yield directory, json.loads(task_path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def reference_parameter_count(directory: Path) -> int:
+        """How many tensors the reference would have to be handed to reproduce its golden."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(f"scope_{directory.name}", directory / "problem.py")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        model = module.Model(*module.get_init_inputs())
+        return len(list(model.parameters())) + len(list(model.buffers()))
+
+    @unittest.skipUnless(torch is not None, "requires torch to count the reference's parameters")
+    def test_a_compiled_answer_only_exists_where_the_reference_has_no_weights(self):
+        answers = sorted(self.PRIVATE.glob("*/compiled/kernel.mu"))
+        self.assertTrue(answers, "no compiled answer is mounted: the maintainer tree is absent")
+        by_id = {task["id"]: directory for directory, task in self.packages()}
+        for answer in answers:
+            task_id = answer.parent.parent.name
+            with self.subTest(task=task_id):
+                count = self.reference_parameter_count(by_id[task_id])
+                self.assertEqual(
+                    count,
+                    0,
+                    f"{task_id} ships a compiled answer and its reference carries {count} tensors of "
+                    "state, which no torch-free submission can reconstruct from the input manifest",
+                )
+
+    @unittest.skipUnless(torch is not None, "requires torch to count the reference's parameters")
+    def test_every_weight_free_package_is_accounted_for(self):
+        """The scope is a decision, not an accident: a weight-free task either has an
+        answer or shares its family with one that does."""
+        entries = list(self.packages())
+        answers = {task["id"] for _d, task in entries if (self.PRIVATE / task["id"] / "compiled" / "kernel.mu").is_file()}
+        families = {task["family"] for _d, task in entries if task["id"] in answers}
+        for directory, task in entries:
+            if task["id"] in answers:
+                continue
+            with self.subTest(task=task["id"]):
+                weight_free = self.reference_parameter_count(directory) == 0
+                self.assertTrue(
+                    not weight_free or task["family"] in families,
+                    f"{task['id']} needs no weights and has no compiled answer, and no other package in "
+                    f"its family ({task['family']}) has one either",
+                )
+
+
 class HiddenCaseListTests(unittest.TestCase):
     """§4.3: every package is graded on a hidden list, and the list follows the rules.
 

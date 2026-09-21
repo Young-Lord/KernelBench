@@ -96,6 +96,15 @@ appears only for the B tier. The build script gets `--extra-library` for whateve
 the contract whitelists and the machine can resolve, so what is linked and what is
 checked are the same list.
 
+The compiled path grades what a case's input manifest carries and nothing else, which
+bounds it in a way worth knowing before writing an adapter: a task whose reference
+builds weights in `__init__` cannot be graded this way, because those weights come
+from the case seed and the init arguments rather than from the input directory. Two
+packages are in scope today, both in the level-1 family whose three inputs are the
+whole model: `kb_l1_97_a` (the worked kernel below) and `kb_l1_97_b` (the worked
+adapter below). `tests/test_private_assets.py::CompiledAnswerScopeTests` asks each
+reference whether it carries state and fails if an answer exists outside that scope.
+
 `private/scaled_dot_product_attention_b_v0/compiled` is the B tier's worked
 submission -- the one that shows the compiled path can score, not just build:
 
