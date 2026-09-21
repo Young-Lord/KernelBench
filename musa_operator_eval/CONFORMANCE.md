@@ -266,6 +266,24 @@ The link check parses the build products' dynamic sections with no dependency be
 the standard library, and was checked against `readelf -d` and `nm -D` on six real
 MUSA extension objects and on system binaries: identical dependency and symbol sets.
 
+**Timing, and what `runtime` means on this path.** A compiled case runs in a process
+that starts cold: measured on the target device, the first call in a fresh process pays
+237 ms for the device context and roughly as much again for mapping a 2.2 GB muDNN,
+the case's files cost 58-470 ms to read and write depending on size, and the attention
+call itself takes 0.5 ms the first time and under 0.1 ms thereafter. A wall clock around
+that process is therefore 99.9% startup and I/O, and comparing it with the Python
+path's `runtime` -- which is measured in a warm process with the tensors already on the
+device -- compares two different quantities.
+
+So the frozen runner takes `--warmup W --repeat N`: it reads the inputs once, calls
+`kernel_entry` W times to settle the process and the device, times the next N calls with
+its own clock, and reports each one. The driver takes the median of those N and records
+it as `runtime`, keeping the process wall clock as `wall_ms`; the clock is in the frozen
+half, so a submission cannot report its own grade, and the statistic is in the driver,
+where a test can hold it. The defaults are the framework's own protocol (warmup 10,
+repeat 100). A runner that reports no timings still grades, with `runtime` falling back
+to the wall clock and `timing` null, which is what an older starter does.
+
 **Defect found and fixed by that run.** The stage selected build products by suffix
 (`.so`, `.o`), and a linker's final product is an executable with no suffix at all,
 so it was reading exactly the artifacts that have no dynamic section and reporting a
@@ -296,11 +314,25 @@ kernel and a library dispatch is a number about nothing. Each ratio is the tier'
 own denominator, read from the baseline's `scoring.speedup_denominator`
 (`upstream_musa` for A, `expert_dispatch` for B), computed per case over the cases
 where the reference has a passing measurement on the same case, and summarised as a
-geometric mean. On the device it produces two tables: the A tier's worked compiled kernel at
-`x0.002615` over the two of nine hidden cases where the upstream hand-written kernel
-has a passing measurement (it proves the ABI; it is not tuned), and the B tier's
-`mingpt_block_b_v0` at `x0.9112` over ten of ten cases, re-measured through
-`run_task.py` against the baseline that task already recorded -- a ratio near 1 is the
-expected reading there, because the report and the baseline measure the same expert. Both sides of a ratio are milliseconds: the framework's dataclass
+geometric mean. Both sides of a ratio are milliseconds, and both are steady-state numbers:
+`run_task`'s `runtime` is measured in a warm process, and the compiled path's is the
+median of the calls the runner timed after its warmup, with the process's own wall clock
+kept beside it as `wall_ms`. A compiled case and a Python case are still never ranked
+against each other -- they are two forms of submission, and a form's overheads are part
+of the form -- so `rank.py` reports the two tiers and a reader compares like with like.
+On the device it produces two tables, and the numbers changed the day the compiled path
+started timing calls instead of processes: the B tier's `mingpt_block_b_v0` at `x0.9112`
+over ten of ten cases, re-measured through `run_task.py` against the baseline that task
+already recorded (a ratio near 1 is the expected reading there, because the report and
+the baseline measure the same expert); and, once steady-state timing existed, the A
+tier's worked compiled kernel at `x0.0504` over the two of nine hidden cases where the
+upstream hand-written kernel has a passing measurement -- about twenty times slower than
+the upstream answer, which is what an unoptimised kernel that proves the ABI should read
+like. The same kernel measured through a process wall clock had read `x0.002615`, four
+hundred times slower, because that number was startup and disk; and the B tier's compiled
+adapter reads `x0.0618` over ten of ten, about sixteen times behind the expert, which is
+the host-side staging the ABI asks a submission to do rather than the library call. Those
+last two readings are the reason a compiled case is only ranked against another compiled
+case: the forms differ by their overheads, and now the overheads are visible. Both sides of a ratio are milliseconds: the framework's dataclass
 comment says microseconds and the recorded values say otherwise, so the unit that
 matters is the one the baseline is in -- `HARDWARE_RUNBOOK.md` records the trap.

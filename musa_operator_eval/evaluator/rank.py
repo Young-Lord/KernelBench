@@ -22,6 +22,15 @@ same case -- so the baseline is what settles it: `latency_ms` is milliseconds an
 report's `runtime` divides into it directly. A tool that trusted the comment would
 report every ratio a thousand times too high.
 
+A ratio is only about the work when both sides measure the work. The Python path's
+`runtime` is a warm measurement; the compiled path's is the median of the calls its
+runner timed after a warmup, and a row that carries a `timing` block is one of those.
+A compiled row without it (`timing: null`) reports a process wall clock -- the device's
+first-call initialisation, mapping a library the size of muDNN, and the case's files --
+and its ratio is about startup rather than about the submission. Rows like that are
+ranked anyway, because dropping a submission silently is worse, but the tables' reading
+should start from whether the numbers mean the same thing.
+
 Usage:
 
     rank.py --report /tmp/report_a.json --report /tmp/report_b.json \

@@ -376,6 +376,10 @@ def build_submission(
     return {"passed": True, "environment_missing": False, "detail": detail, "build_dir": str(build_dir), "script": script}
 
 
+# The framework's measurement protocol, in calls: warm up, then time this many.
+DEFAULT_WARMUP = 10
+DEFAULT_REPEAT = 100
+
 # The tool that turns a reference's state into tensors a submission can read. It is a
 # separate process on purpose: it needs torch, and this driver stays importable
 # without it, which is what lets a stateless task's compiled path run on a machine
@@ -385,6 +389,40 @@ MATERIALIZE_TOOL = EVALUATOR_DIR / "materialize_model_state.py"
 
 class StagingError(Exception):
     """A case's inputs could not be produced for the compiled path."""
+
+
+def median(values: Sequence[float]) -> float:
+    """The middle of a set of measurements, which is the one the mean lets a hiccup move."""
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
+def read_timing(stdout: str) -> Optional[dict]:
+    """The per-call times the runner reported, or None if it reported none.
+
+    The clock is in the frozen runner and the statistic is here: a runner that chose
+    the number would be choosing a grade, and a driver that timed the whole process
+    would be timing the device's first-call initialisation instead of the submission.
+    """
+    for line in reversed(stdout.splitlines()):
+        stripped = line.strip()
+        if not stripped.startswith("{"):
+            continue
+        try:
+            report = json.loads(stripped)
+        except ValueError:
+            continue
+        calls = report.get("per_call_ms")
+        if isinstance(calls, list) and calls and all(isinstance(value, (int, float)) for value in calls):
+            return {
+                "warmup": int(report.get("warmup", 0)),
+                "repeat": int(report.get("repeat", len(calls))),
+                "per_call_ms": [float(value) for value in calls],
+            }
+    return None
 
 
 def stage_case_inputs(
@@ -479,6 +517,8 @@ def run_binary_case(
     tolerance: Optional[dict] = None,
     input_dir: Optional[Path] = None,
     model_state: Optional[dict] = None,
+    warmup: int = 0,
+    repeat: int = 1,
 ) -> dict:
     """Run one case through the compiled runner and grade it against its golden."""
     case_id = case["case_id"]
@@ -530,18 +570,34 @@ def run_binary_case(
         started = time.perf_counter()
         try:
             completed = subprocess.run(
-                [str(binary), str(input_dir), str(output_dir)],
+                [str(binary), str(input_dir), str(output_dir), "--warmup", str(max(0, warmup)), "--repeat", str(max(1, repeat))],
                 capture_output=True, text=True, timeout=timeout, env=environment,
             )
         except (OSError, subprocess.SubprocessError) as error:
             row.update({"passed": False, "errors": [f"the runner could not be run: {error}"]})
             return row
-        # Milliseconds, which is the unit `run_task`'s reports carry in practice and
-        # the unit a baseline row's `latency_ms` is in, so one report field means one
-        # thing whichever path wrote it and `rank.py` divides the two directly.
+        # `runtime` is the submission's own work at steady state, in milliseconds: the
+        # median of the calls the runner timed after its warmup, which is the unit and
+        # the meaning `run_task`'s reports carry. `wall_ms` is what the process took
+        # end to end -- device initialisation, library mapping, reading the case and
+        # writing the answer included -- and it is kept because a reader comparing two
+        # numbers deserves to know which one is which.
         elapsed_ms = (time.perf_counter() - started) * 1000.0
+        timing = read_timing(completed.stdout or "")
         if attempt == 0:
-            row["runtime"] = round(elapsed_ms, 3)
+            row["wall_ms"] = round(elapsed_ms, 3)
+            if timing:
+                calls = timing["per_call_ms"]
+                row["runtime"] = round(median(calls), 3)
+                row["timing"] = {
+                    "warmup": timing["warmup"],
+                    "repeat": timing["repeat"],
+                    "median_ms": round(median(calls), 3),
+                    "min_ms": round(min(calls), 3),
+                }
+            else:
+                row["runtime"] = round(elapsed_ms, 3)
+                row["timing"] = None
         if completed.returncode != 0:
             row.update(
                 {
@@ -651,6 +707,8 @@ def evaluate_binary_task(
     precision: str = DEFAULT_PRECISION,
     stability_reruns: int = 1,
     verbose: bool = False,
+    warmup: int = DEFAULT_WARMUP,
+    repeat: int = DEFAULT_REPEAT,
 ) -> Tuple[int, dict]:
     """Drive the compiled path through §4.7's stages and return (exit code, report)."""
     report: dict = {
@@ -710,7 +768,8 @@ def evaluate_binary_task(
         return fail(report, exit_codes.EXIT_STATIC_AUDIT_FORBIDDEN_API, findings)
 
     return _build_check_and_evaluate(
-        task, task_dir, submission, build_dir, generated_dir, cases, report, stability_reruns, verbose
+        task, task_dir, submission, build_dir, generated_dir, cases, report,
+        stability_reruns, verbose, warmup, repeat,
     )
 
 
@@ -724,6 +783,8 @@ def _build_check_and_evaluate(
     report: dict,
     stability_reruns: int,
     verbose: bool,
+    warmup: int = DEFAULT_WARMUP,
+    repeat: int = DEFAULT_REPEAT,
 ) -> Tuple[int, dict]:
     run_task = load_module("musa_run_task", EVALUATOR_DIR / "run_task.py")
     musa_home = Path(os.environ.get("MUSA_HOME", "/usr/local/musa"))
@@ -779,6 +840,8 @@ def _build_check_and_evaluate(
                 tolerance=tolerance,
                 input_dir=case_inputs,
                 model_state=model_state,
+                warmup=warmup,
+                repeat=repeat,
             )
         )
     report["cases"] = rows
@@ -818,6 +881,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--build-dir", default=None)
     parser.add_argument("--precision", default=DEFAULT_PRECISION)
     parser.add_argument("--stability-reruns", type=int, default=1)
+    # The framework's own protocol: ten calls to settle, then a hundred measurements
+    # (kernelbench's `num_correct_trials`/`num_perf_trials`). Matching it is what makes
+    # a compiled number and a Python number the same kind of number.
+    parser.add_argument("--warmup", type=int, default=DEFAULT_WARMUP)
+    parser.add_argument("--repeat", type=int, default=DEFAULT_REPEAT)
     parser.add_argument("--output", default=None)
     parser.add_argument("--verbose", action="store_true")
     arguments = parser.parse_args(argv)
@@ -833,6 +901,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         precision=arguments.precision,
         stability_reruns=arguments.stability_reruns,
         verbose=arguments.verbose,
+        warmup=arguments.warmup,
+        repeat=arguments.repeat,
     )
     text = json.dumps(report, indent=2, ensure_ascii=False)
     if arguments.output:

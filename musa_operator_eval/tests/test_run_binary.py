@@ -323,6 +323,10 @@ raw = b"".join(struct.pack("<f", value) for value in values)
     "tensors": [{"name": "output", "file": "output.bin", "dtype": "float32",
                  "shape": [len(values)], "nbytes": len(raw)}],
 }))
+if os.environ.get("FAKE_TIMING"):
+    print(json.dumps({"warmup": int(os.environ.get("FAKE_WARMUP", 0)),
+                      "repeat": int(os.environ.get("FAKE_REPEAT", 3)),
+                      "per_call_ms": [float(v) for v in os.environ["FAKE_TIMING"].split()]}))
 if os.environ.get("KB_TRACE") and not os.environ.get("FAKE_NO_TRACE"):
     with open(os.environ["KB_TRACE"], "a", encoding="utf-8") as trace:
         trace.write(json.dumps({
@@ -627,6 +631,66 @@ class PrecisionGuardTests(unittest.TestCase):
             with self.subTest(package=package_name, precision=precision):
                 code, report = self._run(package_name, precision)
                 self.assertNotEqual(code, run_binary.exit_codes.EXIT_PRECISION_CONTRACT_MISMATCH, report)
+
+
+class TimingTests(unittest.TestCase):
+    """What `runtime` means on the compiled path, and why it is not the wall clock.
+
+    The runner owns the clock and reports one number per timed call; the driver owns
+    the statistic. Both halves are here: the median and the report reader as pure
+    functions, and one case end to end with a runner that reports times.
+    """
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_the_median_is_the_middle_and_not_the_mean(self):
+        self.assertEqual(run_binary.median([3.0, 1.0, 2.0]), 2.0)
+        self.assertEqual(run_binary.median([1.0, 2.0, 3.0, 4.0]), 2.5)
+        self.assertEqual(run_binary.median([1.0]), 1.0)
+
+    def test_the_runner_report_is_read_from_its_last_json_line(self):
+        stdout = 'noise\n{"warmup": 1, "repeat": 2, "per_call_ms": [1.0, 3.0]}\n'
+        report = run_binary.read_timing(stdout)
+        self.assertEqual(report["repeat"], 2)
+        self.assertEqual(report["per_call_ms"], [1.0, 3.0])
+        self.assertIsNone(run_binary.read_timing("no report at all\n"))
+        self.assertIsNone(run_binary.read_timing('{"per_call_ms": []}\n'))
+        self.assertIsNone(run_binary.read_timing('{"per_call_ms": ["slow"]}\n'))
+
+    def test_a_case_records_the_steady_state_median_and_the_wall_clock(self):
+        runner = self.tmp / "runner"
+        runner.write_text(FAKE_RUNNER, encoding="utf-8")
+        runner.chmod(0o755)
+        generated = self.tmp / "generated"
+        write_tensor_dir(generated / "c1" / "input", [("input_0", "float32", (2,), [1.0, 2.0])])
+        write_tensor_dir(generated / "c1" / "golden", [("output", "float32", (2,), [1.0, 2.0])], reference="cpu_fp64_reference")
+        os.environ["FAKE_TIMING"] = "10.0 4.0 2.0"
+        os.environ["FAKE_REPEAT"] = "3"
+        self.addCleanup(os.environ.pop, "FAKE_TIMING", None)
+        self.addCleanup(os.environ.pop, "FAKE_REPEAT", None)
+        row = run_binary.run_binary_case(
+            {"tier": "A_kernel"}, runner, {"case_id": "c1", "golden": "c1/golden/tensors.json"}, generated, stability_reruns=0
+        )
+        self.assertTrue(row["passed"], row)
+        self.assertEqual(row["runtime"], 4.0, "the median of 10, 4 and 2")
+        self.assertEqual(row["timing"], {"warmup": 0, "repeat": 3, "median_ms": 4.0, "min_ms": 2.0})
+        self.assertGreater(row["wall_ms"], 0.0)
+
+    def test_a_runner_with_no_report_falls_back_to_the_wall_clock(self):
+        """An older runner is still graded; the row says which number it is."""
+        runner = self.tmp / "runner"
+        runner.write_text(FAKE_RUNNER, encoding="utf-8")
+        runner.chmod(0o755)
+        generated = self.tmp / "generated"
+        write_tensor_dir(generated / "c1" / "input", [("input_0", "float32", (2,), [1.0, 2.0])])
+        write_tensor_dir(generated / "c1" / "golden", [("output", "float32", (2,), [1.0, 2.0])], reference="cpu_fp64_reference")
+        row = run_binary.run_binary_case(
+            {"tier": "A_kernel"}, runner, {"case_id": "c1", "golden": "c1/golden/tensors.json"}, generated, stability_reruns=0
+        )
+        self.assertIsNone(row["timing"])
+        self.assertEqual(row["runtime"], row["wall_ms"])
 
 
 class PipelineTests(unittest.TestCase):

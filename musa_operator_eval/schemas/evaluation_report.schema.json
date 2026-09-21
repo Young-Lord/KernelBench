@@ -60,11 +60,11 @@
           ]
         },
         "runtime": {
+          "description": "The submission's own work at steady state, in milliseconds: the median of the calls the runner timed after its warmup, which is the meaning `run_task`'s rows carry. Not the process's wall clock -- that is `wall_ms`, and it is dominated by the device's first-call initialisation and by mapping a library the size of muDNN.",
           "type": [
             "number",
             "null"
-          ],
-          "description": "The submission's measured time in milliseconds, which is the unit a baseline row's latency_ms is in, so a report's runtime divides into the baseline directly. The framework's KernelExecResult comment says microseconds; the recorded values are milliseconds."
+          ]
         },
         "ref_runtime": {
           "type": [
@@ -190,6 +190,40 @@
                 "string",
                 "null"
               ]
+            }
+          }
+        },
+        "wall_ms": {
+          "description": "The whole process's wall clock for this case, in milliseconds, for a reader who wants the real cost rather than the steady-state one.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "timing": {
+          "description": "The measurement the runner reported. Null means the runner printed no per-call times, in which case `runtime` fell back to the process wall clock.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "warmup",
+            "repeat",
+            "median_ms"
+          ],
+          "properties": {
+            "warmup": {
+              "type": "integer"
+            },
+            "repeat": {
+              "type": "integer"
+            },
+            "median_ms": {
+              "type": "number"
+            },
+            "min_ms": {
+              "type": "number"
             }
           }
         }

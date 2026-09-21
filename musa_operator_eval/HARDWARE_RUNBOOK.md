@@ -118,6 +118,30 @@ kernel is wrong. A case whose reference has no state stages nothing and reports
 a stand-in materializer (no torch needed), and, on a machine with the framework, the
 tool's state against the state the framework's own loader builds from the same seed.
 
+### What `runtime` measures here, and why it needed a flag
+
+A compiled case runs in a process that starts cold. Measured on the target device: the
+first call in a fresh process pays **237 ms** for the device context plus roughly as much
+again for mapping a 2.2 GB muDNN; reading and writing the case's files costs **58-470 ms**
+depending on size (about 110 MB/s); the attention call itself is **0.5 ms** the first
+time and **under 0.1 ms** after that. A wall clock around the process is therefore 99.9%
+startup and disk, and it is not the quantity the Python path's `runtime` reports.
+
+The runner takes `--warmup W --repeat N` (defaults 10 and 100, the framework's own
+protocol): it reads the inputs once, calls `kernel_entry` W times to settle, times the
+next N with its own clock, and prints one line of per-call times. The driver takes the
+**median** and records it as `runtime`, keeping the process's wall clock as `wall_ms`.
+
+    "runtime": 1.28,                     # median of the timed calls, milliseconds
+    "wall_ms": 553.1,                    # the whole process: start, load, read, write
+    "timing": {"warmup": 10, "repeat": 100, "median_ms": 1.28, "min_ms": 1.19}
+
+Two rules follow from that shape. A submission that re-initialises the device inside
+every call is measured paying for it -- hoisting it into a function-local static is the
+submission's own business, and the warmup exists to make that possible. And a compiled
+case is only ever ranked against another compiled case: the two forms have different
+overheads, which is now a visible fact rather than a hidden one.
+
 `private/scaled_dot_product_attention_b_v0/compiled` is the B tier's worked
 submission -- the one that shows the compiled path can score, not just build:
 
