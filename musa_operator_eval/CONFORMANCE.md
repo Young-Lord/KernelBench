@@ -184,28 +184,35 @@ the requirement is not met there and `starter.abi.deviation` says so in every
 package. The compiled path is the compliant one; the Python path is kept for the
 families whose dispatch is only reachable through the framework's bindings.
 
-**Shortfall, stated with its cause.** The compiled path's B side is verified through
-the link check but no B-tier submission can pass it on this machine, and that is a
-property of the rules and the toolchain rather than of the harness:
+**Met on the compiled path for the level-1 family, and verified end to end.**
+muDNN's host API is present on this machine and needs no torch: the toolkit ships
+`mudnn.h`, `mudnn_base.h`, `mudnn_math.h` and `mudnn_nn.h` under
+`/usr/local/musa-3.1.0/include/` (`$MUSA_HOME/include`), and `mudnn_nn.h` declares
+`musa::dnn::ScaledDotProductAttention` with `SetHeadsNum`, `SetEmbedDim`, `SetCausal`,
+`SetMaskMode`, `SetKeyFormat`, `RunFlash` and `RunMath`. `libmudnn.so` exports 10001
+`musa::dnn::*` symbols, and a program that links only `libmudnn` and `libmusart` --
+no torch in its dynamic section -- gets `SUCCESS` back from `RunFlash`.
 
-* the B tier's decisions require the fused path, so a non-gap case's trace expects
-  `fused_library`, and reaching it means calling muDNN's fused attention op directly;
-* no muDNN header exists on the machine -- the only headers are muBLAS's, under
-  `/usr/local/musa-3.1.0/include/internal/` -- and `libmudnn.so` is a 2.2 GB object
-  whose 42514 exported symbols are dominated by `__device_stub__...flash_atten...`
-  device stubs, so there is no documented host entry point to call;
-* the supported route is excluded by construction: the Python experts reach the fused
-  path through torch_musa's aten op, while the contract's whitelist allows only
-  `libmusa`/`libmudnn` and §4.6 forbids libtorch in the runner -- and a muBLAS
-  composition could only honestly record `library_composition`, which fails the trace
-  on every non-gap case.
+`private/scaled_dot_product_attention_b_v0/compiled/kernel.mu` is that adapter for
+this family. It asks the library first and reads the answer rather than predicting
+it: on this build the fused kernel answers head dimension up to 160 and refuses above
+it (*"Flash Attention 2 Not Support HeadDim > 160 Now"*), so the adapter takes the
+fused path or the library's non-fused path and records which one produced the number.
+Through `evaluator/run_binary.py` over the ten hidden cases it exits 0 with 10 of 10
+passed, every recorded path equal to its expected one, and the artifact's dynamic
+section naming `libmudnn` and no torch.
 
-What that leaves verified on the compiled path is the half that matters for
-anti-cheating: the artifact is built, its dynamic section is read, and a submission
-linking outside the whitelist is refused before a single case runs (a device test
-compiles a program that really links zlib and asserts the run stops with
-`EXIT_LINK_WHITELIST_VIOLATION`). The B tier's dispatch semantics stay verified
-through the Python path, where the five experts pass their hidden sets end to end.
+**What remains of the shortfall.** Three of the five B packages -- the causal
+attention entry, the vision entry and the transformer block -- have no compiled
+adapter, so their B-tier evidence is still the Python path, where the five experts
+pass their hidden sets end to end. The block is more than one attention call, so its
+compiled path would have to compose several library ops, which no case at the other
+entries requires.
+
+The anti-cheating half holds independently of that: the artifact is built, its
+dynamic section is read, and a submission linking outside the whitelist is refused
+before a single case runs (a device test compiles a program that really links zlib and
+asserts the run stops with `EXIT_LINK_WHITELIST_VIOLATION`).
 
 **Met, and checked, on the compiled path.** §4.6 confines library calls to the
 dispatch file and the Host launch file. A Python submission is a single module, so

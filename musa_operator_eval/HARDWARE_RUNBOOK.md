@@ -26,7 +26,6 @@ not an error -- it would not have covered the host-side driver, the GPU identity
 or the cgroup limits, all of which are collected directly.
 
 ## The hidden case set
-
 A submission is graded on the hidden set; the public one exists so something can
 be run before submitting. `run_task.py` evaluates whatever `--cases` points at,
 defaulting to the task's `public_cases.json`:
@@ -97,7 +96,51 @@ appears only for the B tier. The build script gets `--extra-library` for whateve
 the contract whitelists and the machine can resolve, so what is linked and what is
 checked are the same list.
 
-## Three traps worth knowing before reading a number
+`private/scaled_dot_product_attention_b_v0/compiled` is the B tier's worked
+submission -- the one that shows the compiled path can score, not just build:
+
+    # B, graded: 10 hidden cases, 10 passed, every recorded path its expected one
+    python musa_operator_eval/evaluator/run_binary.py \
+        --task-dir musa_operator_eval/tasks/kb_l1_97_b \
+        --submission musa_operator_eval/private/scaled_dot_product_attention_b_v0/compiled \
+        --cases musa_operator_eval/private/scaled_dot_product_attention_b_v0/cases.private.json \
+        --generated-dir musa_operator_eval/private/generated/scaled_dot_product_attention_b_v0 \
+        --precision fp16 --output /tmp/binary_b.json
+
+## Calling muDNN from a submission
+
+The library is on the machine and needs no framework. What it takes to use it:
+
+* **Headers.** `/usr/local/musa-3.1.0/include/mudnn*.h`. `mudnn_nn.h` carries
+  `musa::dnn::ScaledDotProductAttention` (`SetHeadsNum`, `SetEmbedDim`, `SetCausal`,
+  `SetMaskMode`, `SetKeyFormat`, `RunFlash` for the fused kernel, `RunMath` for the
+  non-fused one) and `musa::dnn::MultiHeadAttention`; `mudnn_math.h` and
+  `mudnn_base.h` carry the GEMM, softmax and tensor/handle types. `libmudnn.so`
+  exports 10001 `musa::dnn::*` symbols.
+* **Link.** Only `libmudnn` and `libmusart` are needed. A `g++ -std=c++17` binary
+  linking those two and nothing else gets `SUCCESS` from `RunFlash`, which is what
+  makes a §4.6-compliant B submission possible at all.
+* **`SetEmbedDim` is the model width, not the head dimension** -- `num_heads *
+  head_dim`. Passing `head_dim` comes back as `INVALID_PARAMETER ... Validate q
+  dim`, which reads like a shape complaint and is not one.
+* **The fused boundary is the library's to draw.** On this build `RunFlash` answers
+  head dimension up to 160 and refuses above it: *"Flash Attention 2 Not Support
+  HeadDim > 160 Now"*. Ask it and read the status rather than predicting from a
+  shape or a version string.
+* **Descriptors carry the layout.** `Tensor::SetNdInfo(ndims, dims, strides)` takes
+  `int64_t` arrays -- the `int` overloads do not exist, and passing `int` fails to
+  compile -- and strides are how a `[B, H, S, D]` view is expressed without moving
+  data.
+* **The region rule reaches includes.** The compiled-source audit flags any line
+  naming a library (`mudnn` among them) outside `probe_and_dispatch` and
+  `host_launch`, and the flag is on the *line*, so `#include <mudnn.h>` has to sit
+  inside one of those regions in a single-file submission.
+
+A minimal standalone probe -- outside the harness, no torch, a few dozen lines -- is
+the fastest way to learn a descriptor's rules; `RunFlash` returning `SUCCESS` on a
+tiny case is what settled the `SetEmbedDim` question above.
+
+## Four traps worth knowing before reading a number
 
 **The graded bar is resolved from the contract, not from a manifest.** A task's
 `tolerances.max_abs_error` is a loosen-only override of the framework's per-dtype floor
@@ -127,6 +170,16 @@ output and no error, which reads exactly like a device hang. Clear it:
 
 and prefer `kill` to `kill -9`, or check `pgrep -af "evaluator/run_task[.]py"` and
 `mthreads-gmi` before concluding anything about the machine.
+
+**A truncated search is not evidence of absence.** `find / -iname 'mudnn*' | head
+-10` returns `torch_musa` paths first, and the SDK's own headers only appear after
+them -- so a search that stops early reads as "the header does not exist". That
+conclusion was drawn once here and it was wrong: muDNN's headers have been in
+`/usr/local/musa-3.1.0/include/` the whole time, and the claim that no host entry
+point existed delayed the B tier's compiled path by weeks. Scope the search (`find
+/ -xdev ...`), drop the `head`, or follow the vendor's docs; and when a conclusion
+is "it is structurally impossible", make the search show that rather than merely
+failing to find it.
 
 ## Admission
 

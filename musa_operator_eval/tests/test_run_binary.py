@@ -135,6 +135,59 @@ class SourceAuditTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("device_kernel", findings[0])
 
+    def test_a_whitelisted_header_may_be_included_anywhere(self):
+        """An include is a declaration; the call it enables is still checked where it sits.
+
+        An agent writing a compiled submission puts its includes at the top of the file,
+        which is outside every region, and a rule that failed it for that would fail an
+        honest submission for a habit instead of for a call.
+        """
+        source = (
+            "#include <mudnn.h>\n#include \"mudnn_nn.h\"\n"
+            + with_regions({"probe_and_dispatch": "int probe() { return 0; }\n"}, B_REGIONS)
+        )
+        self.assertEqual(run_binary.audit_compiled_source(library_task(), source), [])
+
+    def test_a_header_outside_the_whitelist_is_still_a_finding(self):
+        source = (
+            "#include <torch/extension.h>\n"
+            + with_regions({"probe_and_dispatch": "int probe() { return 0; }\n"}, B_REGIONS)
+        )
+        findings = run_binary.audit_compiled_source(library_task(), source)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("region none", findings[0])
+
+    def test_an_include_does_not_excuse_a_call_in_the_kernel_region(self):
+        source = (
+            "#include <mudnn.h>\n"
+            + with_regions(
+                {
+                    "probe_and_dispatch": "int probe() { return 0; }\n",
+                    "device_kernel": "__global__ void k() { mudnnFusedAttention(0); }\n",
+                },
+                B_REGIONS,
+            )
+        )
+        findings = run_binary.audit_compiled_source(library_task(), source)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("device_kernel", findings[0])
+
+    def test_the_a_tier_may_not_include_the_stack_either(self):
+        source = "#include <mudnn.h>\n" + with_regions({"device_kernel": "__global__ void k() {}\n"})
+        findings = run_binary.audit_compiled_source(failing_task(), source)
+        self.assertEqual(len(findings), 1)
+        self.assertIn("prohibited list", findings[0])
+
+    def test_the_worked_compiled_submission_passes_its_own_audit(self):
+        """The B-tier answer this repository keeps under `private/` is held to the rule too."""
+        answer = ROOT / "private" / "scaled_dot_product_attention_b_v0" / "compiled" / "kernel.mu"
+        if not answer.is_file():
+            self.skipTest("the maintainer tree is not mounted")
+        task = json.loads((ROOT / "tasks" / "kb_l1_97_b" / "task.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            run_binary.audit_compiled_source(task, answer.read_text(encoding="utf-8")), []
+        )
+
     def test_the_markers_must_match_the_inventory(self):
         source = with_regions({"device_kernel": ""}, ["device_kernel", "host_launch"])
         findings = run_binary.audit_compiled_source(failing_task(), source)

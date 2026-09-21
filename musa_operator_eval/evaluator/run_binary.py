@@ -67,6 +67,14 @@ LIBRARY_REGIONS = {"probe_and_dispatch", "host_launch"}
 # SDPA, ATen and CUDA residue rather than the runtime.
 LIBRARY_NAMES = ("mudnn", "mublas", "torch", "at::", "c10", "cuda")
 
+# A preprocessor include is a declaration, not a call: nothing runs when a header is
+# read, and the lines that matter -- where a library is actually reached -- are still
+# checked wherever they sit. The exemption is narrower than it looks: it applies to
+# the B tier only (whose libraries the contract whitelists), and only to headers that
+# resolve to one of those whitelisted libraries, so `#include <torch/extension.h>` in
+# a submission that may not link libtorch stays a finding.
+INCLUDE = re.compile(r"^\s*#\s*include\s*[<\"]([^>\"]+)[>\"]")
+
 MARKER = re.compile(r"^\s*//\s*---\s*(BEGIN|END)\s+([A-Za-z_][A-Za-z0-9_]*)\s*---\s*$", re.MULTILINE)
 
 
@@ -203,6 +211,34 @@ def marker_regions(source: str) -> Tuple[List[str], List[str]]:
     return regions, problems
 
 
+def whitelisted_header_stems(task: dict) -> set:
+    """The library names the contract whitelists, spelled the way a header spells them.
+
+    `libmudnn.so` -> `mudnn`, so `mudnn.h` and `mudnn_nn.h` are recognisable while
+    `torch/extension.h` is not.
+    """
+    stems = set()
+    for entry in (task.get("library_policy") or {}).get("allowed_libraries", []):
+        bare = entry.strip().lower()
+        if bare.startswith("lib"):
+            bare = bare[3:]
+        bare = bare.split(".so")[0]
+        if bare:
+            stems.add(bare)
+    return stems
+
+
+def is_whitelisted_include(line: str, stems: set) -> bool:
+    """Whether a line is an include of a header belonging to a whitelisted library."""
+    match = INCLUDE.match(line)
+    if not match:
+        return False
+    stem = Path(match.group(1)).name.lower().split(".")[0]
+    if stem.startswith("lib"):
+        stem = stem[3:]
+    return any(stem.startswith(name) for name in stems)
+
+
 def region_of_line(source: str) -> List[Optional[str]]:
     """The region each line of the source sits in, None outside every region."""
     ownership: List[Optional[str]] = []
@@ -237,6 +273,7 @@ def audit_compiled_source(task: dict, source: str) -> List[str]:
 
     ownership = region_of_line(source)
     tier = task.get("tier")
+    stems = whitelisted_header_stems(task)
     for number, line in enumerate(source.splitlines(), start=1):
         stripped = line.strip()
         if stripped.startswith("//"):
@@ -253,6 +290,8 @@ def audit_compiled_source(task: dict, source: str) -> List[str]:
                 f"line {number}: the A tier's kernel may not name {stripped.split()[0][:40]!r}; "
                 "the upstream stacks are on its prohibited list"
             )
+            continue
+        if is_whitelisted_include(line, stems):
             continue
         region = ownership[number - 1]
         if region not in LIBRARY_REGIONS:
